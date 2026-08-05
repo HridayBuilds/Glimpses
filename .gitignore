@@ -1,0 +1,20 @@
+# macOS
+.DS_Store
+
+# Local tooling state — machine-specific, not project content
+.claude/
+.serena/
+
+# Secrets — never commit. v1 leaked an AWS key CSV, an OAuth client secret
+# and a CloudFront signing PEM; these patterns exist so it cannot recur.
+*.pem
+*.key
+*.p12
+*.pfx
+credentials*.csv
+accessKeys*.csv
+.env
+.env.*
+!.env.example
+terraform.tfvars
+*.auto.tfvars
