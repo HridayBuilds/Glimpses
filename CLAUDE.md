@@ -4,13 +4,14 @@
 
 **Read `Miscellaneous/SESSION_HANDOFF.md` before doing anything.** It carries the current state, what's next, and how this project is run.
 
-Glimpses is a from-scratch rebuild of a torn-down v1 — an event photo-sharing app with face-recognition search on AWS. The product was locked feature-by-feature *before* any technology was chosen. **As of 2026-08-05 the product lock is complete — the decision register has zero open rows, and the technology discussion is what remains.**
+Glimpses is a from-scratch rebuild of a torn-down v1 — an event photo-sharing app with face-recognition search on AWS. The product was locked feature-by-feature *before* any technology was chosen. **As of 2026-08-05 the product lock is complete with 98 rulings. The user is now reviewing for potential revisions before the technology discussion.**
 
 | File | Purpose |
 |---|---|
-| `Miscellaneous/SESSION_HANDOFF.md` | Current state and next steps |
-| `Miscellaneous/LOCKED_PRODUCT.md` | The spec — ruled decisions (`P-nn`) |
-| `Miscellaneous/PRD.md` | The decision register (`D-nn`) — now fully closed |
+| `Miscellaneous/SESSION_HANDOFF.md` | Current state, what's next, how to work with revisions |
+| `Miscellaneous/PRODUCT_WALKTHROUGH.md` | The product described end-to-end, readable in one sitting — start here for review |
+| `Miscellaneous/LOCKED_PRODUCT.md` | The spec — every ruled decision with full reasoning (`P-nn`) — source of truth |
+| `Miscellaneous/PRD.md` | The decision register (`D-nn`) — use for revisions |
 | `Miscellaneous/HANDOFF.md` | v1 retrospective — historical only |
 
 **The non-negotiable rule: the user makes every decision.** Present options with honest tradeoffs and a recommendation, then wait. Never decide architecture silently or by implementation drift. In v1 the user let an AI dictate everything and ended up not understanding their own system — this rebuild exists to fix that. Explain concepts and syntax as you go; the user wants to understand, not just receive.
