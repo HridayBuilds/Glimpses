@@ -4,9 +4,9 @@
 
 **What this file is not:** the source of truth, and not a record of reasoning. It deliberately leaves out *why* each option was chosen over the alternatives — that lives in `LOCKED_PRODUCT.md`, which stays authoritative if the two ever disagree.
 
-**How to use it:** read §1–§7 as a story, then use §10's checklist to tick off all 98 rulings. If a section describes behaviour you did not intend, that is the thing to reopen.
+**How to use it:** read §1–§7 as a story, then use §10's checklist to tick off all 100 rulings. If a section describes behaviour you did not intend, that is the thing to reopen.
 
-**Covers:** all 98 rulings, `P-01`–`P-98`. **Written:** 2026-08-05.
+**Covers:** all 100 rulings, `P-01`–`P-100` *(`P-75` and `P-76` are dissolved, not live)*. **Written:** 2026-08-05. **Revised:** 2026-08-06 — `P-82`, `P-83`, `P-86`, `P-40`, `P-85`, `P-31`, `P-53`, `P-07`, `P-54`, `P-89`, `P-95`, `P-74` changed, `P-99` and `P-100` added; see the decision log in `LOCKED_PRODUCT.md`.
 
 ---
 
@@ -31,7 +31,7 @@ It is a **portfolio project built to be real-capable** — `P-22`. Consent and d
 
 It is **mobile-web first** — `P-92`. The phone is the design target; desktop is the same layout with more room. No native app. Browser floor is the current version of Safari, Chrome, Firefox and Edge; accessibility is basic and untested — semantic markup, alt text where meaningful, keyboard navigation, sensible contrast, no WCAG target — `P-96`.
 
-It must run inside the **AWS free-tier credit allowance** — `P-25`. This shapes product decisions, not just technical ones. The design target is **1,000 photos per event, 100 attendees per event, 5 active events per organizer, ~10 active events across the whole product** — `P-93` (planning figures) and `P-40` (the only enforced limits).
+It must run inside the **AWS free-tier credit allowance** — `P-25`. This shapes product decisions, not just technical ones. The design target is **1,000 photos per event, 100 attendees per event, ~10 active events across the whole product** — `P-93`. These are planning figures only: **`P-40` enforces no limits at all**, so nothing stops an event or an account exceeding them.
 
 ---
 
@@ -52,16 +52,18 @@ The **display name** is freely editable, not unique, and never verified — `P-8
 
 **There are no notifications of any kind** — `P-81`. No badges, no unread counts, no feed, no push. You discover state by looking at the thing itself.
 
-### Deleting your account
+### Leaving
 
-| What happens | Ruling |
+**There is no way to delete your account** — `P-74`. Not hidden, not by email request: it does not exist, and none will be added.
+
+What you *can* do is delete your profile selfie. That destroys your face template, so nothing new is ever matched to you again — `P-68`. It is the only withdrawal action in the product.
+
+| What stays | Ruling |
 |---|---|
-| Photos you contributed **stay** in their events; the account link is severed | `P-74` |
-| The deletion screen **must say so plainly** — this is a required design obligation | `P-74` |
-| Your face template is destroyed | `P-76` |
-| Match sets already computed **stay** until the event expires | `P-76` |
-| Every event you **organize** is archived immediately and runs out its normal clock | `P-75` |
-| Ownership is never transferred to anyone | `P-75`, `P-39` |
+| Your account: email and display name | `P-74` |
+| Photos you contributed, in their events, with your name and email on them | `P-74`, `P-86` |
+| Match sets already computed, until the event expires on its normal clock | `P-68`, `P-33` |
+| The privacy page **must say both of these plainly** — a required design obligation | `P-72` |
 
 ---
 
@@ -71,7 +73,7 @@ The **display name** is freely editable, not unique, and never verified — `P-8
 
 **You supply a name and you are done** — `P-24`. No configuration questions, no "what type of event is this?", no publish step. Every dial has a default chosen to fit the majority case, changed later by the minority who need it.
 
-**The name and date are fixed at creation and can never be changed** — `P-89`. The two policy dials stay editable while the event is `ACTIVE`; nothing is editable once archived.
+**The name and an optional description are both editable while the event is `ACTIVE`** — `P-89`. **You never type a date:** the system records when the event was created and shows it as *"Created"*, never as the event's date. The description is blank by default and appears both inside the event and on the lobby screen, where it is what tells a waiting stranger whether they are in the right event at all. The two policy dials stay editable while `ACTIVE`; nothing is editable once archived.
 
 The two dials — `P-06`, with defaults from `P-26`:
 
@@ -82,7 +84,7 @@ The two dials — `P-06`, with defaults from `P-26`:
 
 There is **exactly one organizer** — the person who created the event. No co-organizers, no transfer — `P-39`.
 
-Limits: **1,000 photos per event, 5 active events per organizer** — `P-40`. Counted in photos, not bytes.
+Limits: **none** — `P-40`. No photo cap, no event cap, no attendee cap. The only ceiling is Rekognition's unraisable 15 MB per-file limit, which is external rather than a product choice.
 
 ### Sharing the event
 
@@ -93,7 +95,7 @@ Limits: **1,000 photos per event, 5 active events per organizer** — `P-40`. Co
 | Link format | CloudFront default domain — e.g. `d1a2b3c4.cloudfront.net/j/K7M2QX`. No custom domain | `P-30` |
 | Who can share | **Any admitted attendee**, not just the organizer | `P-45` |
 
-**Sharing is hidden only while a batch is being processed**, with a stated reason — *"still processing your photos — share in a moment"* — `P-31`. At every other time, including before any photo has ever been uploaded, the event is shareable. Sharing an empty event shows a note, not a block.
+**An `ACTIVE` event is always shareable** — `P-31`. The code and QR are never hidden: not before the first photo is uploaded, not while a batch is processing. Sharing an empty event shows a note (*"No photos yet. Anyone who joins will see an empty gallery."*), not a block.
 
 ### Uploading photos
 
@@ -102,15 +104,16 @@ Limits: **1,000 photos per event, 5 active events per organizer** — `P-40`. Co
 | Mechanisms | ZIP archive **or** multi-file selection — both available to organizers and attendees alike | `P-11`, `P-36` |
 | Batching | One multi-file selection = **one** ingestion job, not twenty | `P-37` |
 | Formats | JPEG and PNG. HEIC is accepted and converted to JPEG on ingest; the original is discarded. RAW is rejected with a clear message | `P-35` |
-| Inside a ZIP | Photos are extracted, subfolders flattened, OS junk (`__MACOSX/`, `.DS_Store`) skipped silently. A video or RAW file **is** reported, because you chose it deliberately | `P-54` |
+| Inside a ZIP | **Only the top level is read — folders inside the ZIP are not opened**, and you are told so before you choose the file. If a ZIP turns out to hold no loose photos, it says why: *"No photos found — folders inside a ZIP aren't opened. Zip the photos directly."* OS junk (`.DS_Store`) skipped silently. A video or RAW file **is** reported, because you chose it deliberately | `P-54` |
 | Duplicates | Detected by exact content hash, scoped per event, skipped before conversion. You are told: *"26 photos added, 4 were already in the event"* | `P-38` |
 | EXIF | **All metadata stripped on ingest** — no GPS, no timestamps, no camera fields | `P-58` |
 | Cancellation | **Not possible once started.** Every batch has a maximum lifetime, after which it is marked failed | `P-53` |
-| Partial failure | Reported as counts only: *"594 photos added, 6 could not be processed."* Never filenames | `P-55` |
-| Retries | Transient failures are retried silently with a growing delay. Nothing is shown; the batch just takes marginally longer | `P-56` |
+| Partial failure | Reported as counts only: *"594 photos added, 6 could not be processed."* Never filenames. The result is **stored on the event**, so it is there whenever you next open it | `P-55`, `P-100` |
+| Retries | The mechanism stays invisible — no filenames, no error text — but the batch may say *"3 photos are being retried, this may take a little longer"* | `P-56`, `P-100` |
+| Progress | Shown while the upload screen is open. **Closing the tab does not stop anything**: the batch runs on and the photos appear in the event as they finish | `P-100` |
 | Speed | Design target: up to **~30 minutes** for a full 1,000-photo batch | `P-94` |
 
-**Practical consequence:** because `P-31` hides sharing during ingestion and `P-94` allows ~30 minutes, **bulk upload is a before-the-event task, not a during-the-event one.**
+**Practical consequence:** ingestion never blocks anything and never depends on anyone staying. The organizer hands out the code the moment the upload starts and walks away — **uploading during the event works as well as uploading before it** (`P-31`), and nobody waits thirty minutes at a screen (`P-100`). The visible effect of `P-94`'s ~30 minutes is that someone who joins mid-batch sees a gallery still filling up; `P-81` means *they* are told nothing about why, while the uploader is.
 
 Every photo is **face-indexed identically regardless of who uploaded it** — `P-42`. A second batch creates a new job but lands in the same single gallery; batches are never a browsing concept — `P-14`.
 
@@ -118,8 +121,8 @@ Every photo is **face-indexed identically regardless of who uploaded it** — `P
 
 | Capability | Behaviour | Ruling |
 |---|---|---|
-| See who's in | Attendee and pending lists, **display names only** — email addresses are never shown to another user | `P-82` |
-| Numbers shown | Photo count against the 1,000 cap, and attendee count. **Nothing else** — no storage figures, no charts, no analytics | `P-85` |
+| See who's in | Attendee and pending lists, showing **display name and email address** | `P-82` |
+| Numbers shown | Photo count, attendee count, and **total storage used** — all informational, none of them a limit. Nothing else: no charts, no analytics | `P-85` |
 | Approve / deny | Manual, one at a time, only if `joinPolicy = APPROVAL_REQUIRED` | `P-10` |
 | Pre-approved guest list | **Does not exist.** No list of addresses, no auto-admission | `P-88` |
 | Eject or deny | Either action blocks that user from rejoining with the code | `P-29` |
@@ -127,7 +130,7 @@ Every photo is **face-indexed identically regardless of who uploaded it** — `P
 | Delete a photo | Any photo in your event | `P-44` |
 | Bulk delete | By multi-selection. There is **no** "delete everything this person added" | `P-52` |
 | Per-attendee quota | None. The 1,000-photo cap is shared first-come by everyone admitted | `P-87` |
-| Uploader shown | **No.** Photos carry no visible attribution, to anyone, including you | `P-86` |
+| Uploader shown | **Yes.** Every photo shows who added it — display name and email — to everyone | `P-86` |
 
 Since there are no notifications (`P-81`) and no email beyond auth (`P-51`), **an organizer using `APPROVAL_REQUIRED` learns about waiting guests only by opening the event.** Someone can sit in the lobby for days. This is settled behaviour, not a gap.
 
@@ -160,7 +163,7 @@ Since there are no notifications (`P-81`) and no email beyond auth (`P-51`), **a
 2. An account is required — sign up if you don't have one — `P-04`.
 3. Then, depending on the organizer's setting:
    - **`OPEN`** (the default) — you are in immediately — `P-26`.
-   - **`APPROVAL_REQUIRED`** — you wait in a lobby, seeing the event's **name, date, organizer and a clear waiting state, and nothing of its contents** — `P-10`, `P-28`.
+   - **`APPROVAL_REQUIRED`** — you wait in a lobby, seeing the event's **name, description, organizer, creation date and a clear waiting state, and nothing of its contents** — `P-10`, `P-28`.
 4. A pending user **cannot upload** — `P-43`.
 5. Code attempts are rate-limited, per account and per IP — `P-97`.
 
@@ -168,15 +171,15 @@ Since there are no notifications (`P-81`) and no email beyond auth (`P-51`), **a
 
 ### Seeing photos
 
-**Every admitted attendee sees every photo in the event** — `P-07`. There is no per-photo visibility and no mode where you see only your own matches. **Admission is the only access control in the product.**
+**Every admitted attendee sees every photo in the event** — `P-07`. There is no per-photo visibility: no photo is ever withheld from someone who has been admitted. **Admission is the only access control in the product.** `P-64`'s two views — your own photos, or the entire collection — are ways of *looking at* that gallery, never limits on what you may see.
 
 | | Behaviour | Ruling |
 |---|---|---|
 | Layout | One gallery, infinite scroll. No page numbers, no "load more" | `P-63` |
 | Order | Upload time, newest first. Filename breaks ties within a batch | `P-57` |
 | Capture time | Not used for ordering | `P-57` |
-| Who uploaded | Not shown | `P-86` |
-| Other attendees | **You cannot see who else is in the event.** The member list is the organizer's alone | `P-83` |
+| Who uploaded | Shown on the opened photo — display name and email. Stays there even if they are ejected | `P-86`, `P-99` |
+| Other attendees | **No member list.** You can identify anyone who uploaded, from their photos; anyone who never uploaded is not named | `P-83` |
 | Likes, comments, favourites | None. The gallery is a gallery | `P-62` |
 
 ### Face matching
@@ -202,8 +205,7 @@ Since there are no notifications (`P-81`) and no email beyond auth (`P-51`), **a
 |---|---|---|
 | Change your selfie (`P-20`, `P-98`) | Uses the new face | **Unchanged** |
 | Delete your selfie (`P-68`) | Matching stops | **Kept** |
-| Delete your account (`P-76`) | Template destroyed | **Kept** until the event expires |
-| Organizer departs (`P-75`) | Event archived | Unchanged |
+| Delete your account (`P-74`) | **Does not exist** — there is no account deletion | — |
 | Manual re-match (`P-73`) | **Does not exist** — no control anywhere re-runs matching | — |
 
 **What this means in practice:** if your matching is poor and you fix your selfie, you get better results **only for photos that arrive afterwards**. For an event that has stopped receiving photos — which is every event 30 days after its last upload — the fix does nothing at all, ever. This is a deliberate choice for a simpler system, not a cost saving; recomputing would cost about half a cent (`P-98`).
@@ -277,12 +279,13 @@ Two roles, but **five states**, and every check is scoped to a `(user, event)` p
 | `ORGANIZER` | Created the event — exactly one, never transferred |
 | `BLOCKED` | Denied or ejected |
 
-**Two modifiers evaluated before any role check:**
+**One modifier evaluated before any role check:**
 
 | Modifier | Effect |
 |---|---|
 | Event is `ARCHIVED` | Every write denied, for every state, **including the organizer** — `P-32` |
-| A batch is in flight | Share controls hidden, **including from the organizer** — `P-31` |
+
+Ingestion state affects no permission anywhere — `P-31`.
 
 **Order of evaluation is part of the specification** — `P-49`:
 
@@ -316,7 +319,7 @@ Two roles, but **five states**, and every check is scoped to a `(user, event)` p
 | Delete a photo | ✗ | ✗ | ✓ *only their own* | ✓ any | ✗ |
 | See pending requests | ✗ | ✗ | ✗ | ✓ | ✗ |
 | Approve, deny or eject | ✗ | ✗ | ✗ | ✓ | ✗ |
-| See the attendee list | ✗ | ✗ | ✗ | ✓ display names only | ✗ |
+| See the attendee list | ✗ | ✗ | ✗ | ✓ display name + email | ✗ |
 
 **Profile and face — this table has no roles at all, which is the point:**
 
@@ -341,15 +344,15 @@ A single list, because absences are harder to notice than features — and easie
 | Anonymous access without an account | `P-04` |
 | A platform administrator or support console | `P-41` |
 | Co-organizers or ownership transfer | `P-39` |
-| Per-photo visibility, or a "only show me my matches" access mode | `P-07` |
+| Per-photo visibility, or a matches-only *access mode* — a screen with its own permission. *(`P-64`'s matches-only **filter** does exist; it restricts the view, not the access)* | `P-07` |
 | A moderation queue for attendee uploads | `P-13` |
 | A pre-approved guest list, or emailed invitations | `P-88`, `P-51` |
 | Notifications, badges, unread counts, push | `P-81` |
 | Any email except signup verification and password reset | `P-51` |
-| Attendees seeing each other | `P-83` |
-| Uploader attribution on photos | `P-86` |
+| A member list for attendees | `P-83` |
+| Filtering or selecting photos by uploader | `P-86`, `P-52` |
 | Per-attendee upload quotas | `P-87` |
-| Analytics, charts, storage figures | `P-85` |
+| Analytics and charts | `P-85` |
 | A "Find my photos" button or any search step | `P-16` |
 | Manual re-match, or recompute after a selfie change | `P-73`, `P-20`, `P-98` |
 | A per-event opt-out from face matching | `P-79` |
@@ -361,7 +364,8 @@ A single list, because absences are harder to notice than features — and easie
 | RAW support | `P-35` |
 | Batch cancellation | `P-53` |
 | Filenames in failure reports | `P-55` |
-| Editable event name or date | `P-89` |
+| A user-set event date — the date is the creation time, system-set *(the name and description **are** editable)* | `P-89` |
+| Account deletion | `P-74` |
 | Un-archiving | `P-32` |
 | A trash can or undo, anywhere | `P-52` |
 | A removal path for non-users | `P-70` |
@@ -384,11 +388,12 @@ These are accepted costs the spec records openly. None is a bug; each is a decis
 3. **`APPROVAL_REQUIRED` is heavy.** No notification of any kind means guests can wait days — `P-51`, `P-81`, `P-88`.
 4. **One attendee can consume the entire 1,000-photo allowance**, after which the organizer cannot upload their own photos and nothing tells them — `P-87`, `P-97`.
 5. **A partially failed batch cannot be diagnosed.** Counts without filenames means the rational response is re-uploading everything — `P-55`.
-6. **The collaborative persona is served worse than the wedding one** in three places: no uploader attribution (`P-86`), upload-time ordering rather than trip chronology (`P-57`), and a ~30-minute ingestion window that assumes uploading in advance (`P-94`).
+6. **The collaborative persona is served worse than the wedding one** in upload-time ordering rather than trip chronology — `P-57`. *(Uploader attribution was the second and was fixed by the `P-86` rewrite on 2026-08-06; the third was `P-94`'s ~30-minute window, which `D-117` and `P-100` made survivable — you can share and leave mid-batch.)*
 7. **Deployments go straight to production with no rollback target and no rehearsal**, against live events holding photos that exist nowhere else — `P-95`.
 8. **Anyone who obtained the code sees everything**, and any attendee can pass it on — `P-07`, `P-45`.
 9. **Someone who held the camera opens a 300-photo album onto an empty screen** — mitigated only by the required empty-state design — `P-65`.
-10. **A mistyped event name is permanent for the event's whole life** — `P-89`.
+10. **An account can never be deleted** — the only withdrawal is deleting the profile selfie, which stops future matching but leaves the account, the contributed photos and the attribution on them — `P-74`, `P-68`, `P-86`.
+11. **A progress figure can sit still while a slow retry runs**, looking stalled when it is not — `P-100`.
 
 ---
 
@@ -398,11 +403,9 @@ Flagged in the spec as assumptions or explicitly unruled. **None is a locked dec
 
 | Open point | Where |
 |---|---|
-| **Which** AWS region — `P-95` locks *one* region, not which one | `P-95` |
-| Whether the event **date** should be mutable, unlike the name | `P-89` |
-| Whether account deletion should exist at all — recorded as "forced, not ruled — open to override" | `P-74` |
 | Rate-limit **thresholds** for access-code attempts — the mechanism is locked, the numbers are not | `P-97` |
-| Whether there is **one Rekognition collection per event** — assumed by `P-98`'s cost arithmetic; a technology decision | `P-98` |
+| Whether there is **one Rekognition collection per event** — assumed by `P-98`'s cost arithmetic; deferred to the technology phase by the user on 2026-08-06 | `P-98` |
+| How progress and retry state are actually produced — SQS bookkeeping vs Step Functions execution state. `P-100` is a deliberate **input** to that choice | `P-100` |
 | Bulk approval of a waiting queue — `P-88` removed *pre*-approval, not approving several waiting people at once | `P-88` |
 
 **Design obligations that are easy to lose during implementation** — each is load-bearing, not cosmetic:
@@ -410,7 +413,9 @@ Flagged in the spec as assumptions or explicitly unruled. **None is a locked dec
 - Scroll-position restoration in the gallery — `P-63`.
 - The empty "my photos" state — `P-65`.
 - The frozen-filter state — `P-69`.
-- The account-deletion screen stating that contributed photos remain — `P-74`.
+- The privacy page must say plainly that accounts cannot be deleted, and that your name and email stay on photos you uploaded — `P-72`, `P-74`.
+- **Verify Rekognition is available in `ap-south-1` before building** — it is not offered in every region — `P-95`.
+- Progress must degrade honestly rather than freeze when a retry is slow — `P-100`.
 - "Deletion is not retroactive" wording on photo deletion and ejection — `P-44`, `P-29`.
 - Event lifetime stated at creation and warned before each transition — `P-33`.
 - Deleting a photo must also delete its face vectors, which means retaining face identifiers — `P-52`.
@@ -419,7 +424,7 @@ Flagged in the spec as assumptions or explicitly unruled. **None is a locked dec
 
 ---
 
-## 10. Coverage checklist — all 98 rulings
+## 10. Coverage checklist — all 100 rulings
 
 Tick through this to confirm nothing is missing. Grouped by area; each line is the ruling in one sentence.
 
@@ -430,7 +435,7 @@ Tick through this to confirm nothing is missing. Grouped by area; each line is t
 - `P-92` Mobile-web first; no native app, no separate desktop design.
 - `P-93` Target scale: 100 attendees/event, ~10 concurrent events (planning figures).
 - `P-94` Ingestion target ~30 minutes for 1,000 photos; matches within a few minutes after.
-- `P-95` One region, one environment, no staging.
+- `P-95` One region — `ap-south-1` (Mumbai) — one environment, no staging.
 - `P-96` Current browsers; basic untested accessibility.
 
 ### Accounts and identity
@@ -442,20 +447,20 @@ Tick through this to confirm nothing is missing. Grouped by area; each line is t
 - `P-91` Email verification by numeric code, not a link.
 - `P-51` Email for authentication only, to the account holder alone.
 - `P-81` No notifications of any kind.
-- `P-74` Account deletion keeps contributed photos; the screen must say so.
-- `P-75` Organizer's departure archives their events immediately.
-- `P-76` Account deletion destroys the template, keeps match sets.
+- `P-74` Account deletion does not exist and will not be added.
+- `P-75` *(Dissolved by `P-74` — organizers cannot depart.)*
+- `P-76` *(Dissolved by `P-74`. `P-68` still destroys the template on selfie deletion.)*
 
 ### Events, roles and lifecycle
 - `P-24` No configuration questions at event creation.
 - `P-26` Locked defaults: `OPEN`, `ATTENDEES_CAN_ADD`, threshold 80.
 - `P-06` Two independent policy dials.
-- `P-89` Event name and date fixed at creation.
+- `P-89` Event name and optional description editable while `ACTIVE`; no user-set date, only a system "Created" timestamp.
 - `P-39` Exactly one organizer; no co-organizers, no transfer.
 - `P-41` No platform administrator role.
-- `P-40` 1,000 photos per event, 5 active events per organizer.
+- `P-40` No limits of any kind; only Rekognition's external 15 MB per-file ceiling.
 - `P-23` `ACTIVE` is the only state that accepts change.
-- `P-31` Not shareable while a batch is in flight; shareable at all other times.
+- `P-31` Always shareable while `ACTIVE`; ingestion imposes no block.
 - `P-32` Archiving is permanent; viewing and downloading survive.
 - `P-33` Auto-archive on inactivity, deletion after.
 - `P-77` Durations: archive at 30 days, delete 30 days later.
@@ -485,10 +490,11 @@ Tick through this to confirm nothing is missing. Grouped by area; each line is t
 - `P-13` Contributions appear immediately; no moderation queue.
 - `P-35` JPEG and PNG; HEIC converted on ingest; RAW rejected.
 - `P-38` Duplicates detected by content hash, per event, and reported.
-- `P-54` ZIPs are mined for photos; OS junk skipped silently, real files reported.
+- `P-54` ZIPs are mined for photos at the top level only, stated up front; OS junk skipped silently, real files reported.
 - `P-53` No cancellation; every batch has a maximum lifetime.
 - `P-55` Partial failures report counts, never filenames.
-- `P-56` Transient failures retried silently.
+- `P-56` Transient failures retried without per-photo detail; `P-100` may say a retry is under way.
+- `P-100` Progress is shown on screen; ingestion never depends on the uploader staying.
 - `P-58` All EXIF stripped on ingest.
 - `P-14` A second batch is a new job but the same single gallery.
 - `P-87` No per-attendee upload quota.
@@ -499,10 +505,11 @@ Tick through this to confirm nothing is missing. Grouped by area; each line is t
 - `P-57` Ordered by upload time, newest first; filename breaks ties.
 - `P-63` Infinite scroll; cursor-based paging is forced.
 - `P-62` No social layer and no favourites.
-- `P-86` No visible uploader attribution.
-- `P-85` The organizer sees photo count and attendee count only.
-- `P-82` The organizer sees display names only.
-- `P-83` Attendees cannot see each other.
+- `P-86` Uploader attribution — name and email — shown to everyone.
+- `P-99` Attribution persists after ejection.
+- `P-85` The organizer sees photo count, attendee count and storage used — informational only.
+- `P-82` The organizer sees display names and email addresses.
+- `P-83` No member list for attendees; uploaders are identifiable from the gallery.
 - `P-44` Uploader deletes their own; organizer deletes anything. Not retroactive.
 - `P-52` Bulk delete by multi-selection; no delete-by-contributor.
 - `P-59` Downloads are the full-resolution transcode, unwatermarked.

@@ -4,7 +4,11 @@
 
 **Read `Miscellaneous/SESSION_HANDOFF.md` before doing anything.** It carries the current state, what's next, and how this project is run.
 
-Glimpses is a from-scratch rebuild of a torn-down v1 — an event photo-sharing app with face-recognition search on AWS. The product was locked feature-by-feature *before* any technology was chosen. **As of 2026-08-05 the product lock is complete with 98 rulings. The user is now reviewing for potential revisions before the technology discussion.**
+Glimpses is a from-scratch rebuild of a torn-down v1 — an event photo-sharing app with face-recognition search on AWS. The product was locked feature-by-feature *before* any technology was chosen.
+
+**As of 2026-08-06 the revision phase is complete and the product is locked again at 100 rulings (`P-01`–`P-100`).** The lock reached 98 on 2026-08-05; the user then reviewed the walkthrough and raised **11 change requests**, all now resolved, along with the AWS region and account deletion. **Next is the technology phase**, with one question still waiting on the user — read the top of `Miscellaneous/SESSION_HANDOFF.md` before anything else.
+
+**The user commits; you never do.** Stated directly on 2026-08-06: *"all commits will be made by me only not u so pls do not push or commit anything."* Leave work as uncommitted working-tree changes and say what changed.
 
 | File | Purpose |
 |---|---|
@@ -16,7 +20,13 @@ Glimpses is a from-scratch rebuild of a torn-down v1 — an event photo-sharing 
 
 **The non-negotiable rule: the user makes every decision.** Present options with honest tradeoffs and a recommendation, then wait. Never decide architecture silently or by implementation drift. In v1 the user let an AI dictate everything and ended up not understanding their own system — this rebuild exists to fix that. Explain concepts and syntax as you go; the user wants to understand, not just receive.
 
-**How to explain:** plain language, no jargon, and run every option through **named concrete scenarios** before naming it abstractly — then summarise as a scorecard (options as rows, scenarios as columns). The user has asked twice for simpler explanations; this is the default, not a fallback.
+**How to explain:** plain language, no jargon, and run every option through **named concrete scenarios** before naming it abstractly — then summarise as a scorecard (options as rows, scenarios as columns). The user has asked twice for simpler explanations; this is the default, not a fallback. Recurring cast: **Meera** (attendee), **Arjun** (wedding photographer), **Priya** (collaborative trip organizer), **Rohan** (adversarial), **Sam** (self-deploys the repo from Terraform).
+
+**Read the spec before describing it.** Never list a cascade from memory — grep the rulings. On 2026-08-06 a cascade given from recall was partly wrong, and one of the user's requests turned out to be **already built**, with the apparent conflict being nothing but a stale sentence. Some requests may need no change at all.
+
+**Don't moralise about privacy.** The user asked directly for less of this on 2026-08-06: it inflates the write-up and manufactures cascade work the ruling never required. State a consequence in one line and move on. Keep *design obligations* — they stop earlier rulings being undone by drift — and cut the alarm.
+
+**Revision convention:** a revised ruling **keeps its `P-nn` and is rewritten in place**, marked *(Rewritten YYYY-MM-DD by `D-nn`)*. Only a genuinely new question gets a new `P-nn`. Superseded decision-log rows are marked, never deleted. Ids are permanent; **recount statuses from table rows, never decrement.**
 
 ---
 
