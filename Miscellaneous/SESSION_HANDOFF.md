@@ -47,14 +47,17 @@ Worth knowing before designing anything, because it is a real reduction in surfa
 | 7 | **Observability, IAM granularity, CORS, secrets** | All four are §7 drift items — decide deliberately or repeat them | `P-81` means nothing alerts users; alarms are for the operator only |
 | 8 | **Testing approach and CI/CD** | v1's pyramid and its explicit failure-path tests are worth reusing; Jenkins is already named | — |
 
-### Open question on how this phase is recorded
+### How this phase is recorded — settled 2026-08-06
 
-**Not yet ruled — ask before the first decision.** Product used `D-nn` (register) → `P-nn` (locked spec). Technology needs the same traceability. Two options, and the user should pick:
+**Three files, not two** — a deliberate departure from the product convention, because this is explicitly a build-and-learn project and the user wants to understand and justify each decision, not just reference it:
 
-- **(A)** New pair of files — `TECH_DECISIONS.md` + `LOCKED_TECHNOLOGY.md` with `T-nn` ids, mirroring the product convention exactly. Keeps the locked product spec untouched and readable.
-- **(B)** Extend the existing files — technology rulings continue the `P-nn` sequence inside `LOCKED_PRODUCT.md`.
+| File | Role | Analogous to |
+|---|---|---|
+| `TECH_DECISIONS.md` | The raw register — every open technology question, one row each | `PRD.md` |
+| `LOCKED_TECH_DECISIONS.md` | The finalized answer only, kept tight — what to build | `LOCKED_PRODUCT.md`'s ruling line, without its reasoning |
+| `TECH_EXPLANATIONS.md` | The teaching material — what the thing physically is, how it works, the alternatives and why one won | New. Product never needed this; behaviour didn't require a concept explainer |
 
-**Recommendation: (A).** The product spec is the thing the user reviews to check the product is right; mixing DynamoDB key schemas into it makes that harder, and `HANDOFF.md` §10 records that v1's planning docs drifting from what was built was itself a lesson.
+Same `T-nn` id runs through all three, permanent, never renumbered. A decision moves left to right: raised in `TECH_DECISIONS.md` → ruled and copied tight into `LOCKED_TECH_DECISIONS.md` → written up conceptually in `TECH_EXPLANATIONS.md`. All three files exist, scaffolded by agenda area, with 0 decisions ruled so far.
 
 ## The rate-limit question — closed 2026-08-06
 
@@ -305,9 +308,9 @@ If a change cascades into five rulings, present all five at once as a cluster, n
 
 ## Suggested next steps
 
-1. **Settle how the phase is recorded** — the `T-nn` question at the top of "The technology phase". One line from the user.
-2. **Then work the agenda in order**, starting with runtime and language, which gates everything else. **One at a time, options first, run through the named cast.**
-3. **The full agenda is the table** in "The technology phase" above — eight decisions, ordered by what unblocks what.
+1. **Work the agenda in order**, starting with runtime and language, which gates everything else (`T-01` in `TECH_DECISIONS.md`). **One at a time, options first, run through the named cast.**
+2. **The full agenda is the table** in "The technology phase" above — eight decisions, ordered by what unblocks what.
+3. **After each ruling:** copy the tight answer into `LOCKED_TECH_DECISIONS.md`, write the concepts up in `TECH_EXPLANATIONS.md`, and add a dated row to both decision logs.
 
 ---
 

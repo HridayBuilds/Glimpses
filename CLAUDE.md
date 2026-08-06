@@ -23,6 +23,9 @@ Glimpses is a from-scratch rebuild of a torn-down v1 — an event photo-sharing 
 | `Miscellaneous/LOCKED_PRODUCT.md` | The spec — every ruled decision with full reasoning (`P-nn`) — source of truth |
 | `Miscellaneous/PRD.md` | The decision register (`D-nn`) — use for revisions |
 | `Miscellaneous/HANDOFF.md` | v1 retrospective — **a working input for the technology phase.** §7 mistakes, §9 fork points |
+| `Miscellaneous/TECH_DECISIONS.md` | The technology decision register (`T-nn`) — every open question |
+| `Miscellaneous/LOCKED_TECH_DECISIONS.md` | The finalized technology answers, kept tight — what to build |
+| `Miscellaneous/TECH_EXPLANATIONS.md` | The concepts behind each `T-nn` — what it is, how it works, why it won — this is the learning material |
 
 **The non-negotiable rule: the user makes every decision.** Present options with honest tradeoffs and a recommendation, then wait. Never decide architecture silently or by implementation drift. In v1 the user let an AI dictate everything and ended up not understanding their own system — this rebuild exists to fix that. Explain concepts and syntax as you go; the user wants to understand, not just receive.
 
