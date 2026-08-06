@@ -95,7 +95,7 @@ The user reviewed `PRODUCT_WALKTHROUGH.md` on 2026-08-06 and raised 11 changes. 
 | `P-82` **reversed** | Organizer's attendee/pending lists now show **display name + email** | `D-112` |
 | `P-86` **reversed** | Every photo shows uploader **name + email**, visible to **everyone** | `D-113` |
 | `P-83` **rewritten** | No member-list screen; uploaders identifiable from the gallery, non-uploaders not named | `D-113` |
-| `P-99` **new** | Attribution persists unchanged after account deletion or ejection | `D-114` |
+| `P-99` **new** | Attribution persists unchanged after ejection *(originally "after account deletion or ejection" — narrowed the same day by `D-125`, which removed account deletion)* | `D-114` |
 | `P-40` **reversed** | **No product limits at all** — no photo cap, no event cap, no attendee cap | `D-115` |
 | `P-85` **revised** | Three informational numbers: photo count, attendee count, **storage used** | `D-116` |
 

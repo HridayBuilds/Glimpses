@@ -120,7 +120,7 @@ Each question has a stable `D-nn` id that never changes, so decisions stay trace
 | D-82 | Are attendee uploads visible immediately, or held for organizer approval? | **RULED → P-13** — immediately; organizer deletes after |
 | D-83 | Can an attendee delete a photo they uploaded, even after others have matched on or downloaded it? | **RULED → P-44** — yes. Organizer can delete anything; deletion is not retroactive and must say so |
 | D-84 | Is uploader attribution shown ("added by Riya"), or are photos anonymous once in the gallery? | **RULED → P-86** — no attribution shown to anyone. Public attribution contradicts `P-83`; organizer-only recreates what `P-52` refused. **Reversed 2026-08-06 by `D-113`** — name and email are now shown to everyone; `P-83` rewritten rather than contradicted, and the `P-52` concern carried as a design obligation |
-| D-85 | Per-attendee upload quota — count, bytes, or none? Needed against both abuse and free-tier limits. | **RULED → P-87** — none. `P-40`'s event cap is the only limit; `P-52` and `P-29` are the remedies |
+| D-85 | Per-attendee upload quota — count, bytes, or none? Needed against both abuse and free-tier limits. | **RULED → P-87** — none. *(Updated 2026-08-06: this read "`P-40`'s event cap is the only limit". `D-115` removed that cap, so **nothing limits how much one attendee uploads.** `P-52` and `P-29` remain the only remedies, both after the fact.)* |
 | D-86 | In `MATCHES_ONLY` scope, can an attendee see a photo they uploaded themselves? | **DISSOLVED by P-07** — `MATCHES_ONLY` no longer exists |
 | D-87 | Is the organizer notified when an attendee contributes? | **DISSOLVED by P-81** — there are no notifications of any kind anywhere in the product. New photos are simply at the top of the gallery under `P-57` |
 | D-88 | Must an attendee be past the lobby before contributing? Presumably yes — confirm. | **RULED → P-43** — yes. Forced by P-28; a pending user cannot write into a gallery they cannot see |
@@ -155,7 +155,7 @@ Each question has a stable `D-nn` id that never changes, so decisions stay trace
 
 | id | Question | Status |
 |---|---|---|
-| D-70 | Target scale — photos per event, attendees per event, concurrent events? | **RULED → P-93** — 100 attendees/event, ~10 concurrent events; photos-per-event already fixed at 1,000 by `P-40`. Planning figures, not enforced caps |
+| D-70 | Target scale — photos per event, attendees per event, concurrent events? | **RULED → P-93** — 100 attendees/event, ~10 concurrent events; photos-per-event *(previously "already fixed at 1,000 by `P-40`" — `D-115` removed that cap on 2026-08-06, so `P-93` is now the sole statement of scale)*. Planning figures, not enforced caps |
 | D-71 | Acceptable ingestion time for a large batch, and acceptable face-search latency? | **RULED → P-94** — ~30 min for a 1,000-photo batch; matches within a few minutes of completion. Targets, not promises. Restated `P-31`'s cost as a ~30-minute unshareable window *(superseded 2026-08-06 by `D-117` — no such window exists; the ~30 min target stands)* |
 | D-72 | Is this mobile-web first? The selfie flow is inherently a phone action. | **RULED → P-92** — yes. Phone is the design target, desktop is the same layout with more room. Resolves the deferral inside `P-60` |
 | D-73 | Single region, single environment? Is there a staging environment? | **RULED → P-95** — one region, production only, no staging. Which region is left as an implementation choice, flagged unruled. *(**Completed 2026-08-06 by `D-124`** — the region is now named.)* |
