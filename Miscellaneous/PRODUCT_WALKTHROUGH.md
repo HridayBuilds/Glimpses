@@ -129,7 +129,7 @@ Every photo is **face-indexed identically regardless of who uploaded it** — `P
 | Ejection and photos | Photos an ejected person contributed **remain**; you delete them yourself if you want | `P-47` |
 | Delete a photo | Any photo in your event | `P-44` |
 | Bulk delete | By multi-selection. There is **no** "delete everything this person added" | `P-52` |
-| Per-attendee quota | None. The 1,000-photo cap is shared first-come by everyone admitted | `P-87` |
+| Per-attendee quota | None — and since `P-40` removed the event cap, nothing bounds how much one attendee uploads | `P-87`, `P-40` |
 | Uploader shown | **Yes.** Every photo shows who added it — display name and email — to everyone | `P-86` |
 
 Since there are no notifications (`P-81`) and no email beyond auth (`P-51`), **an organizer using `APPROVAL_REQUIRED` learns about waiting guests only by opening the event.** Someone can sit in the lobby for days. This is settled behaviour, not a gap.
@@ -386,7 +386,7 @@ These are accepted costs the spec records openly. None is a bug; each is a decis
 1. **Non-user privacy is the weakest point, and no other ruling is close.** Biometric analysis of people who never consented, no removal path, no in-product disclosure — `P-70` + `P-71`.
 2. **A bad selfie can never be fixed retroactively.** The product's own remedy is inert exactly when someone needs it — `P-20`, `P-73`, `P-98`.
 3. **`APPROVAL_REQUIRED` is heavy.** No notification of any kind means guests can wait days — `P-51`, `P-81`, `P-88`.
-4. **One attendee can consume the entire 1,000-photo allowance**, after which the organizer cannot upload their own photos and nothing tells them — `P-87`, `P-97`.
+4. **One attendee can upload without limit.** `P-40` removed the cap that used to bound this, `P-97` rate-limits only access-code attempts, and `P-81` tells the organizer nothing — so a flood is bounded only by the uploader's connection, and Rekognition bills on arrival — `P-87`, `P-40`, `P-97`, `P-81`.
 5. **A partially failed batch cannot be diagnosed.** Counts without filenames means the rational response is re-uploading everything — `P-55`.
 6. **The collaborative persona is served worse than the wedding one** in upload-time ordering rather than trip chronology — `P-57`. *(Uploader attribution was the second and was fixed by the `P-86` rewrite on 2026-08-06; the third was `P-94`'s ~30-minute window, which `D-117` and `P-100` made survivable — you can share and leave mid-batch.)*
 7. **Deployments go straight to production with no rollback target and no rehearsal**, against live events holding photos that exist nowhere else — `P-95`.

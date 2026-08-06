@@ -2,16 +2,13 @@
 
 **Written:** 2026-08-05, evening · **Updated:** 2026-08-06 *(revision phase complete)*
 **Current phase:** **Revisions done — the product is locked again at 100 rulings.** The user reviewed the walkthrough and raised **11 change requests**; all eleven are resolved, and the same session also closed the AWS region and account-deletion questions that had been carried as unruled. See "The revision queue" below for what changed.
-**Next steps:** **The technology discussion.** One question outstanding first — see "One question waiting on the user" below. Then stack, data model and service shapes, starting with **SQS vs Step Functions Distributed Map**, which `P-100` has now made a concrete product question rather than a taste one.
+**Next steps:** **The technology discussion — nothing product-side is blocking it.** Stack, data model and service shapes, starting with **SQS vs Step Functions Distributed Map**, which `P-100` has now made a concrete product question rather than a taste one.
 
-## One question waiting on the user
+## The rate-limit question — closed 2026-08-06
 
-On 2026-08-06 the user said *"no rate limits as i said"* while settling several items at once. **It has two readings and must not be resolved silently:**
+The user's *"no rate limits as i said"* was ambiguous and was put back to them. **They confirmed it meant the caps, not `P-97`:** *"by no rate limits i meant that no 1000 photos or 5 max active events etc... and that rate limit is something we have ruled on already so no issues."*
 
-1. **Only the numbers stay open** — `P-97`'s access-code attempt limiting stays as a mechanism, and only its thresholds are unruled. This is what was already on the unruled list, so the phrase may just have been confirming it.
-2. **`P-97` goes entirely** — no limiting on access-code attempts at all.
-
-Reading 2 is security-relevant and worth one plain sentence to the user before acting: `P-27`'s ~1 billion code combinations only protect anything if guessing is bounded, and with `P-26`'s `OPEN` default plus `P-07`, a guessed code is immediate full access to the gallery. Ask; do not assume.
+**`P-97` stands exactly as ruled** — access-code attempts are limited per account and per IP, in application code. Only its *thresholds* remain unset, which is what `P-97`'s own last bullet already says and belongs with the join flow. The caps reading was `P-40`, already reversed by `D-115`. **No ruling changed; no new `D-nn` row, because nothing was decided that was not already decided.**
 
 **Build cost is a legitimate reason to rule, and the user uses it.** `D-119` was decided purely on "not worth it for a portfolio project", with no options requested. When a ruling's cost is mostly *implementation* rather than *product*, say so plainly and early — it may be the deciding factor.
 
@@ -118,13 +115,13 @@ The user reviewed `PRODUCT_WALKTHROUGH.md` on 2026-08-06 and raised 11 changes. 
 
 ## Where things stand
 
-**Product: 100 rulings · 0 open · 2 unruled/assumed, plus 1 question waiting** (see the top of this file). The 2 are `P-97`'s rate-limit thresholds and `P-98`'s collection architecture, the second explicitly deferred by the user to the technology phase. `P-75` and `P-76` are **dissolved** — they still exist as ids and text, but describe nothing the product does. **Recount from table rows; never decrement** — `PRD.md` gained `D-117` through `D-126` on 2026-08-06.
+**Product: 100 rulings · 0 open · 0 questions waiting.** Four items are carried forward, none of them a product decision: `P-97`'s rate-limit thresholds, `P-98`'s collection architecture, `P-100`'s progress/retry mechanism and `P-88`'s bulk approval. The user deferred the middle two to the technology phase explicitly. `P-75` and `P-76` are **dissolved** — they still exist as ids and text, but describe nothing the product does. **Recount from table rows; never decrement** — `PRD.md` gained `D-117` through `D-126` on 2026-08-06.
 
 Note that the count rose by only **one** (`P-100`) across ten register rows: `D-117`, `D-119`, `D-121`–`D-125` all rewrote existing `P-nn` in place, `D-118` was a wording fix and `D-120` a reaffirmation. Per convention, revisions keep their `P-nn`.
 
 **Technology: nothing decided.** Deliberately deferred.
 
-**Repo state:** `main` has two commits (b60e14a locking the product, 94217a0 adding the walkthrough). **The 2026-08-06 revisions are uncommitted working-tree changes** to `LOCKED_PRODUCT.md`, `PRD.md`, `PRODUCT_WALKTHROUGH.md`, `SESSION_HANDOFF.md` and `CLAUDE.md` — the user commits when they choose. Backend and Frontend are empty directories. No secret-scanner (gitleaks) installed yet.
+**Repo state:** `main` has three commits — b60e14a locking the product, 94217a0 adding the walkthrough, and da41e0e committing the 2026-08-06 revisions. Later edits sit uncommitted in the working tree; **the user commits when they choose.** Backend and Frontend are empty directories. No secret-scanner (gitleaks) installed yet.
 
 ### The product in one paragraph
 
@@ -147,10 +144,10 @@ Sign up with email, password and a display name, verifying by numeric code. Join
 
 ### What still needs doing before the technology discussion
 
-1. **v1's leaked credentials need rotating** — AWS access key, Google OAuth secret, CloudFront signing PEM. These were in a deleted source folder but deletion is not revocation.
+1. ~~**v1's leaked credentials need rotating**~~ — **the user deleted them on 2026-08-06** and no AWS resources from v1 remain. *Confirm once that the AWS key was deleted in IAM rather than only removed from the folder, and that the Google OAuth secret and CloudFront signing PEM were revoked at their sources too — a live key is usable even against an empty account.*
 2. **Check AWS account creation date** — the 6-month free-tier credit clock is the project's real deadline.
 3. **`gitleaks` installation and pre-commit hook** — before any real code is committed.
-4. **Any product revisions the user wants to make** — which is the current phase.
+4. ~~**Any product revisions**~~ — **the revision phase is complete.** The technology phase is next.
 
 ---
 
@@ -160,8 +157,10 @@ These were flagged in the spec as open or explicitly assumed. They are *not* ope
 
 | Item | Where marked | What it is |
 |---|---|---|
-| **Rate-limit thresholds** | `P-97` | The mechanism is locked; the numbers are not. **See the question at the top of this file before touching this** |
+| **Rate-limit thresholds** | `P-97` | The mechanism is locked; the numbers are not. Set them when the join flow is built |
 | **Collection architecture** | `P-98` | Assumed one collection per event. **Deferred to the technology phase by the user on 2026-08-06**, in those words |
+| **Progress and retry state** | `P-100` | How it is actually produced — SQS bookkeeping vs Step Functions execution state. **Deferred to the technology phase by the user on 2026-08-06.** `P-100` is an *input* to that choice, not a constraint on it |
+| **Bulk approval of a waiting queue** | `P-88` | `P-88` removed *pre*-approval, not approving several waiting people at once. Left as an ordinary interface question |
 
 *(Closed 2026-08-06: the AWS region, now `ap-south-1` by `D-124`; and whether account deletion exists, now ruled out by `D-125`.)*
 
@@ -254,9 +253,9 @@ If a change cascades into five rulings, present all five at once as a cluster, n
 
 ## Suggested next steps
 
-1. **Work the revision queue** — four items left (8, 11, 3, 4) plus the `P-07` wording fix. They are listed near the top of this file with the user's exact words and the rulings each one touches. **One at a time, options first.**
-2. **Suggested order:** item 3, then 8, then 11 (which is 2–3 rulings, not one), then 4 (which collides with `P-81` and needs the most care).
-3. **Once satisfied** — begin the technology discussion. Stack, data model, service shapes.
+1. **Begin the technology discussion.** The revision queue is empty and nothing product-side is blocking.
+2. **Start with SQS vs Step Functions Distributed Map.** It is the choice that carries the most with it: `P-100`'s progress and retry state, `P-56`'s retry budget and `P-53`'s batch deadline all land inside it. **One at a time, options first, run through the named cast.**
+3. **Then** the stack questions already carried: HEIC-in-Python as one function or the whole stack, the data model, and `P-98`'s collection layout.
 
 ---
 

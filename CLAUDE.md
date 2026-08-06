@@ -6,7 +6,7 @@
 
 Glimpses is a from-scratch rebuild of a torn-down v1 — an event photo-sharing app with face-recognition search on AWS. The product was locked feature-by-feature *before* any technology was chosen.
 
-**As of 2026-08-06 the revision phase is complete and the product is locked again at 100 rulings (`P-01`–`P-100`).** The lock reached 98 on 2026-08-05; the user then reviewed the walkthrough and raised **11 change requests**, all now resolved, along with the AWS region and account deletion. **Next is the technology phase**, with one question still waiting on the user — read the top of `Miscellaneous/SESSION_HANDOFF.md` before anything else.
+**As of 2026-08-06 the revision phase is complete and the product is locked again at 100 rulings (`P-01`–`P-100`).** The lock reached 98 on 2026-08-05; the user then reviewed the walkthrough and raised **11 change requests**, all now resolved, along with the AWS region and account deletion. **Next is the technology phase**, with nothing product-side blocking it — read the top of `Miscellaneous/SESSION_HANDOFF.md` before anything else.
 
 **The user commits; you never do.** Stated directly on 2026-08-06: *"all commits will be made by me only not u so pls do not push or commit anything."* Leave work as uncommitted working-tree changes and say what changed.
 
