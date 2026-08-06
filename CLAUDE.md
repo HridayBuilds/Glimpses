@@ -6,7 +6,13 @@
 
 Glimpses is a from-scratch rebuild of a torn-down v1 — an event photo-sharing app with face-recognition search on AWS. The product was locked feature-by-feature *before* any technology was chosen.
 
-**As of 2026-08-06 the revision phase is complete and the product is locked again at 100 rulings (`P-01`–`P-100`).** The lock reached 98 on 2026-08-05; the user then reviewed the walkthrough and raised **11 change requests**, all now resolved, along with the AWS region and account deletion. **Next is the technology phase**, with nothing product-side blocking it — read the top of `Miscellaneous/SESSION_HANDOFF.md` before anything else.
+**As of 2026-08-06 the product is locked and closed at 100 rulings (`P-01`–`P-100`), and the technology phase is open.** The revision phase resolved 11 change requests plus the AWS region and account deletion. **Read "The technology phase" at the top of `Miscellaneous/SESSION_HANDOFF.md` before anything else** — it carries the agenda, the ordering, and the rules below in full.
+
+**The one-directional rule — this phase's version of the non-negotiable.** Product constrains technology; **technology never re-rules product.** If a stack choice makes a `P-nn` awkward or expensive, surface it as a revision request for the user to rule on. Never resolve it in the implementation. v1 failed exactly here: React 18 planned and 19 shipped, FastAPI taught and never used, Powertools shipped in the Lambda layer and never wired, CORS restriction implied by a Terraform variable and never enforced — **every one of those was decided by drift, which is what this rebuild exists to prevent.**
+
+**`HANDOFF.md` is no longer historical-only — it is now a working input.** §7 is v1's mistake ledger (dead dependencies, silent alarms, two unresolved bugs, IAM friction found at runtime) and §9 lists eight fork points v1 actually hit. Check every technology decision against both. Do not re-derive them and do not repeat them by omission.
+
+**The user wants to understand before anything is implemented.** Stated 2026-08-06: *"i need to understand it all before implementing anything."* No code until the decisions behind it are ruled.
 
 **The user commits; you never do.** Stated directly on 2026-08-06: *"all commits will be made by me only not u so pls do not push or commit anything."* Leave work as uncommitted working-tree changes and say what changed.
 
@@ -16,7 +22,7 @@ Glimpses is a from-scratch rebuild of a torn-down v1 — an event photo-sharing 
 | `Miscellaneous/PRODUCT_WALKTHROUGH.md` | The product described end-to-end, readable in one sitting — start here for review |
 | `Miscellaneous/LOCKED_PRODUCT.md` | The spec — every ruled decision with full reasoning (`P-nn`) — source of truth |
 | `Miscellaneous/PRD.md` | The decision register (`D-nn`) — use for revisions |
-| `Miscellaneous/HANDOFF.md` | v1 retrospective — historical only |
+| `Miscellaneous/HANDOFF.md` | v1 retrospective — **a working input for the technology phase.** §7 mistakes, §9 fork points |
 
 **The non-negotiable rule: the user makes every decision.** Present options with honest tradeoffs and a recommendation, then wait. Never decide architecture silently or by implementation drift. In v1 the user let an AI dictate everything and ended up not understanding their own system — this rebuild exists to fix that. Explain concepts and syntax as you go; the user wants to understand, not just receive.
 

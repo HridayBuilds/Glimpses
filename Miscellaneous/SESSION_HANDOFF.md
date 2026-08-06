@@ -1,8 +1,60 @@
 # Session Handoff — Glimpses product lock-in
 
 **Written:** 2026-08-05, evening · **Updated:** 2026-08-06 *(revision phase complete)*
-**Current phase:** **Revisions done — the product is locked again at 100 rulings.** The user reviewed the walkthrough and raised **11 change requests**; all eleven are resolved, and the same session also closed the AWS region and account-deletion questions that had been carried as unruled. See "The revision queue" below for what changed.
-**Next steps:** **The technology discussion — nothing product-side is blocking it.** Stack, data model and service shapes, starting with **SQS vs Step Functions Distributed Map**, which `P-100` has now made a concrete product question rather than a taste one.
+**Current phase:** **The technology phase — opened 2026-08-06.** The product is locked at 100 rulings and closed; see "The technology phase" below for how it runs and what the agenda is. The product sections of this file are now history, kept for the conventions they establish.
+**Next steps:** the first technology decision. **Runtime and language first** — it gates everything else. See the agenda below.
+
+---
+
+## The technology phase — read this before the first decision
+
+**Opened 2026-08-06,** on the user's instruction: they want to *"dive deep… replace mistakes of Glimpses v1… understand it all before implementing anything… and make sure they all work and align with the `LOCKED_PRODUCT.md` decisions."* Those are three standing requirements, not preferences:
+
+1. **Depth over speed.** The user is not looking for a stack list — they are looking to understand each choice well enough to defend it. Explain what the thing physically is before naming it, use the named cast, and finish with a scorecard. Same method that worked for all 100 product rulings.
+2. **Every choice is checked against `HANDOFF.md` §7 and §9.** v1's mistakes are *written down* — the drift, the dead dependencies, the silent alarms, the two unresolved bugs. §9 lists eight fork points v1 actually hit. Do not re-derive them from scratch and do not repeat them by omission.
+3. **Technology may never re-open product.** This is the load-bearing rule of the phase.
+
+### The one-directional rule
+
+**Product constrains technology. Technology never quietly re-rules product.** If a stack choice would make a `P-nn` awkward, expensive or impossible, that is **a revision request the user rules on** — surfaced explicitly, never resolved by implementation. v1 failed exactly here: React 18 planned and 19 shipped, FastAPI taught and never used, Powertools shipped in the layer and never wired, CORS restriction implied by a variable and never enforced. **Each of those was a decision made by drift.**
+
+### What the product rulings already deleted from v1's technology burden
+
+Worth knowing before designing anything, because it is a real reduction in surface area and the payoff for locking product first:
+
+| v1 carried this | Removed by |
+|---|---|
+| Google OAuth federation — **one of v1's two unresolved bugs**, never fixed | `P-03` — no social sign-in |
+| `SearchRateLimit` table, 10 searches/hour/user/event, and the `search` endpoint itself | `P-16`, `P-73`, `P-79` — no user action triggers a search |
+| `galleryMode` `PUBLIC`/`PRIVATE`, the `403 SEARCH_REQUIRED` gate, the `hasSearched` flag | `P-07` — admission is the only access control |
+| Configurable `similarityThreshold` (default 80, min 70) | `P-80` — fixed at 80, exposed to nobody |
+| A user-set event `date` field | `P-89` — system "Created" timestamp only |
+
+**Do not inherit v1's data model or Lambda shape by default.** `HANDOFF.md` §9 says the gallery, search and download Lambdas were never built past stubs — there is no working shape to inherit there, and the rebuild should design them from the rulings up.
+
+### Agenda, ordered by what unblocks what
+
+**One at a time, options first, user rules.** The order matters — each gates the ones under it.
+
+| # | Decision | Why here | Product inputs |
+|---|---|---|---|
+| 1 | **Runtime and language** — Node/TypeScript vs Python | Gates every item below. The user has named a desired Node/TS vocabulary (`handler → manager → procedure/converter → DAO`, middy, DynamoDB Toolbox) but also said they want Python *"for this conversion"* — **unresolved whether that means one function or the whole stack.** v1 chose Python for boto3/Rekognition examples | `P-35` HEIC→JPEG |
+| 2 | **Ingestion orchestration** — SQS + DLQ vs Step Functions Distributed Map | The phase's centrepiece. v1 chose SQS and called Distributed Map *"valid, but more advanced to configure and debug for a first build"* | `P-100`, `P-56`, `P-53`, `P-55`, `P-94` |
+| 3 | **API shape** — one Lambda per endpoint (v1) vs consolidated router | The user has already named Lambda consolidation as a want. Affects IAM granularity and deploy tooling | `P-97` leaves both API Gateway flavours open |
+| 4 | **Data model** — 7 single-purpose tables (v1) vs single-table | v1's GSI discipline (every index tied to a named access pattern) is worth keeping regardless | `P-57`+`P-16` force cursor pagination; `P-85` needs a byte counter that survives `P-44`/`P-52`/`P-38`/`P-55` |
+| 5 | **Rekognition collection layout and lifecycle** | `P-98`'s open assumption. v1's collections were invisible to Terraform and leaked cost on teardown | `P-98`, `P-32`, `P-52` |
+| 6 | **Terraform state and naming** | v1 used local state and hit a naming mismatch between Terraform resources and module filenames | `P-95` — parameterise or the region is expensive to reverse |
+| 7 | **Observability, IAM granularity, CORS, secrets** | All four are §7 drift items — decide deliberately or repeat them | `P-81` means nothing alerts users; alarms are for the operator only |
+| 8 | **Testing approach and CI/CD** | v1's pyramid and its explicit failure-path tests are worth reusing; Jenkins is already named | — |
+
+### Open question on how this phase is recorded
+
+**Not yet ruled — ask before the first decision.** Product used `D-nn` (register) → `P-nn` (locked spec). Technology needs the same traceability. Two options, and the user should pick:
+
+- **(A)** New pair of files — `TECH_DECISIONS.md` + `LOCKED_TECHNOLOGY.md` with `T-nn` ids, mirroring the product convention exactly. Keeps the locked product spec untouched and readable.
+- **(B)** Extend the existing files — technology rulings continue the `P-nn` sequence inside `LOCKED_PRODUCT.md`.
+
+**Recommendation: (A).** The product spec is the thing the user reviews to check the product is right; mixing DynamoDB key schemas into it makes that harder, and `HANDOFF.md` §10 records that v1's planning docs drifting from what was built was itself a lesson.
 
 ## The rate-limit question — closed 2026-08-06
 
@@ -253,9 +305,9 @@ If a change cascades into five rulings, present all five at once as a cluster, n
 
 ## Suggested next steps
 
-1. **Begin the technology discussion.** The revision queue is empty and nothing product-side is blocking.
-2. **Start with SQS vs Step Functions Distributed Map.** It is the choice that carries the most with it: `P-100`'s progress and retry state, `P-56`'s retry budget and `P-53`'s batch deadline all land inside it. **One at a time, options first, run through the named cast.**
-3. **Then** the stack questions already carried: HEIC-in-Python as one function or the whole stack, the data model, and `P-98`'s collection layout.
+1. **Settle how the phase is recorded** — the `T-nn` question at the top of "The technology phase". One line from the user.
+2. **Then work the agenda in order**, starting with runtime and language, which gates everything else. **One at a time, options first, run through the named cast.**
+3. **The full agenda is the table** in "The technology phase" above — eight decisions, ordered by what unblocks what.
 
 ---
 
