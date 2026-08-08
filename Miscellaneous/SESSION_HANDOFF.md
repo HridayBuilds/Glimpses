@@ -1,8 +1,8 @@
 # Session Handoff — Glimpses product lock-in
 
-**Written:** 2026-08-05, evening · **Updated:** 2026-08-06 *(revision phase complete)*
+**Written:** 2026-08-05, evening · **Updated:** 2026-08-09 *(technology phase in progress — `T-01` through `T-06` ruled, `T-07` observability sub-decision ruled)*
 **Current phase:** **The technology phase — opened 2026-08-06.** The product is locked at 100 rulings and closed; see "The technology phase" below for how it runs and what the agenda is. The product sections of this file are now history, kept for the conventions they establish.
-**Next steps:** the first technology decision. **Runtime and language first** — it gates everything else. See the agenda below.
+**Next steps:** `T-01` (runtime and language) is ruled — **all Python**. `T-02` (ingestion orchestration) is ruled — **Step Functions Distributed Map**. `T-03` (API shape) is ruled — **8 Lambdas: 5 domain-grouped API Lambdas, 1 consolidated pipeline Lambda, 2 shared utility Lambdas (`db-api`, HEIC→JPEG converter)** *(pipeline consolidated from 4 to 1 on 2026-08-08, same day, while working through `T-06`)*. `T-04` (data model) is ruled — **multi-table, 6 tables** (`Users`, `Events`, `Jobs`, `Photos`, `Faces`, `EventAttendees`; v1's `SearchRateLimit` dropped since `P-16` killed search). `T-05` (Rekognition collection layout) is ruled — **one collection per event**, created/destroyed at runtime by app code, tracked on the `Events` table for teardown. `T-06` (Terraform state and naming) is ruled — **S3 state backend + native locking, per-Lambda modules, dedicated CI job for untargeted applies, 9 CI/CD jobs total, fixed `glimpses-` naming prefix**. `T-07`'s **observability** sub-question is ruled 2026-08-09 — **Powertools structured `Logger`, `log_event=True` (full request auto-logged), 3-day log retention, no X-Ray, no custom metrics, every alarm on SNS + email, `Errors > 0`/5min alarm on all 8 Lambdas**; the hardcoded-alarm-list bug was confirmed already closed by `T-06`'s per-Lambda `cloudwatch.tf`. Fully written up in all three tech files. **Next up: the rest of `T-07` — IAM granularity, CORS, secrets — then agenda item 8, testing approach and CI/CD.**
 
 ---
 
@@ -38,14 +38,24 @@ Worth knowing before designing anything, because it is a real reduction in surfa
 
 | # | Decision | Why here | Product inputs |
 |---|---|---|---|
-| 1 | **Runtime and language** — Node/TypeScript vs Python | Gates every item below. The user has named a desired Node/TS vocabulary (`handler → manager → procedure/converter → DAO`, middy, DynamoDB Toolbox) but also said they want Python *"for this conversion"* — **unresolved whether that means one function or the whole stack.** v1 chose Python for boto3/Rekognition examples | `P-35` HEIC→JPEG |
-| 2 | **Ingestion orchestration** — SQS + DLQ vs Step Functions Distributed Map | The phase's centrepiece. v1 chose SQS and called Distributed Map *"valid, but more advanced to configure and debug for a first build"* | `P-100`, `P-56`, `P-53`, `P-55`, `P-94` |
-| 3 | **API shape** — one Lambda per endpoint (v1) vs consolidated router | The user has already named Lambda consolidation as a want. Affects IAM granularity and deploy tooling | `P-97` leaves both API Gateway flavours open |
-| 4 | **Data model** — 7 single-purpose tables (v1) vs single-table | v1's GSI discipline (every index tied to a named access pattern) is worth keeping regardless | `P-57`+`P-16` force cursor pagination; `P-85` needs a byte counter that survives `P-44`/`P-52`/`P-38`/`P-55` |
-| 5 | **Rekognition collection layout and lifecycle** | `P-98`'s open assumption. v1's collections were invisible to Terraform and leaked cost on teardown | `P-98`, `P-32`, `P-52` |
-| 6 | **Terraform state and naming** | v1 used local state and hit a naming mismatch between Terraform resources and module filenames | `P-95` — parameterise or the region is expensive to reverse |
-| 7 | **Observability, IAM granularity, CORS, secrets** | All four are §7 drift items — decide deliberately or repeat them | `P-81` means nothing alerts users; alarms are for the operator only |
+| 1 | **Runtime and language** — Node/TypeScript vs Python — **RULED 2026-08-08: all Python (`T-01`)** | Resolved: middy and DynamoDB Toolbox, the main draw of a Node backbone, were separately ruled unnecessary (Powertools' router already covers routing/response/CORS; the multi-table data model doesn't have the single-table key-collision problem Toolbox solves) — once neutralized, Python's more mature router and single toolchain won out over Node's small cold-start edge. `handler → manager → procedure/converter → DAO` carries over as a Python file-layout convention. See `TECH_DECISIONS.md`/`LOCKED_TECH_DECISIONS.md`/`TECH_EXPLANATIONS.md` `T-01` | `P-35` HEIC→JPEG |
+| 2 | **Ingestion orchestration** — SQS + DLQ vs Step Functions Distributed Map — **RULED 2026-08-08: Step Functions Distributed Map (`T-02`)** | Chosen over v1's SQS for removing the hand-rolled polling loop and getting per-item visual execution history. Item list via S3 `ItemReader`, never passed between states. `MaxConcurrency` is a Terraform variable bound to the account's real Rekognition `IndexFaces` quota (this account measured 5 TPS, below the ~50 TPS default; increase requested). See `T-02` in the three tech files | `P-100`, `P-56`, `P-53`, `P-55`, `P-94` |
+| 3 | **API shape** — one Lambda per endpoint (v1) vs consolidated router — **RULED 2026-08-08: domain-grouped, 8 Lambdas total (`T-03`, pipeline shape revised same day)** | Chosen over v1's one-per-endpoint (tightest IAM, most boilerplate) and full consolidation (least boilerplate, widest blast radius). 5 API Lambdas scoped by table, 1 consolidated pipeline Lambda (`PipelineHandler`, revised from 4 named functions same day — no external invocation path, so the API-consolidation blast-radius argument doesn't transfer), plus `db-api` (generic `Jobs`-status writer, deliberately a separate Lambda over a shared code library) and a shared HEIC→JPEG converter. See `T-03` in the three tech files | `P-97` leaves the API Gateway flavour (HTTP vs REST API) still open |
+| 4 | **Data model** — 7 single-purpose tables (v1) vs single-table — **RULED 2026-08-08: multi-table, 6 tables (`T-04`)** | Decided on IAM grounds: `T-03` already scoped each Lambda's role to one table, structural under multi-table, hand-built under single-table. `SearchRateLimit` dropped (v1's 7th table) since `P-16` killed search. Per-table fields/GSIs left as a following sub-decision. See `T-04` in the three tech files | `P-57`+`P-16` force cursor pagination; `P-85` needs a byte counter that survives `P-44`/`P-52`/`P-38`/`P-55` |
+| 5 | **Rekognition collection layout and lifecycle** — **RULED 2026-08-08: one collection per event (`T-05`)** | Decided on security-boundary grounds: `P-07`'s no-cross-event-visibility is AWS-enforced under per-event collections, versus dependent on application-code filtering under a shared collection. Collection id tracked on `Events` (`rekognitionCollectionID`) so a teardown script can clean up orphans without Terraform visibility — closes the exact `HANDOFF.md` §9 fork point. See `T-05` in the three tech files | `P-98`, `P-32`, `P-52` |
+| 6 | **Terraform state and naming** — **RULED 2026-08-08: S3 + native locking (`T-06`)** | v1 used local state and hit a naming mismatch between Terraform resources and module filenames | `P-95` — parameterise or the region is expensive to reverse |
+| 7 | **Observability, IAM granularity, CORS, secrets** — **observability sub-question RULED 2026-08-09 (`T-07`, partial); IAM/CORS/secrets still open** | All four are §7 drift items — decide deliberately or repeat them | `P-81` means nothing alerts users; alarms are for the operator only |
 | 8 | **Testing approach and CI/CD** | v1's pyramid and its explicit failure-path tests are worth reusing; Jenkins is already named | — |
+
+### `T-06` — Terraform state and naming (ruled 2026-08-08)
+
+**Fully written up in `TECH_DECISIONS.md`, `LOCKED_TECH_DECISIONS.md`, and `TECH_EXPLANATIONS.md`** — five sub-decisions: (1) state backend — S3 + native S3 locking (`use_lockfile = true`, no DynamoDB), versioning on; (2) per-Lambda Terraform module layout, replacing v1's centralized `functions` module; (3) deploy discipline — a separate dedicated CI job runs the untargeted `apply` that builds/updates the state machine, never piggybacked on a single Lambda's own pipeline; (4) CI/CD granularity — 8 per-Lambda Jenkinsfiles + 1 dedicated untargeted-apply job = 9 total; (5) naming — a fixed `glimpses-` prefix applied identically everywhere, no environment branching, no mapping file. See `T-06` in the three tech files for full reasoning, options considered, and the worked naming table.
+
+### `T-07` — Observability (ruled 2026-08-09; IAM granularity, CORS, secrets still open)
+
+**Fully written up in `TECH_DECISIONS.md`, `LOCKED_TECH_DECISIONS.md`, and `TECH_EXPLANATIONS.md`** — seven sub-decisions under the observability slice of `T-07`: (1) logging library — Powertools `Logger` (structured JSON), no new dependency since `T-01` already ships Powertools; (2) `log_event=True` — the full incoming request is auto-logged on every invocation, **ruled against the recommendation** (which favored logging only explicit fields, given the `P-19` selfie/`P-68` deletion right sitting in request bodies); (3) log retention set to **3 days**, a direct consequence of (2); (4) tracing — **no X-Ray**, ruled against the recommendation, on cost/effort grounds; (5) custom metrics — **none**, AWS-default Lambda metrics only, `P-100`'s failure-percentage stays a manual read; (6) alarms wired to an **SNS topic + email subscription**, fixing `HANDOFF.md` §7's silent-alarm bug directly; (7) the hardcoded-alarm-list bug confirmed **already closed** by `T-06`'s per-Lambda `cloudwatch.tf`, not a fresh decision — flagged out loud rather than assumed. Alarm content ruled narrow: `Errors > 0` over 5 minutes, identical on all 8 Lambdas. See `T-07` in the three tech files for full reasoning and the options considered at each step.
+
+**IAM granularity, CORS, and secrets hygiene — the other three §7 drift items — are not yet discussed.**
 
 ### How this phase is recorded — settled 2026-08-06
 
@@ -272,11 +282,9 @@ If a change cascades into five rulings, present all five at once as a cluster, n
 
 ## Technical carry-forward, still undecided
 
-**Backend vocabulary:** the user's desired Node/TypeScript with `handler → manager → procedure/converter → DAO`, middy, and DynamoDB Toolbox.
+**Backend runtime and vocabulary — resolved by `T-01` (2026-08-08):** all Python. `handler → manager → procedure/converter → DAO` carries over as a Python file-layout convention (it was never Node-specific). No middy (Powertools' `APIGatewayRestResolver` already covers routing, response conversion, CORS). No DynamoDB Toolbox (multi-table data model doesn't need single-table key protection; plain typed `boto3` wrapper functions cover data access instead — a working assumption, not a formal `T-nn`, revisit only if `T-04` changes the data model shape).
 
-**HEIC tension:** decoding is materially easier in Python. The user said they want Python "for this conversion" — clarify whether that means a separate function or a whole-stack choice.
-
-**Locked stack elements the user has named:** Jenkins CI/CD, React frontend, Terraform IaC, Cognito, DynamoDB, S3, CloudFront, CloudWatch. Lambda consolidation (handlers doing routing, not one-per-endpoint).
+**Locked stack elements the user has named:** Jenkins CI/CD, React frontend, Terraform IaC, Cognito, DynamoDB, S3, CloudFront, CloudWatch. Lambda consolidation via Powertools' `APIGatewayRestResolver` (handlers doing routing, not one-per-endpoint).
 
 **Design obligations from product rulings** — load-bearing, not cosmetic:
 
@@ -295,6 +303,8 @@ If a change cascades into five rulings, present all five at once as a cluster, n
 - "Deletion is not retroactive" wording on photos and ejection (`P-44`, `P-29`).
 - Event lifetime stated at creation and warned before transition (`P-33`).
 - Terraform resource names parameterised from the start, or `P-95` becomes expensive to reverse.
+- **The Distributed Map's `MaxConcurrency` must be a Terraform variable, never hardcoded** (`T-02`) — it has to match the deploying account's actual Rekognition `IndexFaces` TPS quota, which varies per account (new/lightly-used accounts commonly sit below the ~50 TPS published default) and is checked via the Service Quotas console, not assumed. A hardcoded value throttles silently rather than failing the build. *Added 2026-08-08.*
+- **The Map state's photo list is read from S3 via `ItemReader`, never passed as workflow JSON** (`T-02`) — keeps state-machine payloads at the `jobId`/S3-path scale v1 already established, inside the 256KB ASL data-transfer limit. *Added 2026-08-08.*
 - **Verify Rekognition is available in `ap-south-1` before building** — it is not offered in every region (`P-95`).
 - Upload progress must survive the uploader leaving, and must degrade honestly rather than freeze during a slow retry (`P-100`).
 - **The gallery must offer no filtering or selection by uploader** (`P-86` + `P-52`). Attribution is now visible, which puts the "delete everything this person added" control `P-52` deliberately rejected one filter away from existing. *Added 2026-08-06 — this one is a guard against drift, not a nicety.*
@@ -303,14 +313,16 @@ If a change cascades into five rulings, present all five at once as a cluster, n
 - **Two `P-54` messages are the entire mitigation for not recursing, and both must survive into the build.** (a) The "photos must be at the ZIP's top level" line wherever a ZIP can be chosen — organizer upload and `P-36` attendee contribution. (b) The explanatory message when a ZIP yields no top-level photos, instead of a bare zero. Without them, a photographer's nested export ingests nothing with no way to work out why. *Added 2026-08-06.*
 - **No share block may be reintroduced** (`P-31`). Ingestion state now affects no permission anywhere, and `P-53`'s batch timeout no longer rests on it — a future change to batch handling must not quietly re-derive one. *Added 2026-08-06.*
 - **Nothing bounds spend any more** (`P-40`, `P-25`). No photo cap, no event cap, no upload quota, no alerting. Rekognition bills on arrival at ~6× whole-life storage cost, so `terraform destroy` recovers nothing already spent. Ruled deliberately as an accepted portfolio risk; `P-87`'s per-membership counter is the only place a volume guard could later go. *Added 2026-08-06.*
+- **`db-api`'s IAM role must stay scoped to the `Jobs` table only** (`T-03`). It is a generic, reusable Lambda called from four separate pipeline states — the whole reason it's safe as a separate function rather than a shared code library is that its blast radius stays narrow. Widening its use to other tables later would need this re-examined, not assumed away. *Added 2026-08-08.*
 
 ---
 
 ## Suggested next steps
 
-1. **Work the agenda in order**, starting with runtime and language, which gates everything else (`T-01` in `TECH_DECISIONS.md`). **One at a time, options first, run through the named cast.**
+1. **Work the agenda in order.** `T-01` (runtime and language → all Python), `T-02` (ingestion orchestration → Step Functions Distributed Map), `T-03` (API shape → 8 domain-grouped/pipeline/utility Lambdas), `T-04` (data model → multi-table, 6 tables), and `T-05` (Rekognition collection layout → one per event) are ruled. **Next: agenda item 6, Terraform state and naming**, in `TECH_DECISIONS.md`. **One at a time, options first, run through the named cast.**
 2. **The full agenda is the table** in "The technology phase" above — eight decisions, ordered by what unblocks what.
 3. **After each ruling:** copy the tight answer into `LOCKED_TECH_DECISIONS.md`, write the concepts up in `TECH_EXPLANATIONS.md`, and add a dated row to both decision logs.
+4. **The user is learning these concepts from scratch.** Once agreed on a decision at a high level, expect several follow-up rounds going deeper into the mechanics before it's ready to rule (`T-02` took this shape: SQS vs Distributed Map → simpler retrace → isolate the confusing part → trace with small numbers → connect to a real numeric example, i.e. Rekognition's actual TPS quota). Don't rush past this to get to a ruling.
 
 ---
 
