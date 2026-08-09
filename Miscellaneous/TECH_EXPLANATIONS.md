@@ -123,6 +123,38 @@ The **HEIC→JPEG converter** is the same shape of shared Lambda, called from `E
 
 **Cross-reference to `HANDOFF.md`:** directly answers §9's named fork point ("one-Lambda-per-endpoint again, or a grouped/router pattern... at the cost of a slightly heavier single function"), choosing the middle position deliberately rather than re-inheriting v1's shape or over-correcting to full consolidation.
 
+### API Gateway flavour — HTTP API vs REST API (left open at `T-03`, ruled 2026-08-09)
+
+**Left open deliberately at the time** — `P-97` leaves both viable, and the choice didn't block anything else on the agenda. Picked back up after the technology agenda closed, as one of two loose threads explicitly named as still open (the other, `T-04`'s per-table fields/GSIs, is separate and unrelated).
+
+**Worth flagging before the ruling itself: a real drift risk was caught here, not just a stylistic wrinkle.** `T-01`'s locked text names Powertools' `APIGatewayRestResolver` for routing — a class specific to the REST API event shape, not interchangeable with `APIGatewayHttpResolver` (HTTP API's equivalent; the two Gateway flavors send Lambda a differently-shaped event payload, so the resolver has to match). Had REST API shipped by default just because that resolver happened to get named first, that would have been exactly the kind of implementation-drift decision this rebuild exists to prevent — v1's React 18/19 mismatch in a new outfit. Surfaced explicitly instead of resolved silently; it turned out to point at the same answer the ruling below reaches anyway, so `T-01`'s text needs **no correction**.
+
+**What API Gateway is, and what an authorizer does.** API Gateway is the internet-facing front door — every request from a browser or the Glimpses frontend hits it first, before anything reaches a Lambda. Before forwarding a request, it can run an **authorizer**: a check answering "is this caller even allowed to knock?" Without one, every request — logged in or not — reaches the Lambda, and the Lambda's own code has to do the rejecting itself, on every endpoint, every time.
+
+**What a JWT is, since both authorizer types are built around it.** When Meera logs in through Cognito, Cognito hands her browser a **JWT** (JSON Web Token) — a signed block of text carrying claims like "this is user `meera-123`, issued 10:00, expires 11:00." It's cryptographically signed, so nobody can forge one or edit the expiry without the signature breaking. Every request Meera's browser makes afterward carries this token; the authorizer's job is checking that signature and expiry before letting the request through.
+
+**Cognito User Pool authorizer (REST API) vs JWT authorizer (HTTP API) — the actual difference, once the names are stripped away.** Both check the exact same Cognito-issued JWT the same way, for the same purpose. REST API's **User Pool authorizer** is purpose-built — it already knows the shape of a Cognito token specifically. HTTP API's **JWT authorizer** is generic — it works with any standards-compliant token issuer (Cognito, Auth0, anything), by being pointed at that issuer's public verification key. Cognito publishes tokens in the standard format either one expects, so for Glimpses' actual login check, **both produce an identical outcome** — this sounds like a real differentiator and isn't one.
+
+**The differences that are real, verified against current AWS pricing and docs (2026-08-09):**
+
+| | HTTP API | REST API |
+|---|---|---|
+| Price per request | $1 per million | $3.50 per million (3.5x more) |
+| AWS WAF (edge firewall) | Not supported | Supported |
+| Response caching at the gateway | Not supported | Supported |
+| API keys / usage plans (rate-limit specific external clients) | Not supported | Supported |
+| Resource policies (restrict calls to a specific VPC/IP range) | Not supported | Supported |
+| Request-body schema validation at the gateway | Not supported | Supported |
+| Cognito login check | Works (JWT authorizer) | Works (User Pool authorizer) — identical outcome |
+
+**What a WAF actually does, and why it's the one differentiator that maps to something real here.** AWS WAF sits in front of API Gateway and inspects every incoming request for known-malicious shapes — SQL-injection-looking payloads, known-bad IP ranges, rate-based rules ("block an IP making 1,000 requests in 5 minutes") — rejecting them **before they ever reach the authorizer or a Lambda.** This matters specifically for Glimpses because **Rohan is a named adversarial persona in this project** — `P-07`'s access-control boundary exists because of exactly this kind of actor. Without WAF, a rate-based probe from Rohan still reaches a Lambda and gets rejected by the app's own auth code — same end result, but every one of his requests costs a real Lambda invocation and shows up in `T-07`'s `Errors`/`log_event=True` logging as noise to sift through. With WAF, many of those requests are stopped at the edge for free, before they cost anything.
+
+The other REST-only features don't map to anything Glimpses actually does: no third-party API consumers exist to need usage plans/API keys, no product ruling calls for response caching, and there's no private-VPC requirement for resource policies — WAF is the one line item actually worth the price gap.
+
+**Ruled: REST API**, accepting the 3.5x per-request cost over HTTP API, specifically for AWS WAF's edge-level protection against exactly the adversarial actor (Rohan) this project already designs around. `T-01`'s `APIGatewayRestResolver` was correct as written; no change needed.
+
+Sources checked: [AWS API Gateway docs — choosing between REST and HTTP APIs](https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-vs-rest.html); [AWS API Gateway pricing breakdown](https://amnic.com/blogs/aws-api-gateway-pricing); [Cognito authorizers with API Gateway](https://oneuptime.com/blog/post/2026-02-12-cognito-authorizers-api-gateway/view).
+
 ## 4. Data model
 
 ### `T-04` — Data model: multi-table
@@ -145,9 +177,34 @@ The **HEIC→JPEG converter** is the same shape of shared Lambda, called from `E
 
 **Ruled 2026-08-08: A — multi-table, 6 tables.** Drops v1's 7th table, `SearchRateLimit`, outright: `P-16` removed search as a user action entirely, so there is nothing left to rate-limit that way. The remaining six keep v1's own "every GSI tied to a named access pattern" discipline (`HANDOFF.md` §3), which survives this decision unchanged.
 
-**Left open, not decided here:** each table's actual field list and GSI definitions — including how `P-57`+`P-16` force cursor-based pagination (position-based paging breaks when new photos can appear mid-scroll) and how `P-85`'s storage-byte counter stays correct across `P-44`/`P-52`/`P-38`/`P-55` — is a following sub-decision, not this one.
-
 **Cross-reference to `HANDOFF.md`:** keeps §3's stated design philosophy ("single-purpose tables... easier to reason about... every GSI justified against a named access pattern") deliberately, rather than trading it for single-table's join-reduction, which this project's shallow entity graph doesn't need enough to be worth the IAM ground `T-03` would otherwise give back.
+
+### `T-04` follow-up — per-table fields, PK/SK, GSI definitions (left open at `T-04`; in progress, started 2026-08-09)
+
+**DynamoDB operations, in full, before ruling any table's keys:** beyond PK/SK/GSI above — `GetItem` takes an exact key and returns one item, the cheapest possible read. `Query` takes an exact PK plus an optional condition on SK (`=`, `<`, `between`, `begins_with`) and returns a sorted set, touching only the requested partition. `Scan` reads the *entire table* with no key involved, filtering afterward — slow, billed by table size not result size, avoided unless nothing else works. An **LSI (Local Secondary Index)** is a same-PK, different-SK alternate sort order sharing the base item's partition — unlike a GSI it must be declared at table creation and can never be added later, which is why GSIs are used far more often in practice. `BatchGetItem`/`BatchWriteItem` bundle up to 100 reads / 25 writes into one round trip. `UpdateItem` writes a partial change to one item and supports **atomic counters** (increment a field by N without reading it first) — the mechanism `P-85`'s storage-byte counter and `Events.photoCount`/`attendeeCount` will use. `TransactWriteItems` commits several writes atomically, all-or-nothing, reached for only when correctness genuinely requires it.
+
+**`Users` — ruled 2026-08-09.** PK = `userID` (Cognito's `sub`), no SK, no GSI. Fields: `userID`, `displayName` (`P-84`), `email` (full-mirrored from Cognito, not just a pointer to it). The mirror-vs-pointer choice: a minimal mirror (only what Cognito doesn't already hold) avoids any sync risk but forces an `AdminGetUser` Cognito call anywhere an email is needed (`P-82`'s organizer view); a full mirror (email copied into DynamoDB too) is faster and cheaper to read at the cost of a second copy that could drift if email were ever editable. **Ruled: full mirror.** The drift risk that would otherwise be a design obligation is moot — Glimpses does not allow email changes post-signup. No GSI, because every access path to `Users` already arrives holding a `userID` (JWT for "my own profile," `EventAttendees` rows for "who's pending/admitted") — nothing ever starts from an email or display name and needs to find the user.
+
+**`Events` — in progress.** PK = `eventID`, no SK. Fields: `eventID`, `organizerID`, `name`, `accessCode`, `joinPolicy`, `contributionPolicy`, `status`, `lastUploadAt`, `archivedAt`, `photoCount`, `attendeeCount`, `storageBytes`, `qrCodeURL`. `similarityThreshold` deliberately excluded — `P-26`/`P-80` lock it as a single hardcoded constant for the whole product, not per-event data, so it never becomes a column.
+
+- **GSI 1 — `organizerID` (PK), `status` (SK).** Answers "show this organizer their events" for the dashboard. Originally proposed on the reasoning that `P-40`'s old 5-active-events cap made this necessary — that cap no longer exists (`P-40` removed all limits), but the access pattern itself is independent of any cap: the dashboard needs this list regardless of how many events an organizer has.
+- **GSI 2 — `accessCode` (PK), no SK.** Answers "which event does this 6-character code (`P-27`) belong to" for the join flow. Codes are unique by design (~1B combination space), so this always resolves to exactly one event.
+- **GSI 3 — `status` (PK), `lastUploadAt` (SK).** Answers `P-77`/`P-78`'s "which `ACTIVE` events are >30 days past their last upload" — a scheduled Lambda runs `Query(status="ACTIVE", lastUploadAt < now-30d)` and flips matches to `ARCHIVED`.
+
+**The archive-to-delete transition (`P-77`'s second 30 days) — ruled 2026-08-09.** Two options considered, walked through Arjun's wedding event hitting day 30 then day 60:
+
+| | Day-30 archive | Day-60 delete | Extra moving parts |
+|---|---|---|---|
+| A — pure scan | GSI 3 query, scheduled Lambda | Second scheduled query (`status="ARCHIVED", archivedAt < now-30d`), same Lambda cascades the teardown itself | One Lambda handles both transitions |
+| B — GSI for archive, TTL for delete | Same as A | `archivedAt + 30d` written as a `deleteAt` TTL attribute at archive time; DynamoDB expires the item itself, for free, no scheduled query | A DynamoDB Stream on `Events` fires a cleanup Lambda on item removal |
+
+**Ruled: B.** TTL deletes cost nothing and run in the background rather than on a paid schedule. TTL's known imprecision (AWS: typically within 48 hours of expiry, best-effort) is compatible with `P-77`'s own "roughly 60 days" / privacy page's "about two months" wording — neither promises an exact boundary. The Stream-triggered cleanup Lambda (tear down S3 photos, the Rekognition collection, and rows across all 6 tables) is not new incremental work: `P-34`'s organizer-triggered manual delete needs the identical cascade, just invoked directly instead of via a Stream event — so Option B gets automatic deletion by reusing a Lambda `P-34` requires anyway, in exchange for one Stream wiring.
+
+**A gap surfaced by the deletion mechanism, not caused by it — ruled 2026-08-09: a 9th Lambda, `EventTeardown`.** Both `P-34`'s manual delete and the automatic TTL-triggered delete above need to touch `Events`, `Photos`, `Faces`, `EventAttendees`, S3, and the Rekognition collection — a cascade nothing in `T-03`'s original 8 Lambdas can do, since every API Lambda is deliberately IAM-scoped to exactly one table. This gap existed the moment `P-34` was ruled; it only became visible now because the TTL/Stream design forced the question of *which* Lambda the Stream should invoke.
+
+Two ways to close it: (1) a dedicated 9th Lambda with the broader cross-table/S3/Rekognition role, invoked both directly (by `Events`' delete endpoint) and via the `Events` Stream (for the automatic path); (2) widen the existing `Events` Lambda's own role to cover the same reach. **Ruled: (1).** The whole case for multi-table over single-table in the base `T-04` ruling rested on "one Lambda, one table = structural IAM isolation, free" — widening `Events`' role to touch 4 tables plus S3 plus Rekognition would give back exactly the blast-radius guarantee that argument was built on, to save a single Lambda's worth of count. A dedicated Lambda keeps every other Lambda's role exactly as narrow as originally reasoned, at the cost of `T-03`'s Lambda count moving from 8 to 9 and `T-06`'s CI/CD job count moving from 9 to 10 — both updated in `LOCKED_TECH_DECISIONS.md`.
+
+**Still open:** `Jobs`, `Photos`, `Faces`, `EventAttendees` — not yet started. `Photos` is where `P-57`+`P-16`'s forced cursor pagination and `P-85`'s storage-byte counter actually get implemented against a real key schema.
 
 ## 5. Rekognition collection lifecycle
 
@@ -227,7 +284,7 @@ The complication: `-target` (as in `terraform apply -target=module.pipeline_lamb
 
 ## 7. Observability, IAM, CORS, secrets
 
-### `T-07` — Observability (ruled 2026-08-09; IAM granularity, CORS, secrets still open)
+### `T-07` — Observability, IAM granularity, CORS, secrets (ruled 2026-08-09)
 
 **Logging vs. tracing vs. metrics — three different questions, easy to conflate.** A **log line** is one event, in its own words: "photo `abc123` indexed at 14:02:03." A **trace** is a timeline: how long each hop of one request took, and in what order, across every service it touched. A **metric** is a number tracked over time that can be graphed and, critically, alarmed on: "count of failed photos this hour." All three describe overlapping ground, but only a metric is the kind of thing CloudWatch can watch and act on automatically.
 
@@ -259,6 +316,77 @@ The complication: `-target` (as in `terraform apply -target=module.pipeline_lamb
 
 **Alarm content — kept deliberately narrow, matching the metrics ruling.** `Errors > 0` over a 5-minute evaluation window: every 5 minutes, CloudWatch sums that Lambda's `Errors` count for the window just passed; if the sum exceeds zero — i.e. at least one invocation failed — the alarm flips to `ALARM` and the SNS email fires. Same shape on all 8 Lambdas. No duration or throttle alarms were added — consistent with `P-81`'s operator-only scope and the same minimalism already applied to metrics (a few meaningful signals, not a dashboard).
 
-**What's still open under `T-07`:** IAM granularity, CORS, and secrets hygiene — not yet discussed.
+### IAM granularity
+
+**What "IAM granularity" means, concretely.** Every Lambda runs *as* an IAM role — a bundle of permissions ("can read table X," "can call `IndexFaces`"). AWS checks the role before allowing any action; no matching permission, the call is rejected, no exceptions. The question isn't *whether* to scope permissions tightly — `T-03`/`T-04` already committed to that shape, scoping each API Lambda to exactly one DynamoDB table — it's **how the tight permission list actually gets written.**
+
+**The concrete failure mode from v1, worth walking through once:** `HANDOFF.md` §7 — *"several IAM roles were missing a specific permission discovered only at runtime."* Picture `PipelineHandler`'s `Extract` step gaining a new line of code, weeks into development, that reads a thumbnail back from S3 to check its dimensions. If its role only has `s3:PutObject` and not `s3:GetObject`, that line throws `AccessDenied` — but only the first time that exact code path actually executes, which could be days after the code shipped, on whichever attendee's upload happens to trigger it. The bug isn't visible at `terraform apply` time; it's only visible at the exact runtime moment the missing permission is needed.
+
+**Three ways to arrive at "each Lambda's permissions are tight":**
+- **A — Hand-written, strict, one-role-per-Lambda (v1's exact approach).** A developer writes out the AWS actions a Lambda needs, from memory/prediction. Tightest possible blast radius per Lambda; whatever wasn't anticipated becomes the exact `AccessDenied`-at-runtime problem above.
+- **B — Start broader within a service boundary, tighten before launch.** e.g. grant `dynamodb:*` on a Lambda's own table rather than listing each action. Removes runtime surprises during active development, at the cost of a wider blast radius for however long "tighten before launch" takes — and `HANDOFF.md` §7 has a documented example of exactly this kind of "tighten later" note never actually being acted on (the Terraform IAM user's `AdministratorAccess`, flagged as "pragmatic for now, tighten later" and never tightened).
+- **C — Strict, but derived from the code rather than guessed.** `HANDOFF.md` §7 names this directly: *"generating them from a manifest of each Lambda's actual AWS calls."* Each Lambda's folder carries a short, explicit list of every AWS call it actually makes; `iam_policies.tf` is written directly against that list. Same tight end-state as A, but the permission list has something concrete to be checked against, so a missing permission is a mismatch between two things sitting next to each other in the same folder — not a memory gap.
+
+**Ruled: C.** It answers `HANDOFF.md`'s own diagnosis rather than repeating it (A) or trading it for the different, historically-documented-to-linger risk of B.
+
+### CORS
+
+**What CORS physically is.** A frontend running in a browser, at one address, and an API running at a different address — by default, browsers block a page from reading a response from a different address than its own. This is a browser rule, not something an app opts into; **CORS is the mechanism a server uses to say "responses to this specific address are OK to read."** Concretely, the server sends back a header, `Access-Control-Allow-Origin: https://app.glimpses.com` — and the browser only hands the response to the page's JavaScript if that header names the page's own address.
+
+**The `*` shortcut.** A server can instead send `Access-Control-Allow-Origin: *` — "any website may read this API's responses." `HANDOFF.md` §7: *"CORS was hardcoded to `*`... despite an `app_urls` Terraform variable that implied origin-restriction was intended but never wired through"* — the scaffolding for a real allowlist existed and shipped disconnected.
+
+**What `*` actually risks, through Rohan:** with `*`, Rohan can build his own page, embed calls to the real Glimpses API in it, and any logged-in Glimpses user visiting Rohan's page has their browser silently fire authenticated requests on Rohan's behalf. **Nuance that matters:** CORS is not the only thing standing between Rohan and real data — the API's own auth checks are the actual gate. CORS is specifically about which *websites' JavaScript* gets to read responses; it's defense-in-depth, not the whole defense.
+
+**Ruled: restrict to the real frontend origin(s)**, via the `app_urls`-style Terraform variable v1 already had but never wired through — actually connecting it this time, not new infrastructure. Local development origins (e.g. `localhost`) need adding to the allowed list, or local frontend work against a deployed backend breaks.
+
+### Secrets hygiene
+
+**Two real incidents, not a hypothetical risk — worth naming exactly, since that's what makes the ruling cheap to justify.** `HANDOFF.md` §6: *"`infra/modules/cdn/` had both the CloudFront signing public key AND the private key committed as real PEM files on disk — contradicting the project's own documentation, which claimed the private key only ever lived in SSM SecureString."* And separately: *"a live AWS access-key CSV and Google OAuth client secret sit in plaintext across several scratch files."* Both share the same shape: documentation said "this lives somewhere safe," the actual repo said otherwise, and nothing was checking automatically for the gap.
+
+**What a pre-commit secret scanner is, mechanically.** A small program (e.g. `gitleaks`) that runs automatically the moment `git commit` is invoked, scans every file about to be committed for patterns that look like secrets — AWS key formats, PEM file headers (`-----BEGIN PRIVATE KEY-----`), long random-looking tokens — and **refuses to let the commit complete** if it finds one. It runs locally, before anything reaches even local git history, let alone a remote.
+
+**Why "from commit #1" is the load-bearing phrase.** Once a secret is committed, it stays in `git` history permanently unless someone does history-rewriting surgery to remove it — itself risky and disruptive. A scanner added after a leak already happened only protects the *next* mistake. This rebuild has no commits yet, which is the one moment "from the start" is free rather than retrofitted.
+
+**Ruled: add a pre-commit `gitleaks` scanner from the repository's first commit.** Cheapest ruling on the whole `T-07` agenda — a few minutes of one-time setup — against two incidents that actually happened in this exact project's own history.
 
 ## 8. Testing approach and CI/CD
+
+### `T-08` — Testing approach and CI/CD (ruled 2026-08-09)
+
+**Three tiers, what each physically is.** A **unit test** calls one function directly, with every AWS call faked by `moto` (a library that intercepts `boto3` calls and simulates DynamoDB/S3/Rekognition/etc. in memory, so nothing leaves your laptop) — milliseconds, free. An **integration test** still fakes AWS, but calls a whole Lambda's `handler.py` the way API Gateway or Step Functions actually would, letting it run all the way down through its own `manager`/`service`/`dao` layers together instead of testing each one alone — this is what catches a bug where `handler` passes the wrong field name to `service`, which a unit test of `service` in isolation, given correct input by hand, would never see. An **E2E test** fakes nothing — it calls the real deployed API Gateway URL, which hits a real Lambda, which writes to real DynamoDB and calls real Rekognition; it's the only tier that can prove a real deployed auth check actually rejects an unauthenticated caller, or that Terraform actually built something that works.
+
+**Ruled: keep all three tiers**, matching v1. The middle tier specifically earns its cost here because `T-02`'s Step Functions pipeline has real internal wiring — `PipelineHandler` branching on a `step` field, `db-api` writing status at four separate points — that a unit test of one function alone can't exercise together.
+
+**Unit test mocking: why `moto` over the alternatives.** Hand-written `unittest.mock` requires the test author to already know and hardcode what AWS would do — e.g. that `GetItem` on a missing key returns `None` rather than raising — so the test only proves the code matches an assumption, not real AWS behavior; `moto` reproduces that behavior itself. LocalStack goes further, running actual Docker containers that imitate AWS services over real HTTP rather than just intercepting Python calls, which is more realistic still for DynamoDB and S3 — but Rekognition's `IndexFaces`, the single AWS service this app depends on most, is a LocalStack-Pro (paid) feature, so LocalStack wouldn't even help with the app's most central AWS call.
+
+**Ruled: `moto`.** Matches v1, free, no Docker requirement, and covers the one service (Rekognition) that matters most here.
+
+**Explicit failure-path tests — why v1 named specific scenarios instead of just chasing coverage.** `HANDOFF.md` §8 describes v1's approach as deliberately proving the *failure* branch works, not just the happy path — e.g. a deliberately-corrupted ZIP should drive the pipeline to `FAILED`, not silently succeed or hang. That list is walked through and re-ruled here rather than inherited wholesale, since `T-02` changed the underlying mechanism for one of them:
+
+- **Corrupted ZIP → `FAILED`, kept as-is** — the extraction step didn't change.
+- **DLQ → `COMPLETE_WITH_ERRORS`, adapted.** v1's SQS+DLQ setup meant a forced-failing message landed in a dead-letter queue and the batch was marked `COMPLETE_WITH_ERRORS`. `T-02` replaced this with Step Functions Distributed Map, which has no DLQ — instead it has `ToleratedFailurePercentage` (a threshold of allowed per-item failures before the whole execution is marked failed) and writes each item's individual result to an S3 output file. The adapted test: one deliberately-bad photo in a batch should fail only that item, the execution should still complete, and the failure should show up in the S3 results — same intent, new mechanism. Same compromise as v1 carried forward: verified by code review only, not a live test, since forcing Rekognition to fail on command mid-flow is impractical in a dev environment.
+- **Rate limiter blocks the 11th search — dropped.** `P-16` removed search as a user action; there's nothing left to rate-limit.
+- **Private S3 GET fails, expired signed URL fails, 401/403 — kept as-is.** None of these mechanisms changed.
+- **New: each Lambda's IAM policy matches its manifest of actual AWS calls.** `T-07` ruled that IAM permissions are derived from a per-Lambda manifest of real AWS calls rather than hand-guessed — but a manifest is just a file someone writes; without a test that fails when the manifest and the code's real calls disagree, that file can silently drift out of sync with the code over time, landing back at `HANDOFF.md` §7's exact "permission missing, discovered only at runtime" problem, just one layer removed.
+
+**Integration scope — why not cross-Lambda.** One option considered was invoking one Lambda's handler for real and feeding its real output into the next Lambda's handler in the same test, to test the actual handoff between them. Rejected: Step Functions itself already guarantees the shape of that handoff (it's the orchestrator's job to pass state correctly between steps) — re-testing that guarantee at the application level is mostly redundant with what the orchestration layer already provides, for a real ongoing cost in test-maintenance.
+
+**Ruled: integration tests stay scoped to one Lambda's own internal chain**, `handler → manager → service/dao`, `moto`-backed at the AWS boundary only.
+
+**E2E — the two questions that needed separate answers.** E2E is expensive in a way the other tiers aren't: every real run calls real Rekognition, which costs real money, and touches real DynamoDB rows that need cleaning up. Two things had to be ruled, not one: what it runs against, and how often.
+
+*What it runs against:* a shared, long-lived test event (created once, reused across runs) is cheaper to set up but risks a previous run's leftover photo throwing off a later test's count-based assertion — a classic source of flaky, order-dependent test failures. A dedicated event created and torn down by the test itself avoids that entirely, at the cost of a bit more setup/teardown code per test.
+
+**Ruled: a dedicated test event per run**, created and destroyed by the test itself, inside the project's one AWS account (there's no separate dev/prod split — `T-05`/`T-06` never introduced one).
+
+*How often:* running E2E automatically on every one of `T-06`'s 9 Jenkins jobs would multiply real Rekognition spend by every ordinary commit. v1 itself described E2E as "a handful of high-value journeys," not a suite run constantly.
+
+**Ruled: manual only** — E2E is never wired into an automatic Jenkins job; it's run by hand, kept for moments that actually warrant the cost.
+
+**CI/CD wiring — why tests don't live in Jenkins here.** The natural default (and the recommendation) was that each of the 8 per-Lambda Jenkinsfiles runs tests before deploying, and a failure stops the pipeline — matching `HANDOFF.md`'s own "deployments are always intentional" framing, already the philosophy behind `T-06` (Terraform apply kept out of automatic triggers, always deliberate). Under that shape, if broken code were pushed, the Jenkins job would fail before ever deploying it, so a real upload from Arjun the next day would still hit the last-known-good version, not the break.
+
+**Ruled against that recommendation: tests are not part of any Jenkinsfile at all.** The user's actual workflow is to test locally first and only push to trigger a Jenkins deploy once local tests already pass — so Jenkins here is purely a deploy mechanism (build → push code → `terraform apply -target`), not a CI test gate. This means a broken push *can* deploy if local testing is skipped, with nothing in Jenkins to catch it — a real, named tradeoff, not an oversight. The dedicated untargeted-apply job (`T-06`) is unaffected either way — it stays independent and manual, since it deploys shared infra (the state machine, DynamoDB tables), not app code, so gating it on per-Lambda test results wouldn't map to anything real.
+
+**Coverage — why no tracked number.** A coverage percentage (via `pytest-cov`, checked locally) is a concrete, trackable signal, but a weak one: a function can hit 100% line coverage while never actually exercising its own error-handling branch, so the number can look reassuring while missing exactly the failure-path gaps this ruling already named explicitly above.
+
+**Ruled: no formal coverage threshold.** Given testing here is already fully self-disciplined rather than CI-enforced, a tracked percentage adds bookkeeping without changing what actually gets tested — the named failure-path list is the real substance, and it's already explicit.

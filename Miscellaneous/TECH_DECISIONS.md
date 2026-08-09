@@ -6,7 +6,7 @@
 
 **How we work:** AI presents options with real tradeoffs — using named concrete scenarios and a scorecard, the same method that ruled all 100 product decisions — and the user rules. Nothing gets decided by default or by implementation drift. **Technology never re-rules product**: if an option here would make a `P-nn` awkward or expensive, that is surfaced as a product revision request, not resolved here.
 
-**Status:** 6 ruled · 1 partial (`T-07`, observability only) · 0 fully open *(register opened 2026-08-06)*
+**Status:** 7 ruled · 0 open *(register opened 2026-08-06)*
 
 **Ids:** `T-nn`, stable and never reused or renumbered. A question closed without a technology choice attached (because product made it moot, or because it dissolved into another question) is marked **DISSOLVED**, not deleted.
 
@@ -101,9 +101,19 @@ Each question has a stable `T-nn` id. Questions are grouped by the agenda area i
 
 **Total Lambda count: 8** — 5 API-facing, 1 pipeline, 2 shared utility (HEIC converter, `db-api`). Compares to v1's ~16 (9 business + 7 pipeline).
 
-**Left open, not decided here:** API Gateway flavour (HTTP API vs REST API) — `P-97` leaves both viable and this session didn't touch it; still a live sub-question for later.
+**API Gateway flavour — left open at the time this section was first ruled, picked back up and ruled 2026-08-09, after the technology agenda closed.**
 
-**Product inputs:** `P-35` (HEIC conversion applies everywhere an image enters), `P-54` (content-sniffed file type, ZIP top-level-only), `P-38` (dedup before conversion), `P-55`/`P-100` (terminal job status, durable progress).
+**Flagged before ruling:** `T-01`'s locked text names Powertools' `APIGatewayRestResolver` — a resolver class specific to the REST API event shape, not interchangeable with HTTP API's `APIGatewayHttpResolver`. Had REST API shipped by implementation default just because that resolver was named first, that would have been an undecided choice made by drift, the exact failure mode this rebuild exists to prevent. Surfaced explicitly rather than resolved silently.
+
+**Options considered:**
+- **A — HTTP API.** $1/million requests, lower latency, simpler CORS config. No AWS WAF support, no gateway-side request validation, no usage plans/API keys, no resource policies, no response caching. Cognito auth via a generic JWT authorizer.
+- **B — REST API.** $3.50/million requests (3.5x HTTP API's price). Supports AWS WAF, gateway-side request-body schema validation, usage plans/API keys, resource policies, response caching. Cognito auth via a dedicated User Pool authorizer.
+
+Verified current (2026-08-09): both authorizer types check the identical Cognito-issued JWT for an identical outcome — not a real differentiator. Of REST API's exclusive features, only **AWS WAF** maps to anything Glimpses actually needs: usage plans/API keys assume third-party API consumers (none exist), response caching and resource policies answer needs the product never raised. WAF specifically matters because **Rohan is a named adversarial persona** in this project (`P-07`'s access-control boundary exists because of him) — WAF can reject malicious-shaped or rate-abusive requests at the edge, before they cost a Lambda invocation or add noise to `T-07`'s `log_event=True` logging.
+
+**Ruled: B — REST API**, accepting the 3.5x per-request cost specifically for WAF's edge protection against Glimpses' own named threat model. `T-01`'s `APIGatewayRestResolver` was correct as written — no correction required.
+
+**Product inputs:** `P-35` (HEIC conversion applies everywhere an image enters), `P-54` (content-sniffed file type, ZIP top-level-only), `P-38` (dedup before conversion), `P-55`/`P-100` (terminal job status, durable progress), `P-07` (admission-only access control — the boundary WAF adds edge-level defense in front of).
 
 **Decided by the user, final.**
 
@@ -208,7 +218,7 @@ Each question has a stable `T-nn` id. Questions are grouped by the agenda area i
 
 ### `T-07` — Observability, IAM granularity, CORS, secrets
 
-**Observability sub-decision RULED 2026-08-09.** IAM granularity, CORS, and secrets are still open. See `LOCKED_TECH_DECISIONS.md` for the tight answer and `TECH_EXPLANATIONS.md` for the reasoning.
+**RULED 2026-08-09, four sub-decisions: observability, IAM granularity, CORS, secrets.** See `LOCKED_TECH_DECISIONS.md` for the tight answer and `TECH_EXPLANATIONS.md` for the reasoning.
 
 **Question (observability):** how much to actually wire up of the Powertools observability surface (`T-01` already brought the dependency in for routing) — v1 shipped Powertools/pydantic unused (`HANDOFF.md` §7), and separately shipped alarms with no SNS subscription and a hardcoded, drift-prone alarm list. `HANDOFF.md` §9 names "actually wire up Powertools structured logging/tracing this time, or consciously stick with print-based logging" as a fork point to decide deliberately.
 
@@ -260,13 +270,120 @@ Each question has a stable `T-nn` id. Questions are grouped by the agenda area i
 
 **Product inputs:** `P-81` (alarms/observability are operator-only, never surfaced to users); `P-19`/`P-68` (profile selfie — the concrete sensitive data driving the logging-retention decision); `P-100` (the tolerated-failure-percentage that custom metrics would have made alarmable, if ruled).
 
-**IAM granularity, CORS, and secrets: not yet discussed.**
+**Sub-decision — IAM granularity.** `HANDOFF.md` §7: *"several IAM roles were missing a specific permission discovered only at runtime... strict one-role-per-Lambda is good for security but created real iteration friction."* `HANDOFF.md` §9 names this as a fork point to decide deliberately.
 
-**Decided by the user, final (observability sub-decision only).**
+**Options considered:**
+- **A — Strict one-role-per-Lambda, hand-written permissions** (v1's exact approach). Tightest security; whatever a developer forgets to anticipate surfaces as a runtime `AccessDenied`, not a build-time error.
+- **B — Start broader within a service boundary, tighten before launch.** Fewer runtime surprises during development; real risk that "tighten before launch" quietly never happens, echoing `HANDOFF.md` §7's `AdministratorAccess`-on-Terraform-user item, flagged as "tighten later" and never tightened.
+- **C — Strict one-role-per-Lambda, but the policy is derived from the code rather than hand-guessed.** `HANDOFF.md` §7 names this directly: *"writing IAM policies test-first against actual code paths, or generating them from a manifest of each Lambda's actual AWS calls."* Same tight end-state as A; the permission list is checked against a concrete manifest of each Lambda's actual AWS calls instead of guessed from memory.
+
+**Ruled: C.** The only option that answers `HANDOFF.md`'s diagnosis directly rather than repeating it (A) or trading it for a different, historically-proven-to-linger risk (B).
+
+**Sub-decision — CORS.** `HANDOFF.md` §7: *"CORS was hardcoded to `*`... despite an `app_urls` Terraform variable that implied origin-restriction was intended but never wired through."*
+
+**Options considered:**
+- **A — Keep `*`** (repeats v1's actual shipped behavior). Zero configuration; any website's JavaScript can read API responses from a logged-in user's browser (auth still gates the underlying data — CORS is a separate layer, not the only one).
+- **B — Restrict to the real frontend origin(s)**, using the `app_urls`-style variable v1 already had but never connected. Small to wire up — not new infrastructure, just actually reading a variable that already half-existed. Local development origins (e.g. `localhost`) need to be added to the allowed list too.
+
+**Ruled: B.**
+
+**Sub-decision — secrets hygiene.** `HANDOFF.md` §6 records two concrete incidents: a real CloudFront private key committed as a PEM file despite docs claiming SSM-only storage, and a live AWS access-key CSV + OAuth secret sitting in plaintext scratch files. `HANDOFF.md` §9 names the fix directly: *"exactly the kind of gap a pre-commit secret scanner... would have caught — worth deciding whether to add one from commit #1."*
+
+**Options considered:**
+- **A — No automated scanner; rely on discipline** (`.gitignore`, remembering not to commit keys) — v1's actual approach, and v1's own repo is the counterexample: `.gitignore` existed and the private key was committed anyway.
+- **B — A pre-commit secret scanner (`gitleaks`) from the first commit.** Runs automatically before any commit completes; catches AWS-key-shaped and PEM-shaped content before it reaches git history, not after. One-time setup.
+
+**Ruled: B.** Cheapest ruling on the whole agenda, against two incidents that actually happened in this project's own history, not hypothetical ones.
+
+**Product inputs (IAM/CORS/secrets):** none beyond `HANDOFF.md` §6/§7/§9 directly — these three are infrastructure-hygiene rulings with no `P-nn` dependency.
+
+**Decided by the user, final.**
 
 ---
 
 ## Agenda area 8 — Testing approach and CI/CD
+
+### `T-08` — Testing approach and CI/CD
+
+**RULED 2026-08-09, seven sub-decisions.** See `LOCKED_TECH_DECISIONS.md` for the tight answer and `TECH_EXPLANATIONS.md` for the reasoning. Checked against `HANDOFF.md` §8 (v1's testing approach, described in full) and §7/§9 for the specific failure modes it should close rather than repeat.
+
+**Sub-decision — testing pyramid shape.**
+
+**Options considered:**
+- **A — Keep v1's 3-tier shape**: unit → integration → E2E. Highest coverage of failure modes across the whole stack, highest build/maintain cost.
+- **B — 2-tier**: unit + E2E only, no separate integration tier. Cheaper, but wiring bugs between a single Lambda's own internal layers (`handler → manager → dao`) only surface at E2E, which is slower and costs real Rekognition money to iterate against.
+- **C — unit only.** Cheapest, but catches neither internal wiring bugs nor real-deployment bugs (auth wiring, Terraform-provisioned resources actually working).
+
+**Ruled: A.** Matches v1's own shape, already flagged in the agenda as worth reusing, and the pipeline's real multi-step wiring (`T-02`'s Distributed Map) is exactly the kind of bug a missing integration tier would let through.
+
+**Sub-decision — unit test mocking library.**
+
+**Options considered:**
+- **A — `moto`** (v1's approach). Monkey-patches `boto3` so AWS calls are redirected to an in-memory fake that simulates real AWS behavior (error shapes, not-found semantics) — no network, no Docker, free. Covers Rekognition.
+- **B — Hand-written `unittest.mock`.** No behavior simulation; the test author must already know and hardcode what AWS would actually do, which risks testing an assumption rather than real behavior.
+- **C — LocalStack.** A Dockerized set of real HTTP servers imitating AWS services, closer to real behavior than `moto` for DynamoDB/S3 — but Rekognition's `IndexFaces` is LocalStack-Pro-only (paid), and this project leans on Rekognition more than any other service.
+
+**Ruled: A.** Matches v1, free, no Docker requirement, and the one AWS service this app depends on most (Rekognition) isn't covered by LocalStack's free tier anyway — C would still need `moto` or hand-mocking for that part regardless.
+
+**Sub-decision — explicit failure-path test list.** v1 named specific failure scenarios to test deliberately, not just happy paths (`HANDOFF.md` §8). Carried forward, adapted, or dropped as follows:
+
+| v1's test | Ruling |
+|---|---|
+| Corrupted ZIP drives the pipeline to `FAILED` | Kept as-is — extraction step unchanged |
+| Forced-failing message → DLQ → `COMPLETE_WITH_ERRORS` | **Adapted.** `T-02` replaced SQS+DLQ with Step Functions Distributed Map — no DLQ exists anymore. Equivalent: one deliberately-bad photo in a batch fails only that item (`ToleratedFailurePercentage` not exceeded), the execution still completes, and the per-item failure appears in the Distributed Map's S3 result output — same intent as v1's `COMPLETE_WITH_ERRORS`, new mechanism |
+| Rate limiter blocks the 11th search | **Dropped.** `P-16` removed search as a user action entirely |
+| Direct S3 GET on a private object fails | Kept as-is |
+| Expired signed URL fails | Kept as-is |
+| Unauthenticated calls get 401, cross-role calls get 403 | Kept as-is (`P-07`) |
+| *(new)* Each Lambda's IAM policy matches its manifest of actual AWS calls | **Added.** `T-07` ruled IAM permissions derive from a per-Lambda manifest rather than being hand-guessed — without a test enforcing the two stay in sync, the manifest can drift from the code exactly the way `HANDOFF.md` §7's "permission missing, discovered only at runtime" happened in the first place |
+
+**Testing compromise carried forward, not silently:** v1 verified `COMPLETE_WITH_ERRORS` by code review only, not a live test, since forcing Rekognition to fail mid-flow was judged impractical in a dev environment. The adapted Distributed Map version has the same practicality problem — same compromise accepted here.
+
+**Sub-decision — integration test scope.**
+
+**Options considered:**
+- **A — one Lambda's full internal chain (`handler → manager → service/dao`), `moto`-backed**, invoked as a single unit the way API Gateway/Step Functions would call it, only the AWS boundary faked.
+- **B — cross-Lambda chaining** (invoke one Lambda's handler for real, feed its real output into the next Lambda's handler in the same test). Closer to true integration, but Step Functions already guarantees the data handoff shape between states — largely re-testing a guarantee the orchestration layer already provides, for a lot of extra test-maintenance cost.
+- **C — skip a distinct integration tier**, fold into E2E. Cheaper to build, but wiring bugs then only get caught against the real deployed stack.
+
+**Ruled: A.**
+
+**Sub-decision — E2E test environment and frequency.**
+
+**Options considered (environment):**
+- **A — a dedicated test event, created and torn down by the test itself**, inside the project's single AWS account (no separate dev/prod split exists — `T-05`/`T-06` never introduced one). A real `Event`, a real Rekognition collection, a few real photos, deleted at the end of the run.
+- **B — a long-lived shared test event**, created once, reused across runs. Less teardown code, but risks state leaking between runs (a previous run's leftover photo throwing off a count-based assertion).
+
+**Ruled: A.**
+
+**Options considered (frequency):**
+- **A — every Jenkins run.** Maximum safety net, but multiplies real Rekognition spend by every ordinary commit, given `T-06` already committed to 9 Jenkinsfiles firing on regular work.
+- **B — manual only**, kept out of the automatic Jenkins jobs, run by hand before something that matters. Matches v1's own description of E2E as "a handful of high-value journeys," not a constantly-run suite.
+
+**Ruled: B.**
+
+**Sub-decision — CI/CD wiring: do tests run inside the 9 Jenkins jobs `T-06` already set up?**
+
+**Options considered:**
+- **A — tests run as a required step before deploy in each of the 8 per-Lambda Jenkinsfiles; failure stops the pipeline.** Matches `HANDOFF.md`'s "deployments are always intentional" philosophy already established in `T-06`.
+- **B — tests run and report, but don't block deploy.** Relies on a human reading Jenkins output.
+- **C — tests are not part of any Jenkinsfile at all**, run locally by the developer before pushing; Jenkins is triggered only once local tests already pass, and functions purely as a deploy mechanism, not a test gate.
+
+**Ruled: C**, against the recommendation (A was recommended, on the grounds that C means a broken Lambda can deploy if the developer skips or forgets local testing, with nothing in Jenkins to catch it — under A, Arjun's real upload would still hit last-known-good code even after a broken push; under C it wouldn't). User's process: test locally first, only push to trigger a Jenkins deploy once local tests pass.
+
+**Untargeted-apply job:** stays independent of the 8 Lambda jobs' pass/fail, as `T-06` already ruled — manual "Build Now," not gated on anything (not a fresh decision, confirmed unchanged).
+
+**Sub-decision — formal coverage requirement.**
+
+**Options considered:**
+- **A — a coverage number, checked locally with `pytest-cov`** (e.g. an 80% line-coverage target). Concrete signal, but a weak proxy — full coverage of a function that never exercises its own error branch still "passes."
+- **B — no formal number.** The named failure-path list (above) is the real substance; coverage beyond that is a judgment call each time, not a tracked metric.
+
+**Ruled: B.** Consistent with testing already being fully self-disciplined (no CI gate per the wiring ruling above) — a tracked percentage adds bookkeeping without changing what actually gets tested.
+
+**Product inputs:** none beyond `HANDOFF.md` §7/§8/§9 directly — testing/CI-CD is process, not a `P-nn`-dependent ruling.
+
+**Decided by the user, final.**
 
 ---
 
@@ -281,4 +398,6 @@ Each question has a stable `T-nn` id. Questions are grouped by the agenda area i
 | 2026-08-08 | `T-04` | Ruled **A — multi-table (6 tables)** over single-table design (B). Decided on IAM grounds: `T-03` already scoped each Lambda's role to one table, which is structural under multi-table and would need hand-built key-prefix conditions under single-table. Table count drops from v1's 7 to 6 — `SearchRateLimit` dropped, since `P-16` removed search as a user action. Exact per-table fields/GSIs left as a following sub-decision. |
 | 2026-08-08 | `T-05` | Ruled **A — one Rekognition collection per event** over one shared account-wide collection (B). Decided on security-boundary grounds: `P-07`'s "no cross-event visibility" is enforced by AWS itself under A (a search can't reach another event's collection) versus entirely by application-code filtering under B. Collection id tracked on the `Events` table for teardown, since Terraform can't see runtime-created collections. |
 | 2026-08-08 | `T-06` | Ruled, five sub-decisions: **(1)** S3 state backend + native locking (`use_lockfile`), no DynamoDB, versioning on. **(2)** per-Lambda Terraform module layout (user-originated), replacing v1's single centralized `functions` module. **(3)** deploy discipline — a separate dedicated CI job runs the untargeted `apply` that builds/updates the state machine; every Lambda's own Jenkinsfile stays targeted, over piggybacking on one Lambda's pipeline (rejected — indirect trigger, easy to forget) or decoupling via `data` lookups (rejected — reintroduces `HANDOFF.md` §7's drift risk). **(4)** CI/CD granularity — 8 per-Lambda Jenkinsfiles + 1 dedicated untargeted-apply job = 9 total; only resources with actual code get a pipeline. **(5)** naming — fixed `glimpses-` prefix applied identically everywhere, no environment branching, no per-Lambda mapping file; folder name is the single source of truth. |
-| 2026-08-09 | `T-07` *(partial)* | Observability sub-decision ruled: Powertools structured `Logger` (B over plain `print()`); `log_event=True` — full request auto-logged (A over selective-field logging, against recommendation); 3-day log retention added as a direct consequence; no X-Ray (A, against recommendation, cost/effort); no custom metrics (A, AWS defaults only); every alarm wired to SNS + email (B, fixes v1's silent-alarm bug); hardcoded-alarm-list bug confirmed already closed by `T-06`'s per-Lambda `cloudwatch.tf`, not a fresh decision; alarm content `Errors > 0`/5min, all 8 Lambdas alike. IAM granularity, CORS, and secrets not yet discussed. |
+| 2026-08-09 | `T-07` | Ruled, four sub-decisions. **Observability:** Powertools structured `Logger` (B over plain `print()`); `log_event=True` — full request auto-logged (A over selective-field logging, against recommendation); 3-day log retention added as a direct consequence; no X-Ray (A, against recommendation, cost/effort); no custom metrics (A, AWS defaults only); every alarm wired to SNS + email (B, fixes v1's silent-alarm bug); hardcoded-alarm-list bug confirmed already closed by `T-06`'s per-Lambda `cloudwatch.tf`; alarm content `Errors > 0`/5min, all 8 Lambdas alike. **IAM granularity:** strict one-role-per-Lambda, policy derived from a per-Lambda manifest of actual AWS calls (C, over hand-guessed A or broaden-then-tighten B). **CORS:** restricted to real frontend origin(s) (B), `app_urls` variable actually wired through instead of v1's unused `*`. **Secrets:** pre-commit `gitleaks` scanner from commit #1 (B), directly answering `HANDOFF.md` §6's two real incidents. |
+| 2026-08-09 | `T-08` | Ruled, seven sub-decisions. **Pyramid shape:** 3-tier, unit + integration + E2E (A, matches v1). **Unit mocking:** `moto` (A, matches v1; LocalStack's free tier doesn't cover Rekognition). **Explicit failure-path list:** four of v1's tests kept as-is, the DLQ/`COMPLETE_WITH_ERRORS` test adapted to `T-02`'s Distributed Map per-item-failure equivalent, the rate-limiter test dropped (`P-16` killed search), an IAM-manifest-drift test added (closes `T-07`'s manifest approach against silent drift). **Integration scope:** single Lambda's full internal chain, `moto`-backed (A), not cross-Lambda (B, redundant with Step Functions' own guarantees) or folded into E2E (C). **E2E:** dedicated test event created/torn down per run (A, not a shared long-lived one); manual-only, not run on every Jenkins job (B, cost control on real Rekognition spend). **CI/CD wiring:** tests are not part of any Jenkinsfile (C, against recommendation A — tests gate deploy); user tests locally, only pushes to trigger a Jenkins deploy once local tests pass; the untargeted-apply job stays independent, unchanged from `T-06`. **Coverage:** no formal number tracked (B) — the named failure-path list is the real substance. |
+| 2026-08-09 | `T-03` (follow-up) | API Gateway flavour, left open at the original `T-03` ruling, picked back up post-agenda. Ruled **B — REST API** over HTTP API (A), specifically for AWS WAF's edge-level protection against Rohan's named adversarial threat model (`P-07`) — accepting REST API's 3.5x-higher per-request cost ($3.50/million vs $1/million). Cognito-auth outcome is identical either way (User Pool authorizer vs JWT authorizer both check the same token). Flagged and resolved a real drift risk in passing: `T-01`'s `APIGatewayRestResolver` naming turned out to already match this ruling, not an accidental default. |
