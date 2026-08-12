@@ -18,3 +18,7 @@ accessKeys*.csv
 !.env.example
 terraform.tfvars
 *.auto.tfvars
+
+# Terraform working directory — downloaded provider binaries, machine-specific.
+# .terraform.lock.hcl stays tracked; .terraform/ itself never should be.
+**/.terraform/
