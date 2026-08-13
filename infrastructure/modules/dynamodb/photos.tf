@@ -25,17 +25,29 @@ resource "aws_dynamodb_table" "photos" {
 
   # Gallery, newest-first, filename tiebreak; DynamoDB's own LastEvaluatedKey is the cursor (P-57/P-16)
   global_secondary_index {
-    name            = "eventID-uploadedAtFilename-index"
-    hash_key        = "eventID"
-    range_key       = "uploadedAtFilename"
+    name = "eventID-uploadedAtFilename-index"
+    key_schema {
+      attribute_name = "eventID"
+      key_type       = "HASH"
+    }
+    key_schema {
+      attribute_name = "uploadedAtFilename"
+      key_type       = "RANGE"
+    }
     projection_type = "ALL"
   }
 
   # Per-event duplicate check (P-38)
   global_secondary_index {
-    name            = "eventID-contentHash-index"
-    hash_key        = "eventID"
-    range_key       = "contentHash"
+    name = "eventID-contentHash-index"
+    key_schema {
+      attribute_name = "eventID"
+      key_type       = "HASH"
+    }
+    key_schema {
+      attribute_name = "contentHash"
+      key_type       = "RANGE"
+    }
     projection_type = "ALL"
   }
 }
