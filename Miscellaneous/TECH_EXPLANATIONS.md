@@ -108,6 +108,8 @@ For an I/O-bound JSON API where the DynamoDB round-trip dominates latency either
 
 **Revised same day, while working through `T-06`'s Terraform module layout: these four steps share one physical Lambda, not four.** Step Functions still has four separate *states* — each one invokes the same Lambda ARN, passing a `step` value in its input (`{"step": "extract", ...}`), and the Lambda's own handler branches on it internally. This is the pipeline equivalent of the API Lambdas' path-based router, except there's no HTTP path involved at all, since nothing outside Step Functions can ever call this function.
 
+**Revised again 2026-08-13, while scoping implementation folders: `InitializeJob` moved out of the pipeline Lambda entirely, into `db-api`; the pipeline Lambda renamed `ingestion`.** The trigger was noticing `InitializeJob` was the *only* reason the pipeline Lambda's IAM role needed `Jobs`-table access at all — `Extract`/`IndexOnePhoto`/`Finalize` never touch `Jobs`, and every other write to that table already lived in `db-api`. Since `InitializeJob`'s entire body is a single `PutItem` on `Jobs` — exactly the kind of one-table write `db-api` exists to hold — moving it there removes `Jobs` from the pipeline Lambda's manifest completely (now just `Photos`, `Events`, S3, Rekognition) and puts all 5 `Jobs` writes behind one role instead of two. Renamed the folder `pipeline` → `ingestion` at the same time, since "pipeline" stopped being as apt a name once job creation moved out, and "ingestion" was already the term used elsewhere in these docs for this exact state machine. The pipeline Lambda's three remaining steps still share one physical function, same `step`-branching mechanism as above — this change only moves *which* Lambda owns the first step, not how the rest are consolidated.
+
 **Why this is a different call than the API consolidation question above, not a contradiction of it:** Option B there (fully consolidate the API) was rejected because *"one IAM role carries the union of every permission any endpoint needs"* — real risk, because any external caller can hit an API Lambda directly through API Gateway. The pipeline Lambdas have **no external invocation path whatsoever** — the only thing that ever calls them is Step Functions, with input Step Functions generates itself. Remove the "a stranger can reach this directly" scenario, and a wide IAM role stops being the same kind of risk. What's left is a smaller, real cost: `IndexOnePhoto` runs far more often than the other three steps (once per photo, potentially hundreds of times a batch) and now carries the whole pipeline's dependencies — Pillow/`pillow-heif` for HEIC, zip handling — in its package even on invocations that never touch that code. Accepted as minor, since cold start is already amortized across a long batch. Also accepted: CloudWatch logs for all four steps now land in one log group instead of four, so isolating one step's logs takes a little more filtering than before.
 
 **Two shared utility Lambdas, and a real distinction worth keeping straight: a shared code *library* vs. a shared Lambda *function* are not the same reuse.**
@@ -115,9 +117,13 @@ For an I/O-bound JSON API where the DynamoDB round-trip dominates latency either
 - A **library** (e.g. a `jobs_dao.py` imported into several Lambdas, extending `T-01`'s DAO-layer convention) runs *inside* whichever Lambda imports it — same process, same invocation. If the Lambda's real work succeeds, the library call succeeds or fails as part of that same atomic step.
 - A **separate Lambda function**, called as its own state, is a genuinely separate execution — over the network, with its own chance to fail *independently* of the step that called it.
 
-Both count as "reuse" (one place the logic lives, not copy-pasted), but only the second introduces a gap where real work can succeed while the follow-up call fails on its own. This was worked through directly for **`db-api`** — a generic status-writer Lambda, scoped to the `Jobs` table only, called as its own state from four points in the ingestion pipeline (marking `EXTRACTING`, `INDEXING`, the terminal outcome, `FAILED`) rather than embedded in each pipeline Lambda's own code. **The user's explicit choice was the separate-Lambda version**, accepting the gap it introduces — a `db-api` call failing right after `Extract` finishes could abort a batch whose 1,000 photos are already safely in S3 — on the grounds that Step Functions' own `Retry` makes this rare in practice, and `db-api`'s narrow scope (one table, nothing else) keeps its IAM role tight regardless of how many places call it.
+Both count as "reuse" (one place the logic lives, not copy-pasted), but only the second introduces a gap where real work can succeed while the follow-up call fails on its own. This was worked through directly for **`db-api`** — a generic `Jobs`-table writer, called as its own state from four points in the ingestion pipeline (marking `EXTRACTING`, `INDEXING`, the terminal outcome, `FAILED`) rather than embedded in each pipeline Lambda's own code. **The user's explicit choice was the separate-Lambda version**, accepting the gap it introduces — a `db-api` call failing right after `Extract` finishes could abort a batch whose 1,000 photos are already safely in S3 — on the grounds that Step Functions' own `Retry` makes this rare in practice, and `db-api`'s narrow scope (one table, nothing else) keeps its IAM role tight regardless of how many places call it.
+
+**A fifth touch point joined these four on 2026-08-13:** `InitializeJob`, moved into `db-api` from the pipeline Lambda (see the `T-03` revision above) — the same reasoning applies, since it's also a single write to `Jobs` and nothing else. `db-api`'s handler now branches on an `action` field (`create` for `InitializeJob`, `update_status` for the other four) — the same shape of internal branching the pipeline Lambda already uses for `step`, just one level smaller.
 
 The **HEIC→JPEG converter** is the same shape of shared Lambda, called from `Extract` (batch ingestion) and `Profile` (selfie upload) — `P-35` requires the conversion everywhere an image enters the product, so one function serving both call sites avoids writing the conversion logic twice.
+
+**Folder naming settled 2026-08-13:** the pipeline Lambda's folder is `ingestion` (renamed from `pipeline` the same day `InitializeJob` moved out, to match the term already used elsewhere in these docs for this state machine); `db-api`'s folder name stays `db_api`, unchanged — it was never named for the status-only shape, so gaining a `create` action alongside its four `update_status` calls doesn't make the name inaccurate.
 
 **Total: 8 Lambdas** — 5 API-facing, 1 consolidated pipeline, 2 shared utility. v1 had roughly 16 (9 business + 7 pipeline).
 
@@ -204,7 +210,7 @@ Sources checked: [AWS API Gateway docs — choosing between REST and HTTP APIs](
 
 Two ways to close it: (1) a dedicated 9th Lambda with the broader cross-table/S3/Rekognition role, invoked both directly (by `Events`' delete endpoint) and via the `Events` Stream (for the automatic path); (2) widen the existing `Events` Lambda's own role to cover the same reach. **Ruled: (1).** The whole case for multi-table over single-table in the base `T-04` ruling rested on "one Lambda, one table = structural IAM isolation, free" — widening `Events`' role to touch 4 tables plus S3 plus Rekognition would give back exactly the blast-radius guarantee that argument was built on, to save a single Lambda's worth of count. A dedicated Lambda keeps every other Lambda's role exactly as narrow as originally reasoned, at the cost of `T-03`'s Lambda count moving from 8 to 9 and `T-06`'s CI/CD job count moving from 9 to 10 — both updated in `LOCKED_TECH_DECISIONS.md`.
 
-**`Jobs` — ruled 2026-08-12.** PK = `jobId`, no SK. Fields: `jobId`, `eventID`, `uploaderID`, `status` (`P-53`/`P-55`, in-progress → terminal), `succeededCount`/`failedCount` (`P-55`), a retry/backoff signal (`P-56`, surfaced per `P-100`'s "says why this is taking longer"), `startedAt` (`P-53`'s hard lifetime ceiling). The status-polling endpoint (`GET /events/{eventId}/jobs/{jobId}/status`) reads this by `jobId` directly — no index needed there.
+**`Jobs` — ruled 2026-08-12.** PK = `jobId`, no SK. Fields: `jobId`, `eventID`, `uploaderID`, `status` (`P-53`/`P-55`, in-progress → terminal), `succeededCount`/`failedCount` (`P-55`), `startedAt` (`P-53`'s hard lifetime ceiling). The status-polling endpoint (`GET /events/{eventId}/jobs/{jobId}/status`) reads this by `jobId` directly — no index needed there. **No retry/backoff field** — this was originally sketched for `P-100`'s retry-visibility clause; that clause was removed 2026-08-15 by `D-127` (see `LOCKED_PRODUCT.md`'s decision log) while scoping `db_api`, so there's no longer anything for a field like this to back.
 
 **The GSI question, run through Meera and Sam.** `P-100` requires a batch's result to stay visible to **the uploader specifically** whenever they next open the event — including from a fresh tab where no `jobId` survives client-side (the UI plan is a "come back later" button, not a link carrying the job's id forward). A GSI keyed on `eventID` alone, sorted by time, sounds like it answers "give me the newest job for this event" — but with two people uploading around the same time to Priya's trip, it returns whichever job finished last, which could show Meera Sam's result instead of her own — the wrong person's batch.
 
@@ -469,3 +475,110 @@ The complication: `-target` (as in `terraform apply -target=module.pipeline_lamb
 **Coverage — why no tracked number.** A coverage percentage (via `pytest-cov`, checked locally) is a concrete, trackable signal, but a weak one: a function can hit 100% line coverage while never actually exercising its own error-handling branch, so the number can look reassuring while missing exactly the failure-path gaps this ruling already named explicitly above.
 
 **Ruled: no formal coverage threshold.** Given testing here is already fully self-disciplined rather than CI-enforced, a tracked percentage adds bookkeeping without changing what actually gets tested — the named failure-path list is the real substance, and it's already explicit.
+
+## 9. `T-03` follow-up (2026-08-15) — full endpoint paths, and a new `download` Lambda/`Downloads` table
+
+**Why this surfaced now, not earlier.** `T-03`'s original Lambda table only sketched paths loosely (`GET /events/{eventId}/photos`, "admit/eject") — enough to scope which table each Lambda owns, not enough to actually build against. Building `heic_converter` first (a shared utility, invoked internally, no HTTP path at all) meant this gap never had to be closed until the first API-facing Lambda came up next.
+
+### Endpoint paths — mostly a straightforward exercise, three real decisions inside it
+
+Most of the path list (§3 of `LOCKED_TECH_DECISIONS.md`) is direct translation of already-ruled product behaviour into REST shape — `Profile`, `Events`, and most of `Membership`/`Gallery` needed no real judgment calls. Three did:
+
+**1. The QR code — a field, or its own endpoint?** `P-90` already established the QR image is a cached S3 object, fully determined by the join link. The question was only how the frontend reaches it: a `qrCodeURL` field returned inline on `GET /events/{eventId}`, or a dedicated `GET /events/{eventId}/qrcode`. A field is cheaper (no new route) but reads awkwardly for the actual product goal — Arjun needs to hand this to people who aren't even using the app yet (printed table cards, a text message), which is a "download this file" action, not "display this field." **Ruled: a dedicated endpoint**, one that can set `Content-Disposition: attachment` so hitting it is a one-click download rather than opening an image in a new tab.
+
+**2. Membership actions — did `deny`/`eject`/`block` need to be three separate actions, or fewer?** `EventAttendees` has 4 statuses (`PENDING`/`ATTENDEE`/`LEFT`/`BLOCKED`), and it looked at first like `P-29`'s "eject an attendee, deny a pending one, and block" might need three distinct organizer-facing endpoints plus `P-46`'s self-service leave — four total. Re-reading `P-29` closed this on its own: *"either action blocks that user from rejoining with the code. One per-event blocklist serves both."* Deny and eject were never two-step (deny-then-optionally-block) — each *is* a direct transition to `BLOCKED`. **Ruled: three organizer actions** (`admit`: `PENDING`→`ATTENDEE`; `deny`: `PENDING`→`BLOCKED`; `eject`: `ATTENDEE`→`BLOCKED`), plus the already-ruled self-service `leave` (`ATTENDEE`→`LEFT`, rejoinable, `P-46`). No separate `block` action exists.
+
+**3. Bulk photo delete — how does a multi-select delete travel from browser to Lambda?** `P-52` needs to accept a batch of `photoId`s in one call. `DELETE` requests can carry a body, but it's non-standard enough that browsers/clients/proxies don't reliably support it — the safer alternative is a query string (`DELETE .../photos?photoIds=a,b,c`) or a `POST` with a JSON body. A query string has a practical length ceiling that becomes a real risk at `P-93`'s scale (up to ~1,000 photos/event, so a large multi-select could produce a very long URL). **Ruled: `POST /events/{eventId}/photos/bulk-delete`**, body-carried `photoIds` — reads correctly as a mutating action regardless, and has no length ceiling to worry about.
+
+### Download — why it split into two mechanisms, not one
+
+`P-60`/`P-92` name two different attendee actions that both read as "download," but they're mechanically nothing alike:
+
+- **Downloading a handful of selected photos** needs no server processing at all — the objects already exist in S3 individually. `Gallery/photos` just needs to hand back pre-signed URLs for exactly the objects requested (`POST /events/{eventId}/photos/download-urls`), and the browser fires off N direct downloads. No new Lambda, no new table, no waiting.
+- **Downloading a whole event (or a large selection) as one ZIP** is a different shape of problem: something has to actually assemble a zip container, which no S3 API does natively — S3 only has object-level operations (`GetObject`/`PutObject`/`CopyObject`), no "combine these objects into one archive" call. A zip file is just a byte format (per-file headers + the file's bytes + a trailing central directory index); building one means real compute has to stream the source objects through and write the container structure out — mechanically simple (no re-compression needed, since photos are already-compressed JPEGs; the zip's `STORED` method just wraps them) but it is genuine work that has to run *somewhere*, and API Gateway's 29-second synchronous timeout rules out doing it inline in the request/response cycle at any real scale.
+
+**Which Lambda does the zip work — surfaced its own IAM question.** Under `T-04`'s one-table-per-Lambda isolation, `Gallery/photos` is scoped to `Photos` only. Giving it write access to a place to track a background zip job (status, result location) would be exactly the role-widening `T-04` exists to prevent — the same shape of gap that produced `CascadeDelete` for `Events`/`Faces` cross-table deletes. **Ruled: a dedicated 10th Lambda, `download`**, scoped to a new `Downloads` table (its own job-tracking record) plus read-only `Photos` (to look up each selected photo's `s3Key`) plus S3. `Gallery/photos`'s own IAM manifest is untouched.
+
+**Step Functions, or a plain async Lambda invoke?** `T-02` already established Step Functions Distributed Map as the mechanism for per-item fan-out with a shared throttle (Rekognition's `IndexFaces` TPS limit) needing coordinated retry/tolerated-failure handling across many parallel invocations. Zip-building has neither property — it's one sequential job (read N objects, write one combined object), with no external per-call rate limit to coordinate against. Reaching for a second state machine here would be solving a problem this job doesn't have. **Ruled: a plain asynchronous Lambda invocation** (`InvocationType=Event`), the same category of mechanism `db-api` already uses as a plain Lambda rather than an orchestrated workflow. The `POST /events/{eventId}/photos/download` handler creates the `Downloads` row and returns a `downloadId` immediately; the actual zip build happens in the background invocation, checked via `GET /events/{eventId}/downloads/{downloadId}/status`.
+
+**Does the build actually fit inside Lambda's limits?** Worked through at `P-93`'s top-of-scale case: 1,000 photos, ~3-4MB average JPEG, same-region S3↔Lambda traffic. Estimated total build time is on the order of a few minutes — well inside Lambda's 15-minute execution cap, and the reason a synchronous `Gallery/photos` endpoint was never viable (that would need to fit inside API Gateway's 29 seconds instead). One implementation detail flagged for build time, not a ruling: Lambda's `/tmp` scratch space defaults to 512MB (configurable to 10GB) — building the zip by downloading everything to disk first would need that raised at `P-93`'s scale, so the actual implementation should stream each S3 object directly into the zip's output stream, which is itself streamed to S3 via multipart upload, without ever staging the full batch on disk or in memory.
+
+**Does `Downloads` need a GSI like `Jobs` has?** `Jobs`' `eventUploaderKey` GSI exists specifically because `P-100` requires an upload's result to be findable from a fresh session with no `jobId` in hand — someone can close the tab mid-upload and check back days later. **No equivalent product ruling exists for downloads** — a zip request is something the requester stays on the page for, holding the `downloadId` returned synchronously from the kickoff call. **Ruled: no GSI on `Downloads`** — PK-only lookup by `downloadId` is sufficient, a smaller table than `Jobs` for a smaller problem.
+
+**Cleanup.** `P-90`'s own writeup already anticipated this: the QR image "joins `P-60`'s expiring ZIP archives on the list of stored artifacts that need a lifecycle." An S3 lifecycle rule expiring objects under the downloads prefix (defaulted to 48 hours, adjustable later) closes that obligation — not new ground, just implementing what the product docs already expected.
+
+**Net effect on `T-03`/`T-04`/`T-06`:** Lambda count 9→**10**, DynamoDB tables 6→**7**, CI/CD jobs 11→**12**. Tight answers in `LOCKED_TECH_DECISIONS.md`.
+
+## 10. `T-09` (2026-08-15) — S3 bucket/key layout, CDN, and the ingestion trigger
+
+**Why these two were tackled together.** `Photos.s3Key` (ruled 2026-08-12) has always been a field with an undefined shape, and the `download` Lambda's zip objects (ruled the same day as this section) added a second undefined key shape on top of it. Separately, nothing had ever ruled what actually starts `ingestion` once a browser's direct-to-S3 upload finishes. The two turned out to be genuinely coupled: whichever trigger mechanism gets chosen decides what information the object key has to carry on its own, since the trigger has no other source of truth to consult.
+
+### The trigger mechanism — S3 Event Notification vs a client callback
+
+Two ways something could learn "the upload just finished":
+
+- **A client "upload complete" callback** — after the browser's `PUT` succeeds, it makes a second call, e.g. `POST /events/{eventId}/jobs/{jobId}/complete`, and that endpoint calls `StartExecution`.
+- **An S3 Event Notification** — S3 itself notices the object was created and fires an event with no client involvement at all.
+
+Run against `P-100`'s own scenario (Arjun uploads a 400-photo ZIP at the venue, then closes his laptop — the batch must still complete): a callback depends on the browser surviving long enough to make that second call. If the tab closes or the network drops in the gap between the `PUT` finishing and the callback firing — which `P-100` explicitly names as a case that must work — the batch silently never starts, and `P-81` means nobody is ever told it didn't. An S3 Event Notification has no such gap: S3 is the witness, not the browser, so the trigger fires regardless of whether anyone is still looking. **Ruled: S3 Event Notification.** This also closes a lesser Rohan-shaped hole a callback endpoint would open — there would be nothing to stop a client calling `/complete` for a job whose files were never actually uploaded.
+
+### Why EventBridge sits in the middle, not S3 → Lambda directly
+
+S3's own native event-notification config can invoke a Lambda directly, but Step Functions isn't one of its native targets — reaching Step Functions from a raw S3 notification would need a small glue Lambda in between, whose only job is "receive this event, call `StartExecution`." Routing through EventBridge instead removes that Lambda entirely: the bucket is set to send all object-created events to the account's default EventBridge bus, an EventBridge Rule filters for the ones that matter (bucket + key prefix/suffix), and the rule's target is the state machine's ARN directly — EventBridge can invoke Step Functions natively, no Lambda needed as glue.
+
+**The rule's filter, concretely:**
+
+```json
+{
+  "source": ["aws.s3"],
+  "detail-type": ["Object Created"],
+  "detail": {
+    "bucket": { "name": ["glimpses-photos"] },
+    "object": { "key": [{ "prefix": "uploads/" }, { "suffix": "/original.zip" }] }
+  }
+}
+```
+
+The prefix condition alone would already be sufficient — no code path ever signs a pre-signed URL for anything under `uploads/` except `original.zip` — but the suffix check costs nothing and guards against a future code change accidentally writing something else there and silently starting executions for it.
+
+### One batch, one object, one execution — why multi-file selections get zipped client-side
+
+`P-37` already rules that a multi-file selection is one batch, not many. Under an event-driven trigger, "one batch" has to mean **one S3 object**, because one S3 `PUT` produces exactly one Object Created event, and the design needs exactly one `StartExecution` per batch — if Meera's six-photo selection instead uploaded as six separate objects, six separate events would fire and (absent some suppression mechanism nothing here provides) six separate executions would start for what the product considers a single job. **Ruled: the browser always builds a zip client-side before requesting the upload URL**, whether the user picked "upload a ZIP" or "select multiple files" — the server-side shape is identical either way, one object, one key, one trigger. This makes `Extract`'s "unzip" step unconditional rather than ZIP-only.
+
+### Bucket count — one bucket, or split by purpose?
+
+Two ways of splitting were considered and rejected before landing on one bucket:
+
+- **One bucket per category** (six buckets: uploads/photos/thumbnails/selfies/qrcodes/downloads) — every isolation property this buys (scoped IAM, scoped lifecycle rules, scoped event notifications) is already available at the *prefix* level within a single bucket: S3 bucket policies accept prefix-scoped `Resource` ARNs, S3 lifecycle rules accept a prefix filter, and EventBridge rules filter on the key itself. Six buckets is six more Terraform resources for `Sam` to deploy for no capability a single bucket doesn't already have.
+- **Split by axis, event-scoped bucket vs user-scoped bucket** (an option raised mid-session) — doesn't actually hold, because `uploads/` is scoped to event **and** user **and** job simultaneously. Whichever bucket it landed in, the other axis would still be nested inside it; the split wouldn't separate anything real for the one prefix that most needed separating.
+- **The split that does draw a real line: publicly-servable-via-CloudFront vs never-public.** `photos/`, `thumbnails/`, `qrcodes/` are meant to be viewed repeatedly by every admitted attendee in a browser. `uploads/`, `selfies/`, `downloads/` are never meant to be reachable by anyone except through a Lambda-issued pre-signed URL — most notably `selfies/`, since `P-15`/`P-82` make selfies invisible to *everyone*, not just other users. This is a genuine security boundary, not a cosmetic one: a misconfigured CloudFront origin or an overly broad bucket policy could leak a selfie under a two-way split just as easily as under one bucket, **if enforcement relied on bucket separation alone**. It doesn't — the actual enforcement point either way is the bucket policy's `Resource` scoping (see OAC below), which works identically whether public/private live in one bucket or two. Given that, one bucket is strictly less Terraform for the same guarantee. **Ruled: one bucket, six prefixes**, enforcement done entirely through the bucket policy, not bucket existence.
+
+### Origin Access Control (OAC) — how CloudFront is kept out of the other three prefixes
+
+CloudFront needs to fetch an object from S3 on a cache miss before it can serve or cache it. Historically that meant either making the bucket public (defeating the point of gating access through CloudFront at all) or the older, now-superseded Origin Access Identity mechanism. **OAC is the current mechanism**: an AWS-managed identity that represents *this one CloudFront distribution and nothing else*. The S3 bucket policy grants that identity `s3:GetObject`, scoped to exactly the prefixes meant to be public:
+
+```json
+{
+  "Effect": "Allow",
+  "Principal": { "Service": "cloudfront.amazonaws.com" },
+  "Action": "s3:GetObject",
+  "Resource": [
+    "arn:aws:s3:::glimpses-photos/photos/*",
+    "arn:aws:s3:::glimpses-photos/thumbnails/*",
+    "arn:aws:s3:::glimpses-photos/qrcodes/*"
+  ],
+  "Condition": { "StringEquals": { "AWS:SourceArn": "<this distribution's arn>" } }
+}
+```
+
+`uploads/`, `selfies/`, `downloads/` simply never appear in that `Resource` list — even a correctly-guessed CloudFront-style path under one of those prefixes gets rejected by S3 itself, not merely left uncached. The bucket additionally has all public access blocked at the bucket level, so no path — through CloudFront or directly — ever works without either OAC (for the three public prefixes) or a Lambda-issued pre-signed URL (for everything else).
+
+### Why selfies still need a *read* path, despite being invisible to everyone
+
+`P-82` rules selfies invisible to *other* people, not to their own owner — the profile page shows Meera her own selfie back, so she can see what's currently set before replacing it. Since `selfies/` is deliberately outside CloudFront's grant, this read has to go through the same pre-signed mechanism as every other non-public prefix: `Profile`'s `GET /profile` mints a pre-signed `GET` scoped to exactly the caller's own key (`Profile` derives `userId` from the authenticated request, so it structurally cannot sign anyone else's selfie).
+
+**Making that actually cacheable took one more piece.** A pre-signed URL's signature is unique per call, so a fresh URL on every `GET /profile` would make the browser treat each response as a different resource and never reuse a cached copy across sessions. The fix is two-sided: `Cache-Control: private, max-age=86400` set on the selfie object itself at upload time (honored on any successful fetch, regardless of which signed URL retrieved it), plus a pre-signed expiry at least as long as that `max-age`, so the signature doesn't go stale before the browser's own cache would naturally expire it. `private` (not `public`) keeps any shared/intermediate cache from ever storing a piece of biometric reference data — only the requesting browser's local cache may.
+
+### Net effect
+
+No Lambda/table/CI-job counts change — this ruling is infrastructure shape (one S3 bucket, one CloudFront distribution, one EventBridge rule), not a new Lambda. `Photos.s3Key` (undefined since 2026-08-12) and the `download` Lambda's zip-key shape (undefined since its own ruling) are both now defined. Tight answer in `LOCKED_TECH_DECISIONS.md` §9.

@@ -1,0 +1,3 @@
+Pillow
+pillow-heif
+aws-lambda-powertools

@@ -1,0 +1,63 @@
+pipeline {
+    agent any
+
+    environment {
+        AWS_PROFILE = 'glimpses'
+    }
+
+    stages {
+        stage('Build') {
+            steps {
+                dir('Backend/db_api') {
+                    sh '''
+                        set -e
+                        rm -rf build build.zip
+                        mkdir -p build
+                        pip install -r requirements.txt \
+                          --target build \
+                          --platform manylinux2014_x86_64 \
+                          --implementation cp \
+                          --python-version 3.13 \
+                          --only-binary=:all: \
+                          --upgrade
+                        cp -r src/. build/
+                        cd build && zip -r ../build.zip . && cd ..
+                    '''
+                }
+            }
+        }
+        stage('Push to deployment-artifacts') {
+            steps {
+                dir('Backend/db_api') {
+                    sh 'aws s3 cp build.zip s3://glimpses-deploy-artifacts/db_api/build.zip'
+                }
+            }
+        }
+        stage('Terraform Init') {
+            steps {
+                dir('infrastructure') {
+                    sh 'terraform init'
+                }
+            }
+        }
+        stage('Terraform Validate') {
+            steps {
+                dir('infrastructure') {
+                    sh 'terraform validate'
+                }
+            }
+        }
+        stage('Terraform Apply - db_api') {
+            steps {
+                dir('infrastructure') {
+                    sh 'terraform apply -target=module.db_api -auto-approve'
+                }
+            }
+        }
+        stage('Update Lambda code') {
+            steps {
+                sh 'aws lambda update-function-code --function-name glimpses-db-api --s3-bucket glimpses-deploy-artifacts --s3-key db_api/build.zip'
+            }
+        }
+    }
+}

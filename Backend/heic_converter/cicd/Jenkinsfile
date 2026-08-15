@@ -1,0 +1,67 @@
+pipeline {
+    agent any
+
+    environment {
+        AWS_PROFILE = 'glimpses'
+    }
+
+    stages {
+        // Pillow/pillow-heif ship native compiled extensions, so dependencies must be
+        // built for Lambda's Linux runtime regardless of the machine Jenkins runs on —
+        // --platform/--only-binary below force that, rather than whatever wheel the
+        // local OS/architecture would otherwise resolve to.
+        stage('Build') {
+            steps {
+                dir('Backend/heic_converter') {
+                    sh '''
+                        set -e
+                        rm -rf build build.zip
+                        mkdir -p build
+                        pip install -r requirements.txt \
+                          --target build \
+                          --platform manylinux2014_x86_64 \
+                          --implementation cp \
+                          --python-version 3.13 \
+                          --only-binary=:all: \
+                          --upgrade
+                        cp -r src/. build/
+                        cd build && zip -r ../build.zip . && cd ..
+                    '''
+                }
+            }
+        }
+        stage('Push to deployment-artifacts') {
+            steps {
+                dir('Backend/heic_converter') {
+                    sh 'aws s3 cp build.zip s3://glimpses-deploy-artifacts/heic_converter/build.zip'
+                }
+            }
+        }
+        stage('Terraform Init') {
+            steps {
+                dir('infrastructure') {
+                    sh 'terraform init'
+                }
+            }
+        }
+        stage('Terraform Validate') {
+            steps {
+                dir('infrastructure') {
+                    sh 'terraform validate'
+                }
+            }
+        }
+        stage('Terraform Apply - heic_converter') {
+            steps {
+                dir('infrastructure') {
+                    sh 'terraform apply -target=module.heic_converter -auto-approve'
+                }
+            }
+        }
+        stage('Update Lambda code') {
+            steps {
+                sh 'aws lambda update-function-code --function-name glimpses-heic-converter --s3-bucket glimpses-deploy-artifacts --s3-key heic_converter/build.zip'
+            }
+        }
+    }
+}
