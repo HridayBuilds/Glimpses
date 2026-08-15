@@ -7,6 +7,7 @@ output "table_names" {
     photos          = aws_dynamodb_table.photos.name
     faces           = aws_dynamodb_table.faces.name
     event_attendees = aws_dynamodb_table.event_attendees.name
+    downloads       = aws_dynamodb_table.downloads.name
   }
 }
 
@@ -19,6 +20,7 @@ output "table_arns" {
     photos          = aws_dynamodb_table.photos.arn
     faces           = aws_dynamodb_table.faces.arn
     event_attendees = aws_dynamodb_table.event_attendees.arn
+    downloads       = aws_dynamodb_table.downloads.arn
   }
 }
 

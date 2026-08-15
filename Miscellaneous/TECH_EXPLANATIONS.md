@@ -507,7 +507,9 @@ Most of the path list (§3 of `LOCKED_TECH_DECISIONS.md`) is direct translation 
 
 **Cleanup.** `P-90`'s own writeup already anticipated this: the QR image "joins `P-60`'s expiring ZIP archives on the list of stored artifacts that need a lifecycle." An S3 lifecycle rule expiring objects under the downloads prefix (defaulted to 48 hours, adjustable later) closes that obligation — not new ground, just implementing what the product docs already expected.
 
-**Net effect on `T-03`/`T-04`/`T-06`:** Lambda count 9→**10**, DynamoDB tables 6→**7**, CI/CD jobs 11→**12**. Tight answers in `LOCKED_TECH_DECISIONS.md`.
+**Net effect on `T-03`/`T-04`/`T-06`:** Lambda count 9→**10**, DynamoDB tables 6→**7**, CI/CD jobs 11→**12** *(amended again 2026-08-15, same day, to **15** — see below)*. Tight answers in `LOCKED_TECH_DECISIONS.md`.
+
+**CI/CD job count amended again, same day: 12 → 15.** Wiring `heic_converter`/`db_api`/`download` into root `imports.tf` surfaced that the shared resources they depend on — the deploy-artifacts bucket, the photos bucket, the alarm SNS topic, and CloudFront — didn't exist in Terraform yet. Each became its own module (`buckets`, `alarms`, `cloudfront`), kept deliberately separate rather than bundled into one "shared" module/job, for the same reason `T-04` keeps tables separate: smaller, individually-understandable pieces over one opaque one. Each gets its own dedicated CI job, same as `dynamodb`/`state_machines` — 12 → **15**. Tight answer and run order in `LOCKED_TECH_DECISIONS.md`.
 
 ## 10. `T-09` (2026-08-15) — S3 bucket/key layout, CDN, and the ingestion trigger
 

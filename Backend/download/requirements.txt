@@ -1,0 +1,2 @@
+stream-zip
+aws-lambda-powertools
