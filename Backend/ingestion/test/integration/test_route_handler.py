@@ -1,4 +1,5 @@
 import io
+import json
 import os
 import sys
 import zipfile
@@ -112,8 +113,9 @@ def test_extract_then_index_then_finalize_full_round_trip(monkeypatch):
 
     extract_result = lambda_handler({"step": "extract", "bucket": bucket, "key": upload_key}, _FakeLambdaContext())
     assert extract_result["extractFailedCount"] == 0
-    assert len(extract_result["photos"]) == 1
-    photo = extract_result["photos"][0]
+    manifest = json.loads(s3.get_object(Bucket=bucket, Key=extract_result["manifestKey"])["Body"].read())
+    assert len(manifest) == 1
+    photo = manifest[0]
 
     photo_key = photo["s3Key"]
     assert s3.get_object(Bucket=bucket, Key=photo_key)["Body"].read() == _JPEG_BYTES
@@ -130,7 +132,7 @@ def test_extract_then_index_then_finalize_full_round_trip(monkeypatch):
         {"step": "index_one_photo", "eventID": "evt_1", "photoID": photo["photoID"], "s3Key": photo_key},
         _FakeLambdaContext(),
     )
-    assert index_result == {"photoID": photo["photoID"], "faceCount": 1}
+    assert index_result == {"photoID": photo["photoID"], "status": "SUCCEEDED", "faceCount": 1}
     assert faces_table.get_item(Key={"rekognitionFaceID": "face-1"})["Item"]["photoID"] == photo["photoID"]
 
     finalize_result = lambda_handler(

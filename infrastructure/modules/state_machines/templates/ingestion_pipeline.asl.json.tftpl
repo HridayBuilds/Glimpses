@@ -1,0 +1,399 @@
+{
+  "Comment": "Ingestion pipeline (T-02): InitializeJob -> UpdateStatus(EXTRACTING) -> Extract -> UpdateStatus(INDEXING) -> per-photo IndexFaces fan-out -> Finalize -> UpdateStatus(MATCHING) -> ListAttendees -> per-attendee SearchFaces fan-out (MatchAttendees) -> UpdateStatusTerminal -> IngestionSucceeded. db_api is called at all six documented touch points (LOCKED_TECH_DECISIONS.md T-02 follow-up): create + five status updates (EXTRACTING/INDEXING/MATCHING/terminal/FAILED). The terminal SUCCEEDED/PARTIAL write happens only right before IngestionSucceeded, not right after Finalize, so Jobs never reports done while ListAttendees/MatchAttendees are still running.",
+  "QueryLanguage": "JSONata",
+  "StartAt": "InitializeJob",
+  "States": {
+    "InitializeJob": {
+      "Comment": "First db_api touch point: creates the Jobs row. jobId/eventID/uploaderID are parsed from the upload key (uploads/event/{eventID}/user/{userId}/job/{jobId}/original.zip, T-09) since no Jobs row exists yet to read them from. No Jobs row exists yet if this fails, so its own Catch skips JobFailed and goes straight to IngestionFailed.",
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Arguments": {
+        "FunctionName": "${db_api_function_arn}",
+        "Payload": {
+          "action": "create",
+          "jobId": "{% $split($states.input.key, '/')[6] %}",
+          "eventID": "{% $split($states.input.key, '/')[2] %}",
+          "uploaderID": "{% $split($states.input.key, '/')[4] %}",
+          "status": "CREATED",
+          "startedAt": "{% $states.context.Execution.StartTime %}"
+        }
+      },
+      "Output": "{% $merge([$states.input, {'jobId': $split($states.input.key, '/')[6], 'eventID': $split($states.input.key, '/')[2], 'uploaderID': $split($states.input.key, '/')[4]}]) %}",
+      "Retry": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "IngestionFailed"
+        }
+      ],
+      "Next": "UpdateStatusExtracting"
+    },
+
+    "UpdateStatusExtracting": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Arguments": {
+        "FunctionName": "${db_api_function_arn}",
+        "Payload": {
+          "action": "update_status",
+          "jobId": "{% $states.input.jobId %}",
+          "status": "EXTRACTING"
+        }
+      },
+      "Output": "{% $states.input %}",
+      "Retry": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Output": "{% $states.input %}",
+          "Next": "JobFailed"
+        }
+      ],
+      "Next": "Extract"
+    },
+
+    "Extract": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Arguments": {
+        "FunctionName": "${ingestion_function_arn}",
+        "Payload": {
+          "step": "extract",
+          "bucket": "{% $states.input.bucket %}",
+          "key": "{% $states.input.key %}"
+        }
+      },
+      "Output": "{% $states.result.Payload %}",
+      "Retry": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Output": "{% $states.input %}",
+          "Next": "JobFailed"
+        }
+      ],
+      "Next": "UpdateStatusIndexing"
+    },
+
+    "UpdateStatusIndexing": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Arguments": {
+        "FunctionName": "${db_api_function_arn}",
+        "Payload": {
+          "action": "update_status",
+          "jobId": "{% $states.input.jobId %}",
+          "status": "INDEXING"
+        }
+      },
+      "Output": "{% $states.input %}",
+      "Retry": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Output": "{% $states.input %}",
+          "Next": "JobFailed"
+        }
+      ],
+      "Next": "IndexPhotos"
+    },
+
+    "IndexPhotos": {
+      "Type": "Map",
+      "Label": "IndexPhotos",
+      "ItemProcessor": {
+        "ProcessorConfig": {
+          "Mode": "DISTRIBUTED",
+          "ExecutionType": "STANDARD"
+        },
+        "StartAt": "IndexOnePhoto",
+        "States": {
+          "IndexOnePhoto": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "Arguments": {
+              "FunctionName": "${ingestion_function_arn}",
+              "Payload": {
+                "step": "index_one_photo",
+                "eventID": "{% $states.input.eventID %}",
+                "photoID": "{% $states.input.photoID %}",
+                "s3Key": "{% $states.input.s3Key %}"
+              }
+            },
+            "Output": "{% $states.result.Payload %}",
+            "Retry": [
+              {
+                "ErrorEquals": ["States.ALL"],
+                "IntervalSeconds": 2,
+                "MaxAttempts": 3,
+                "BackoffRate": 2
+              }
+            ],
+            "End": true
+          }
+        }
+      },
+      "ItemReader": {
+        "Resource": "arn:aws:states:::s3:getObject",
+        "ReaderConfig": {
+          "InputType": "JSON"
+        },
+        "Arguments": {
+          "Bucket": "{% $states.input.manifestBucket %}",
+          "Key": "{% $states.input.manifestKey %}"
+        }
+      },
+      "MaxConcurrency": ${rekognition_index_max_concurrency},
+      "ToleratedFailurePercentage": 100,
+      "Output": "{% $merge([$states.input, {'indexResults': $states.result}]) %}",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Output": "{% $states.input %}",
+          "Next": "JobFailed"
+        }
+      ],
+      "Next": "Finalize"
+    },
+
+    "Finalize": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Arguments": {
+        "FunctionName": "${ingestion_function_arn}",
+        "Payload": {
+          "step": "finalize",
+          "jobId": "{% $states.input.jobId %}",
+          "eventID": "{% $states.input.eventID %}",
+          "extractFailedCount": "{% $states.input.extractFailedCount %}",
+          "indexResults": "{% $states.input.indexResults %}"
+        }
+      },
+      "Output": "{% $states.result.Payload %}",
+      "Retry": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Output": "{% $states.input %}",
+          "Next": "JobFailed"
+        }
+      ],
+      "Next": "UpdateStatusMatching"
+    },
+
+    "UpdateStatusMatching": {
+      "Comment": "Fourth touch point: an in-progress status, not the terminal outcome. Finalize's computed status/succeededCount/failedCount are carried through unwritten in $states.input for UpdateStatusTerminal (right before IngestionSucceeded) to write once ListAttendees/MatchAttendees have actually finished.",
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Arguments": {
+        "FunctionName": "${db_api_function_arn}",
+        "Payload": {
+          "action": "update_status",
+          "jobId": "{% $states.input.jobId %}",
+          "status": "MATCHING"
+        }
+      },
+      "Output": "{% $states.input %}",
+      "Retry": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Output": "{% $states.input %}",
+          "Next": "JobFailed"
+        }
+      ],
+      "Next": "ListAttendees"
+    },
+
+    "ListAttendees": {
+      "Comment": "Runs before Jobs' terminal outcome is written — UpdateStatusTerminal still hasn't run. A failure here or in MatchAttendees now routes through JobFailed (flips Jobs to FAILED) rather than straight to IngestionFailed, since without that the row would otherwise be stuck at MATCHING forever with no terminal status ever written.",
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Arguments": {
+        "FunctionName": "${ingestion_function_arn}",
+        "Payload": {
+          "step": "list_attendees",
+          "eventID": "{% $states.input.eventID %}"
+        }
+      },
+      "Output": "{% $merge([$states.input, $states.result.Payload]) %}",
+      "Retry": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Output": "{% $states.input %}",
+          "Next": "JobFailed"
+        }
+      ],
+      "Next": "MatchAttendees"
+    },
+
+    "MatchAttendees": {
+      "Type": "Map",
+      "Label": "MatchAttendees",
+      "Items": "{% $states.input.attendeeIDs %}",
+      "ItemSelector": {
+        "eventID": "{% $states.input.eventID %}",
+        "userID": "{% $states.context.Map.Item.Value %}"
+      },
+      "ItemProcessor": {
+        "ProcessorConfig": {
+          "Mode": "DISTRIBUTED",
+          "ExecutionType": "STANDARD"
+        },
+        "StartAt": "MatchOneAttendeeBatch",
+        "States": {
+          "MatchOneAttendeeBatch": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "Arguments": {
+              "FunctionName": "${ingestion_function_arn}",
+              "Payload": {
+                "step": "match_attendees",
+                "eventID": "{% $states.input.eventID %}",
+                "userID": "{% $states.input.userID %}"
+              }
+            },
+            "Output": "{% $states.result.Payload %}",
+            "Retry": [
+              {
+                "ErrorEquals": ["States.ALL"],
+                "IntervalSeconds": 2,
+                "MaxAttempts": 3,
+                "BackoffRate": 2
+              }
+            ],
+            "End": true
+          }
+        }
+      },
+      "MaxConcurrency": ${rekognition_search_max_concurrency},
+      "ToleratedFailurePercentage": 100,
+      "Output": "{% $states.input %}",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Output": "{% $states.input %}",
+          "Next": "JobFailed"
+        }
+      ],
+      "Next": "UpdateStatusTerminal"
+    },
+
+    "UpdateStatusTerminal": {
+      "Comment": "Fifth touch point: the real terminal outcome (SUCCEEDED/PARTIAL, computed by Finalize and carried through MATCHING/ListAttendees/MatchAttendees unwritten) — written only now, right before IngestionSucceeded, so Jobs never reports done while matching is still in flight.",
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Arguments": {
+        "FunctionName": "${db_api_function_arn}",
+        "Payload": {
+          "action": "update_status",
+          "jobId": "{% $states.input.jobId %}",
+          "status": "{% $states.input.status %}",
+          "succeededCount": "{% $states.input.succeededCount %}",
+          "failedCount": "{% $states.input.failedCount %}"
+        }
+      },
+      "Output": "{% $states.input %}",
+      "Retry": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Output": "{% $states.input %}",
+          "Next": "JobFailed"
+        }
+      ],
+      "Next": "IngestionSucceeded"
+    },
+
+    "IngestionSucceeded": {
+      "Comment": "Explicit success terminal, symmetric with IngestionFailed below — gives the happy path a named, observable end state in execution history rather than just whichever state happens to carry End: true.",
+      "Type": "Succeed"
+    },
+
+    "JobFailed": {
+      "Comment": "Sixth db_api touch point: any execution-level failure (Extract crashing, IndexPhotos' Map itself erroring, ListAttendees/MatchAttendees failing before the terminal write, etc.) after a Jobs row exists flips it to FAILED. Every prior state's Catch preserves jobId in $states.input for this to read.",
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Arguments": {
+        "FunctionName": "${db_api_function_arn}",
+        "Payload": {
+          "action": "update_status",
+          "jobId": "{% $states.input.jobId %}",
+          "status": "FAILED"
+        }
+      },
+      "Retry": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Next": "IngestionFailed"
+    },
+
+    "IngestionFailed": {
+      "Type": "Fail",
+      "Error": "IngestionPipelineFailed",
+      "Cause": "The ingestion pipeline execution failed before reaching a normal terminal state; see this execution's history for the failing state and error detail."
+    }
+  }
+}

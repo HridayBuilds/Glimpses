@@ -134,6 +134,16 @@ def get_faces(face_ids):
     return items
 
 
+def list_admitted_attendees(event_id):
+    response = _event_attendees_table().query(
+        IndexName="eventID-status-index",
+        KeyConditionExpression="eventID = :e AND #s = :s",
+        ExpressionAttributeNames={"#s": "status"},
+        ExpressionAttributeValues={":e": event_id, ":s": "ATTENDEE"},
+    )
+    return [item["userID"] for item in response["Items"]]
+
+
 def add_matched_photo_ids(user_id, event_id, photo_ids):
     if not photo_ids:
         return

@@ -16,6 +16,14 @@ resource "aws_s3_bucket_public_access_block" "photos" {
 
 # T-04/T-09 follow-up: built zip objects are stored artifacts with a lifecycle, not kept
 # indefinitely — matches the download Lambda's ruled 48h default.
+# T-09: ingestion's trigger is S3 -> EventBridge -> StartExecution directly, no glue
+# Lambda — this is the switch that routes the bucket's events onto the default event bus,
+# where the state_machines module's own rule picks up "uploads/.../original.zip" writes.
+resource "aws_s3_bucket_notification" "photos_eventbridge" {
+  bucket      = aws_s3_bucket.photos.id
+  eventbridge = true
+}
+
 resource "aws_s3_bucket_lifecycle_configuration" "photos" {
   bucket = aws_s3_bucket.photos.id
 

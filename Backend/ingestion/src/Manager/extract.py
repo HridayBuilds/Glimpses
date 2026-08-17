@@ -1,3 +1,4 @@
+import json
 import os
 import uuid
 from datetime import datetime, timezone
@@ -44,10 +45,17 @@ def handle_extract(payload):
         if photo is not None:  # None means a duplicate — deliberately not counted as success or failure (P-38)
             succeeded.append(photo)
 
+    # T-02: the Distributed Map reads this list via an S3 ItemReader, never as a JSON
+    # array passed between states — at up to 1,000 photos/event (P-93) that array
+    # could approach Step Functions' 256KB state-transfer limit.
+    manifest_key = f"uploads/event/{event_id}/user/{user_id}/job/{job_id}/manifest.json"
+    put_object(bucket, manifest_key, json.dumps(succeeded).encode("utf-8"), content_type="application/json")
+
     return {
         "eventID": event_id,
         "jobId": job_id,
-        "photos": succeeded,
+        "manifestBucket": bucket,
+        "manifestKey": manifest_key,
         "extractFailedCount": failed_count,
     }
 

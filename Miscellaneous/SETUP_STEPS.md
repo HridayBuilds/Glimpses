@@ -107,11 +107,11 @@ aws s3api put-public-access-block \
 
 ## 5. Rekognition service quota check (`ap-south-1`)
 
-**Why:** `P-95`/`D-124` flagged Rekognition availability in `ap-south-1` as an unverified obligation. `T-02` separately requires `MaxConcurrency` (the Distributed Map's fan-out concurrency for `IndexFaces`) to be set to the deploying account's **actual** `IndexFaces` TPS Service Quota, not the published default of 50 — new/lightly-used accounts commonly start lower.
+**Why:** `P-95`/`D-124` flagged Rekognition availability in `ap-south-1` as an unverified obligation. `T-02` separately requires `MaxConcurrency` (the Distributed Map's fan-out concurrency for `IndexFaces`/`SearchFacesByImage`) to be set to the deploying account's **actual** TPS Service Quota for each operation, not the published default of 50 — new/lightly-used accounts commonly start lower.
 
-**Checked:** Rekognition is available in `ap-south-1`. Account's actual `IndexFaces` TPS quota is **5**, not the published default of 50.
+**Checked:** Rekognition is available in `ap-south-1`. Account's actual `IndexFaces` TPS quota is **5**, not the published default of 50. **`SearchFacesByImage`'s TPS quota was measured separately, 2026-08-17** (`aws service-quotas list-service-quotas --service-code rekognition --query "Quotas[?contains(QuotaName, 'SearchFaces')]"`, after finding the quota under Service Quotas → Amazon Rekognition, not inside the Rekognition console itself) — also **5**, same as `IndexFaces`, confirmed rather than assumed.
 
-**Consequence:** the Terraform variable `rekognition_index_max_concurrency` (`T-02`) will be set to **5**, not 50, when the Step Functions module is built. This throttles ingestion throughput (batches process slower than the 50-TPS case) but changes nothing about correctness — the Distributed Map's retry/backoff and tolerated-failure-% handle this regardless of the concurrency ceiling. A quota increase can be requested later via the Service Quotas console if throughput becomes a real bottleneck at scale; not needed now.
+**Consequence:** the Terraform variables `rekognition_index_max_concurrency` and `rekognition_search_max_concurrency` (`T-02`, on the `state_machines` module) are both set to **5**, not 50. This throttles ingestion/matching throughput (batches process slower than the 50-TPS case) but changes nothing about correctness — the Distributed Maps' retry/backoff and tolerated-failure-% handle this regardless of the concurrency ceiling. A quota increase can be requested later via the Service Quotas console if throughput becomes a real bottleneck at scale; not needed now.
 
 ---
 

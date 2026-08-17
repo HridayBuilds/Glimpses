@@ -71,3 +71,12 @@ module "ingestion" {
   heic_converter_function_arn  = module.heic_converter.function_arn
   alarm_sns_topic_arn          = module.alarms.alarm_sns_topic_arn
 }
+
+module "state_machines" {
+  source = "./modules/state_machines"
+
+  ingestion_function_arn = module.ingestion.function_arn
+  db_api_function_arn    = module.db_api.function_arn
+  photos_bucket_name     = module.buckets.photos_bucket_name
+  photos_bucket_arn      = module.buckets.photos_bucket_arn
+}

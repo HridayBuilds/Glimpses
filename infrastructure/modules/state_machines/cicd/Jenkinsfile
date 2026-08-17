@@ -1,0 +1,31 @@
+pipeline {
+    agent any
+
+    environment {
+        AWS_PROFILE = 'glimpses'
+    }
+
+    stages {
+        stage('Terraform Init') {
+            steps {
+                dir('infrastructure') {
+                    sh 'terraform init'
+                }
+            }
+        }
+        stage('Terraform Validate') {
+            steps {
+                dir('infrastructure') {
+                    sh 'terraform validate'
+                }
+            }
+        }
+        stage('Terraform Apply - state_machines') {
+            steps {
+                dir('infrastructure') {
+                    sh 'terraform apply -target=module.state_machines -auto-approve'
+                }
+            }
+        }
+    }
+}

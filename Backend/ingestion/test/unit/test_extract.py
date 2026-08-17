@@ -1,4 +1,5 @@
 import io
+import json
 import sys
 import zipfile
 from pathlib import Path
@@ -39,37 +40,45 @@ def test_extract_stores_photo_and_thumbnail_for_each_entry(monkeypatch):
     assert result["eventID"] == "evt_1"
     assert result["jobId"] == "job_1"
     assert result["extractFailedCount"] == 0
-    assert len(result["photos"]) == 1
-    assert result["photos"][0]["s3Key"].startswith("photos/event/evt_1/")
+    assert result["manifestKey"] == "uploads/event/evt_1/user/user_1/job/job_1/manifest.json"
+    manifest = json.loads(stored_objects[result["manifestKey"]])
+    assert len(manifest) == 1
+    assert manifest[0]["s3Key"].startswith("photos/event/evt_1/")
     assert photos[0]["uploaderDisplayName"] == "Meera"
     assert photos[0]["uploaderEmail"] == "meera@example.com"
     assert photos[0]["filename"] == "a.jpg"
 
 
 def test_extract_skips_duplicate_without_counting_as_failure(monkeypatch):
+    stored_objects = {}
+
     monkeypatch.setattr(extract, "get_object", lambda bucket, key: _zip_bytes({"a.jpg": _JPEG_BYTES}))
     monkeypatch.setattr(extract, "get_user", lambda user_id: {})
     monkeypatch.setattr(extract, "is_duplicate", lambda event_id, content_hash: True)
+    monkeypatch.setattr(extract, "put_object", lambda bucket, key, body, content_type=None: stored_objects.update({key: body}))
 
     result = extract.handle_extract({
         "bucket": "glimpses-photos-test-bucket",
         "key": "uploads/event/evt_1/user/user_1/job/job_1/original.zip",
     })
 
-    assert result["photos"] == []
+    assert json.loads(stored_objects[result["manifestKey"]]) == []
     assert result["extractFailedCount"] == 0
 
 
 def test_extract_counts_unrecognized_format_as_failure(monkeypatch):
+    stored_objects = {}
+
     monkeypatch.setattr(extract, "get_object", lambda bucket, key: _zip_bytes({"a.txt": b"not-an-image"}))
     monkeypatch.setattr(extract, "get_user", lambda user_id: {})
+    monkeypatch.setattr(extract, "put_object", lambda bucket, key, body, content_type=None: stored_objects.update({key: body}))
 
     result = extract.handle_extract({
         "bucket": "glimpses-photos-test-bucket",
         "key": "uploads/event/evt_1/user/user_1/job/job_1/original.zip",
     })
 
-    assert result["photos"] == []
+    assert json.loads(stored_objects[result["manifestKey"]]) == []
     assert result["extractFailedCount"] == 1
 
 

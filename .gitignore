@@ -22,3 +22,10 @@ terraform.tfvars
 # Terraform working directory — downloaded provider binaries, machine-specific.
 # .terraform.lock.hcl stays tracked; .terraform/ itself never should be.
 **/.terraform/
+
+# graphify output — generated knowledge graph, not project content.
+graphify-out/
+
+# Python bytecode cache — regenerated locally, not source.
+__pycache__/
+*.pyc

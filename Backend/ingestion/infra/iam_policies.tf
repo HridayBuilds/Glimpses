@@ -47,13 +47,22 @@ resource "aws_iam_role_policy" "faces_access" {
   policy = data.aws_iam_policy_document.faces_access.json
 }
 
-# MatchAttendees/MatchOneAttendee write the matchedPhotoIDs String Set; the row itself is
-# never read here (the trigger delivers the changed keys via the DynamoDB Stream record).
+# MatchAttendees/MatchOneAttendee write the matchedPhotoIDs String Set; ListAttendees
+# reads eventID-status-index (below) — MatchOneAttendee's own trigger still delivers its
+# changed keys via the DynamoDB Stream record, not a read here.
 data "aws_iam_policy_document" "event_attendees_access" {
   statement {
     effect    = "Allow"
     actions   = ["dynamodb:UpdateItem"]
     resources = [var.event_attendees_table_arn]
+  }
+
+  # ListAttendees queries eventID-status-index for the "who's currently admitted" list
+  # MatchAttendees' Distributed Map fans out over.
+  statement {
+    effect    = "Allow"
+    actions   = ["dynamodb:Query"]
+    resources = ["${var.event_attendees_table_arn}/index/*"]
   }
 
   statement {
