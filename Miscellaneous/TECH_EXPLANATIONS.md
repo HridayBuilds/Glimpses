@@ -82,6 +82,42 @@ For an I/O-bound JSON API where the DynamoDB round-trip dominates latency either
 
 **Cross-reference to `HANDOFF.md`:** departs deliberately from v1's SQS choice (§2), while keeping its "don't carry bulk data through the state machine" discipline (§4) and directly serving `P-100`'s progress/retry requirement, which named this exact decision as its input.
 
+### `T-02`/`T-04` follow-up (2026-08-16) — `MatchOneAttendee`: matching an attendee who joins after the photos already exist
+
+**The gap, named concretely.** `MatchAttendees` (the follow-up ruled 2026-08-12, see §4 below) only runs as a step inside `ingestion`'s own batch pipeline — it fans out `SearchFaces` over whoever is `ATTENDEE` **at the moment a batch finishes**. Walk Meera through the timeline: Arjun uploads 200 photos on day one, `MatchAttendees` runs and matches everyone who was already `ATTENDEE` that day. Meera gets admitted on day three. If Arjun never uploads again, nothing ever re-runs `SearchFaces` for Meera — she is `ATTENDEE`, she appears in six of those 200 photos, and her gallery filter shows zero of them, permanently. This was already named and accepted as a cost in the original `EventAttendees` leave/rejoin ruling (§4 below: *"gallery empty until the next batch triggers `MatchAttendees` again, which could be days away or never"*) — building `ingestion` for real is what turned it from an accepted line in a table into a problem worth actually closing.
+
+**What must NOT change, and why.** `MatchAttendees`'s Distributed Map is the direct load-bearing reason `T-02` exists in the first place — `SearchFaces` shares Rekognition's same account-wide throttle as `IndexFaces`, so at `P-93`'s 100-attendees/event target, a single batch fans out to up to 100 calls needing the same per-item retry/tolerated-failure-% Distributed Map already gives for free. Removing it and hand-rolling the batch-arrival case would reopen the exact problem `T-02` was ruled to close — in a second place, for no reason, since the batch-arrival trigger was never the part that was broken.
+
+**Three ways to close the gap, run through Meera (the attendee), Arjun (does `Membership` need to know matching exists?), and Sam (IAM blast radius):**
+
+- **A — `Membership` directly invokes `ingestion`.** `Membership`'s `admit`/`join`/rejoin-via-`leave` code paths gain `lambda:InvokeFunction` on `ingestion`'s ARN, calling a new `MatchOneAttendee` step with `{eventID, userId}` the moment a row flips to `ATTENDEE`. Simple, and it's the same *shape* of wiring already proven for `download`'s self-invoke and `Gallery/photos → CascadeDelete`.
+- **B — a DynamoDB Stream on `EventAttendees`, filtered to the `ATTENDEE` transition, triggering `ingestion` directly.** `Membership` writes its status flip exactly as it does today and never learns matching exists — the stream reacts to the write, `Membership`'s own code doesn't call anything new.
+- **C — a scheduled sweep.** A periodic Lambda (e.g. hourly) scans `EventAttendees` for anyone whose `matchedPhotoIDs` looks stale and re-runs `SearchFaces`. Closes the gap eventually, not on join — a real latency cost with no correctness benefit A/B don't already have.
+
+| | Meera sees her matches | `Membership`'s IAM footprint | Self-triggering-loop risk | Handles all three `→ATTENDEE` paths (admit, open join, `P-46` rejoin) |
+|---|---|---|---|---|
+| A — direct invoke | Near-immediate | Gains an invoke permission it has no other reason to hold — a small crack in `T-04`'s one-table-per-Lambda isolation | None (an explicit call, once) | Only if every code path remembers to call it |
+| B — DynamoDB Stream | Near-immediate | **Unchanged** — `Membership` stays scoped to exactly `EventAttendees` | Real, but closed by filter criteria (below) | Automatic — any write landing on `ATTENDEE`, from any code path, is covered without `Membership` doing anything special |
+| C — scheduled sweep | Delayed up to the sweep interval | Unchanged | None | Yes, eventually |
+
+**Ruled: B.** It's the only option where `Membership` never has to know matching exists — the same isolation discipline `T-04` already enforces everywhere else in the system, extended to this trigger instead of being carved an exception for it. It also structurally can't miss a `→ATTENDEE` transition the way A can (a future fourth code path that flips someone to `ATTENDEE` gets covered automatically, since the stream reacts to the write itself, not to a call site someone had to remember to add). C was never really a contender once B was on the table — same correctness, worse latency, an extra scheduled resource for no gain.
+
+**The self-triggering-loop risk, and how it's actually closed.** `MatchOneAttendee`'s own effect is an `UpdateItem` on that same `EventAttendees` row, writing `matchedPhotoIDs` — which itself lands on the stream. Without a filter, `ingestion` would react to its own output forever. DynamoDB Streams' Lambda Event Source Mapping supports **filter criteria** evaluated by AWS before your function ever runs: `OldImage.status != "ATTENDEE" AND NewImage.status == "ATTENDEE"`. A `matchedPhotoIDs`-only write never touches `status`, so it's excluded at the source — no loop, and no wasted invocation for writes that aren't the transition being watched for.
+
+**What this actually buys, concretely, across every real scenario:**
+
+| Scenario | Why it now works |
+|---|---|
+| Photos exist, Meera is admitted afterward | The `PENDING→ATTENDEE` write fires the stream, `MatchOneAttendee` runs one `SearchFaces` against the event's full collection (old and new photos together) |
+| No photos yet, Meera joins early, a batch lands later | She's already `ATTENDEE` when `MatchAttendees`' batch-arrival fan-out runs — covered by the existing mechanism, untouched |
+| Meera leaves, rejoins later, missed a batch while away | The `LEFT→ATTENDEE` rejoin write fires the stream exactly the same as a fresh admit — she isn't a special case |
+| A batch finishes right as Meera gets admitted (race) | Both triggers may fire — harmless, since `matchedPhotoIDs` is a Set with idempotent `ADD`; worst case is one redundant `SearchFaces` call |
+| Meera is denied or ejected | Neither `ATTENDEE` transition ever happens — no trigger fires, `P-07`'s boundary stays intact |
+
+**What this deliberately does not fix, left open rather than silently absorbed.** A stream-triggered invocation that fails (Rekognition throttled, cold start past the mapping's own retry/bisect behavior) silently misses that one attendee, with nothing else ever catching it — the same shape of risk as option C above would have closed by brute force, on a delay. A periodic reconciliation sweep would close this properly, but wasn't ruled necessary at `P-93`'s scale (100 attendees/event, occasional admits, not a high-volume stream) — flagged here rather than built speculatively, per this project's own "no feature beyond what was asked" discipline.
+
+**Cost, checked against `D-96`'s own numbers (§4 below).** One `SearchFaces` call per admit/join/rejoin, ~$0.001 each (`D-96`: one call regardless of collection size). Trivial against `P-25`'s budget and nowhere near `P-93`'s actual cost driver, which remains the batch-arrival fan-out's attendee-count multiplier.
+
 ## 3. API shape
 
 ### `T-03` — Backend Lambda-function shape

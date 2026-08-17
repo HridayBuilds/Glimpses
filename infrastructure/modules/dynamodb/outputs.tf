@@ -29,3 +29,9 @@ output "events_stream_arn" {
   description = "Events table's DynamoDB Stream ARN, for CascadeDelete's event-source-mapping."
   value       = aws_dynamodb_table.events.stream_arn
 }
+
+# MatchOneAttendee's trigger (T-02 follow-up, EventAttendees section)
+output "event_attendees_stream_arn" {
+  description = "EventAttendees table's DynamoDB Stream ARN, for MatchOneAttendee's event-source-mapping."
+  value       = aws_dynamodb_table.event_attendees.stream_arn
+}

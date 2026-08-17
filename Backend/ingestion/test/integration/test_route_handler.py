@@ -1,0 +1,187 @@
+import io
+import os
+import sys
+import zipfile
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
+
+import boto3  # noqa: E402
+from moto import mock_aws  # noqa: E402
+from PIL import Image  # noqa: E402
+
+import Manager.index_one_photo as index_one_photo  # noqa: E402
+import Manager.match_attendees as match_attendees  # noqa: E402
+from routeHandler import lambda_handler  # noqa: E402
+
+
+class _FakeLambdaContext:
+    function_name = "ingestion"
+    memory_limit_in_mb = 512
+    invoked_function_arn = "arn:aws:lambda:ap-south-1:000000000000:function:ingestion"
+    aws_request_id = "test-request-id"
+
+
+def _make_jpeg_bytes():
+    buffer = io.BytesIO()
+    Image.new("RGB", (100, 100), color="red").save(buffer, format="JPEG")
+    return buffer.getvalue()
+
+
+_JPEG_BYTES = _make_jpeg_bytes()
+
+
+def _create_tables(dynamodb):
+    dynamodb.create_table(
+        TableName=os.environ["PHOTOS_TABLE_NAME"],
+        KeySchema=[{"AttributeName": "photoID", "KeyType": "HASH"}],
+        AttributeDefinitions=[
+            {"AttributeName": "photoID", "AttributeType": "S"},
+            {"AttributeName": "eventID", "AttributeType": "S"},
+            {"AttributeName": "contentHash", "AttributeType": "S"},
+        ],
+        GlobalSecondaryIndexes=[
+            {
+                "IndexName": "eventID-contentHash-index",
+                "KeySchema": [
+                    {"AttributeName": "eventID", "KeyType": "HASH"},
+                    {"AttributeName": "contentHash", "KeyType": "RANGE"},
+                ],
+                "Projection": {"ProjectionType": "ALL"},
+            }
+        ],
+        BillingMode="PAY_PER_REQUEST",
+    )
+    dynamodb.create_table(
+        TableName=os.environ["EVENTS_TABLE_NAME"],
+        KeySchema=[{"AttributeName": "eventID", "KeyType": "HASH"}],
+        AttributeDefinitions=[{"AttributeName": "eventID", "AttributeType": "S"}],
+        BillingMode="PAY_PER_REQUEST",
+    )
+    dynamodb.create_table(
+        TableName=os.environ["FACES_TABLE_NAME"],
+        KeySchema=[{"AttributeName": "rekognitionFaceID", "KeyType": "HASH"}],
+        AttributeDefinitions=[{"AttributeName": "rekognitionFaceID", "AttributeType": "S"}],
+        BillingMode="PAY_PER_REQUEST",
+    )
+    dynamodb.create_table(
+        TableName=os.environ["EVENT_ATTENDEES_TABLE_NAME"],
+        KeySchema=[
+            {"AttributeName": "userID", "KeyType": "HASH"},
+            {"AttributeName": "eventID", "KeyType": "RANGE"},
+        ],
+        AttributeDefinitions=[
+            {"AttributeName": "userID", "AttributeType": "S"},
+            {"AttributeName": "eventID", "AttributeType": "S"},
+        ],
+        BillingMode="PAY_PER_REQUEST",
+    )
+    dynamodb.create_table(
+        TableName=os.environ["USERS_TABLE_NAME"],
+        KeySchema=[{"AttributeName": "userID", "KeyType": "HASH"}],
+        AttributeDefinitions=[{"AttributeName": "userID", "AttributeType": "S"}],
+        BillingMode="PAY_PER_REQUEST",
+    )
+
+
+def _zip_bytes(entries):
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        for filename, data in entries.items():
+            archive.writestr(filename, data)
+    return buffer.getvalue()
+
+
+@mock_aws
+def test_extract_then_index_then_finalize_full_round_trip(monkeypatch):
+    dynamodb = boto3.resource("dynamodb", region_name="ap-south-1")
+    _create_tables(dynamodb)
+    events_table = dynamodb.Table(os.environ["EVENTS_TABLE_NAME"])
+    users_table = dynamodb.Table(os.environ["USERS_TABLE_NAME"])
+    faces_table = dynamodb.Table(os.environ["FACES_TABLE_NAME"])
+
+    s3 = boto3.client("s3", region_name="ap-south-1")
+    bucket = os.environ["PHOTOS_BUCKET"]
+    s3.create_bucket(Bucket=bucket, CreateBucketConfiguration={"LocationConstraint": "ap-south-1"})
+
+    events_table.put_item(Item={"eventID": "evt_1", "rekognitionCollectionID": "evt_1-collection"})
+    users_table.put_item(Item={"userID": "user_1", "displayName": "Meera", "email": "meera@example.com"})
+
+    upload_key = "uploads/event/evt_1/user/user_1/job/job_1/original.zip"
+    s3.put_object(Bucket=bucket, Key=upload_key, Body=_zip_bytes({"a.jpg": _JPEG_BYTES}))
+
+    extract_result = lambda_handler({"step": "extract", "bucket": bucket, "key": upload_key}, _FakeLambdaContext())
+    assert extract_result["extractFailedCount"] == 0
+    assert len(extract_result["photos"]) == 1
+    photo = extract_result["photos"][0]
+
+    photo_key = photo["s3Key"]
+    assert s3.get_object(Bucket=bucket, Key=photo_key)["Body"].read() == _JPEG_BYTES
+    thumbnail_key = f"thumbnails/event/evt_1/{photo['photoID']}.jpg"
+    assert s3.get_object(Bucket=bucket, Key=thumbnail_key)
+
+    monkeypatch.setattr(
+        index_one_photo,
+        "index_faces",
+        lambda collection_id, bucket, key: [{"Face": {"FaceId": "face-1"}}],
+    )
+
+    index_result = lambda_handler(
+        {"step": "index_one_photo", "eventID": "evt_1", "photoID": photo["photoID"], "s3Key": photo_key},
+        _FakeLambdaContext(),
+    )
+    assert index_result == {"photoID": photo["photoID"], "faceCount": 1}
+    assert faces_table.get_item(Key={"rekognitionFaceID": "face-1"})["Item"]["photoID"] == photo["photoID"]
+
+    finalize_result = lambda_handler(
+        {
+            "step": "finalize",
+            "jobId": "job_1",
+            "eventID": "evt_1",
+            "extractFailedCount": extract_result["extractFailedCount"],
+            "indexResults": [{"status": "OK"}],
+        },
+        _FakeLambdaContext(),
+    )
+    assert finalize_result == {
+        "jobId": "job_1",
+        "eventID": "evt_1",
+        "status": "SUCCEEDED",
+        "succeededCount": 1,
+        "failedCount": 0,
+    }
+
+
+@mock_aws
+def test_event_attendees_stream_record_triggers_match_attendees(monkeypatch):
+    dynamodb = boto3.resource("dynamodb", region_name="ap-south-1")
+    _create_tables(dynamodb)
+    events_table = dynamodb.Table(os.environ["EVENTS_TABLE_NAME"])
+    event_attendees_table = dynamodb.Table(os.environ["EVENT_ATTENDEES_TABLE_NAME"])
+    faces_table = dynamodb.Table(os.environ["FACES_TABLE_NAME"])
+
+    s3 = boto3.client("s3", region_name="ap-south-1")
+    bucket = os.environ["PHOTOS_BUCKET"]
+    s3.create_bucket(Bucket=bucket, CreateBucketConfiguration={"LocationConstraint": "ap-south-1"})
+    s3.put_object(Bucket=bucket, Key="selfies/user/user_1/selfie.jpg", Body=_JPEG_BYTES)
+
+    events_table.put_item(Item={"eventID": "evt_1", "rekognitionCollectionID": "evt_1-collection"})
+    event_attendees_table.put_item(Item={"userID": "user_1", "eventID": "evt_1", "status": "ATTENDEE"})
+    faces_table.put_item(Item={"rekognitionFaceID": "face-1", "eventID": "evt_1", "photoID": "photo_1"})
+
+    monkeypatch.setattr(
+        match_attendees,
+        "search_faces_by_image",
+        lambda collection_id, bucket, key, threshold: [{"Face": {"FaceId": "face-1"}}],
+    )
+
+    event = {
+        "Records": [
+            {"dynamodb": {"Keys": {"userID": {"S": "user_1"}, "eventID": {"S": "evt_1"}}}},
+        ]
+    }
+    result = lambda_handler(event, _FakeLambdaContext())
+    assert result == [{"eventID": "evt_1", "userID": "user_1", "matchedCount": 1}]
+
+    attendee_row = event_attendees_table.get_item(Key={"userID": "user_1", "eventID": "evt_1"})["Item"]
+    assert attendee_row["matchedPhotoIDs"] == {"photo_1"}

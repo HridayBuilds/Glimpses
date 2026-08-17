@@ -1,0 +1,63 @@
+pipeline {
+    agent any
+
+    environment {
+        AWS_PROFILE = 'glimpses'
+    }
+
+    stages {
+        stage('Build') {
+            steps {
+                dir('Backend/ingestion') {
+                    sh '''
+                        set -e
+                        rm -rf build build.zip
+                        mkdir -p build
+                        pip install -r requirements.txt \
+                          --target build \
+                          --platform manylinux2014_x86_64 \
+                          --implementation cp \
+                          --python-version 3.13 \
+                          --only-binary=:all: \
+                          --upgrade
+                        cp -r src/. build/
+                        cd build && zip -r ../build.zip . && cd ..
+                    '''
+                }
+            }
+        }
+        stage('Push to deployment-artifacts') {
+            steps {
+                dir('Backend/ingestion') {
+                    sh 'aws s3 cp build.zip s3://glimpses-deploy-artifacts/ingestion/build.zip'
+                }
+            }
+        }
+        stage('Terraform Init') {
+            steps {
+                dir('infrastructure') {
+                    sh 'terraform init'
+                }
+            }
+        }
+        stage('Terraform Validate') {
+            steps {
+                dir('infrastructure') {
+                    sh 'terraform validate'
+                }
+            }
+        }
+        stage('Terraform Apply - ingestion') {
+            steps {
+                dir('infrastructure') {
+                    sh 'terraform apply -target=module.ingestion -auto-approve'
+                }
+            }
+        }
+        stage('Update Lambda code') {
+            steps {
+                sh 'aws lambda update-function-code --function-name glimpses-ingestion --s3-bucket glimpses-deploy-artifacts --s3-key ingestion/build.zip'
+            }
+        }
+    }
+}
