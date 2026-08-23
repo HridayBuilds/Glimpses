@@ -83,6 +83,33 @@ module "profile" {
   alarm_sns_topic_arn     = module.alarms.alarm_sns_topic_arn
 }
 
+module "events" {
+  source = "../Backend/events/infra"
+
+  deploy_artifacts_bucket = module.buckets.deploy_artifacts_bucket_name
+  events_table_name       = module.dynamodb.table_names["events"]
+  events_table_arn        = module.dynamodb.table_arns["events"]
+  photos_bucket_name      = module.buckets.photos_bucket_name
+  photos_bucket_arn       = module.buckets.photos_bucket_arn
+  cloudfront_domain_name  = module.cloudfront.distribution_domain_name
+  alarm_sns_topic_arn     = module.alarms.alarm_sns_topic_arn
+  # CascadeDelete (P-34) isn't built yet — left unset per the build order set 2026-08-23.
+  # No lambda:InvokeFunction policy is created for delete_event's self-invoke until then.
+}
+
+module "membership" {
+  source = "../Backend/membership/infra"
+
+  deploy_artifacts_bucket    = module.buckets.deploy_artifacts_bucket_name
+  event_attendees_table_name = module.dynamodb.table_names["event_attendees"]
+  event_attendees_table_arn  = module.dynamodb.table_arns["event_attendees"]
+  events_table_name          = module.dynamodb.table_names["events"]
+  events_table_arn           = module.dynamodb.table_arns["events"]
+  users_table_name           = module.dynamodb.table_names["users"]
+  users_table_arn            = module.dynamodb.table_arns["users"]
+  alarm_sns_topic_arn        = module.alarms.alarm_sns_topic_arn
+}
+
 module "state_machine" {
   source = "./modules/state_machine"
 

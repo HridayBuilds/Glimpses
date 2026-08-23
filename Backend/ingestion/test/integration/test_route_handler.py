@@ -122,6 +122,10 @@ def test_extract_then_index_then_finalize_full_round_trip(monkeypatch):
     thumbnail_key = f"thumbnails/event/evt_1/{photo['photoID']}.jpg"
     assert s3.get_object(Bucket=bucket, Key=thumbnail_key)
 
+    updated_event = events_table.get_item(Key={"eventID": "evt_1"})["Item"]
+    assert updated_event["photoCount"] == 1
+    assert "lastUploadAt" in updated_event  # P-78: drives the events Lambda's auto-archive sweep
+
     monkeypatch.setattr(
         index_one_photo,
         "index_faces",
