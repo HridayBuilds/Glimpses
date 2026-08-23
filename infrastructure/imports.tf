@@ -72,8 +72,8 @@ module "ingestion" {
   alarm_sns_topic_arn          = module.alarms.alarm_sns_topic_arn
 }
 
-module "state_machines" {
-  source = "./modules/state_machines"
+module "state_machine" {
+  source = "./modules/state_machine"
 
   ingestion_function_arn = module.ingestion.function_arn
   db_api_function_arn    = module.db_api.function_arn

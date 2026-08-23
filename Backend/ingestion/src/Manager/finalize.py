@@ -6,17 +6,9 @@ def handle_finalize(payload):
     succeeded_count = len(index_results) - index_failed
     failed_count = extract_failed + index_failed
 
-    if succeeded_count == 0:
-        status = "FAILED"
-    elif failed_count > 0:
-        status = "PARTIAL"
-    else:
-        status = "SUCCEEDED"
-
     return {
         "jobId": payload["jobId"],
         "eventID": payload["eventID"],
-        "status": status,
         "succeededCount": succeeded_count,
         "failedCount": failed_count,
     }

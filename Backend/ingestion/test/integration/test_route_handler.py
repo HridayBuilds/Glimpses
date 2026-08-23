@@ -148,7 +148,6 @@ def test_extract_then_index_then_finalize_full_round_trip(monkeypatch):
     assert finalize_result == {
         "jobId": "job_1",
         "eventID": "evt_1",
-        "status": "SUCCEEDED",
         "succeededCount": 1,
         "failedCount": 0,
     }
