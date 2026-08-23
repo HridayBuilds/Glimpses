@@ -23,20 +23,10 @@ from DAO.dao import (
 MIN_PART_SIZE = 5 * 1024 * 1024
 
 
-def handle_action(action, payload):
-    if action == "kickoff":
-        return _kickoff(payload)
-    if action == "build":
-        return _build(payload)
-    if action == "status":
-        return _status(payload)
-    raise ValueError(f"Unknown action: {action}")
-
-
 # Synchronous: called from POST /events/{eventId}/photos/download. Writes the PENDING
 # row and fires the actual zip-build off as a separate async invocation so this call can
 # return well inside API Gateway's 29s limit, however long the build itself takes.
-def _kickoff(payload):
+def kickoff(payload):
     download_id = str(uuid.uuid4())
     create_download(
         {
@@ -59,10 +49,10 @@ def _kickoff(payload):
     return {"downloadId": download_id}
 
 
-# Async only, self-invoked by _kickoff — never called from API Gateway. Streams each
+# Async only, self-invoked by kickoff — never called from API Gateway. Streams each
 # photo from the photos bucket into a zip, uploading it to the downloads bucket as an S3
 # multipart upload so the full archive is never held in memory or /tmp at once.
-def _build(payload):
+def build(payload):
     download_id = payload["downloadId"]
     event_id = payload["eventID"]
     bucket = os.environ["PHOTOS_BUCKET"]  # one bucket, six prefixes (T-09) — photos/ and downloads/ both live here
@@ -115,7 +105,7 @@ def _stream_zip_to_s3(bucket, zip_key, upload_id, photo_keys):
 
 
 # Synchronous: called from GET /events/{eventId}/downloads/{downloadId}/status.
-def _status(payload):
+def status(payload):
     item = get_download(payload["downloadId"])
     if item is None:
         raise ValueError(f"Unknown downloadId: {payload['downloadId']}")

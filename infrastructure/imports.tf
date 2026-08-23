@@ -72,6 +72,17 @@ module "ingestion" {
   alarm_sns_topic_arn          = module.alarms.alarm_sns_topic_arn
 }
 
+module "profile" {
+  source = "../Backend/profile/infra"
+
+  deploy_artifacts_bucket = module.buckets.deploy_artifacts_bucket_name
+  users_table_name        = module.dynamodb.table_names["users"]
+  users_table_arn         = module.dynamodb.table_arns["users"]
+  photos_bucket_name      = module.buckets.photos_bucket_name
+  photos_bucket_arn       = module.buckets.photos_bucket_arn
+  alarm_sns_topic_arn     = module.alarms.alarm_sns_topic_arn
+}
+
 module "state_machine" {
   source = "./modules/state_machine"
 

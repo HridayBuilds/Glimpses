@@ -24,8 +24,8 @@ def test_kickoff_creates_pending_row_and_invokes_self_async(monkeypatch):
         lambda function_name, payload: invoked.update(function_name=function_name, payload=payload),
     )
 
-    result = manager.handle_action(
-        "kickoff", {"eventID": "evt_1", "requesterID": "user_1", "photoIds": ["p1", "p2"]}
+    result = manager.kickoff(
+        {"eventID": "evt_1", "requesterID": "user_1", "photoIds": ["p1", "p2"]}
     )
 
     download_id = result["downloadId"]
@@ -44,7 +44,7 @@ def test_kickoff_creates_pending_row_and_invokes_self_async(monkeypatch):
 def test_status_returns_pending_without_url(monkeypatch):
     monkeypatch.setattr(manager, "get_download", lambda download_id: {"status": "PENDING"})
 
-    result = manager.handle_action("status", {"downloadId": "dl_1"})
+    result = manager.status({"downloadId": "dl_1"})
 
     assert result == {"status": "PENDING"}
 
@@ -57,7 +57,7 @@ def test_status_returns_ready_with_presigned_url(monkeypatch):
     )
     monkeypatch.setattr(manager, "generate_presigned_url", lambda bucket, key: f"https://example/{key}")
 
-    result = manager.handle_action("status", {"downloadId": "dl_1"})
+    result = manager.status({"downloadId": "dl_1"})
 
     assert result == {"status": "READY", "downloadUrl": "https://example/downloads/event/evt_1/dl_1.zip"}
 
@@ -66,7 +66,7 @@ def test_status_raises_for_unknown_download_id(monkeypatch):
     monkeypatch.setattr(manager, "get_download", lambda download_id: None)
 
     try:
-        manager.handle_action("status", {"downloadId": "missing"})
+        manager.status({"downloadId": "missing"})
         assert False, "expected ValueError"
     except ValueError:
         pass
@@ -90,8 +90,8 @@ def test_build_streams_photos_into_zip_and_marks_ready(monkeypatch):
         manager, "update_download_status", lambda download_id, updates: status_updates.update(updates)
     )
 
-    result = manager.handle_action(
-        "build", {"downloadId": "dl_1", "eventID": "evt_1", "photoIds": ["p1"]}
+    result = manager.build(
+        {"downloadId": "dl_1", "eventID": "evt_1", "photoIds": ["p1"]}
     )
 
     assert result == {"downloadId": "dl_1", "status": "READY"}
@@ -119,7 +119,7 @@ def test_build_marks_failed_and_aborts_multipart_on_error(monkeypatch):
     )
 
     try:
-        manager.handle_action("build", {"downloadId": "dl_1", "eventID": "evt_1", "photoIds": ["p1"]})
+        manager.build({"downloadId": "dl_1", "eventID": "evt_1", "photoIds": ["p1"]})
         assert False, "expected RuntimeError"
     except RuntimeError:
         pass

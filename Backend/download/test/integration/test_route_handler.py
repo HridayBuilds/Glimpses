@@ -1,4 +1,5 @@
 import io
+import json
 import os
 import sys
 import zipfile
@@ -18,6 +19,32 @@ class _FakeLambdaContext:
     memory_limit_in_mb = 128
     invoked_function_arn = "arn:aws:lambda:ap-south-1:000000000000:function:download"
     aws_request_id = "test-request-id"
+
+
+# Mirrors the real AWS_PROXY envelope API Gateway sends — a Lambda proxy integration
+# does no request/response transformation itself, so the handler must be exercised
+# against this exact shape, not a hand-shortened dict.
+def _api_event(http_method, path, body=None, claims=None):
+    return {
+        "resource": path,
+        "path": path,
+        "httpMethod": http_method,
+        "headers": {"Content-Type": "application/json"},
+        "multiValueHeaders": {},
+        "queryStringParameters": None,
+        "multiValueQueryStringParameters": None,
+        "pathParameters": None,
+        "stageVariables": None,
+        "requestContext": {
+            "authorizer": {"claims": claims or {}},
+            "resourcePath": path,
+            "httpMethod": http_method,
+            "path": path,
+            "stage": "test",
+        },
+        "body": json.dumps(body) if body is not None else None,
+        "isBase64Encoded": False,
+    }
 
 
 def _create_downloads_table(dynamodb):
@@ -89,10 +116,12 @@ def test_kickoff_then_build_then_status_full_round_trip(monkeypatch):
         lambda function_name, payload: captured_build_payload.update(payload),
     )
 
-    kickoff_result = lambda_handler(
-        {"action": "kickoff", "eventID": "evt_1", "requesterID": "user_1"}, _FakeLambdaContext()
+    kickoff_response = lambda_handler(
+        _api_event("POST", "/events/evt_1/photos/download", claims={"sub": "user_1"}),
+        _FakeLambdaContext(),
     )
-    download_id = kickoff_result["downloadId"]
+    assert kickoff_response["statusCode"] == 200
+    download_id = json.loads(kickoff_response["body"])["downloadId"]
     assert captured_build_payload == {
         "action": "build",
         "downloadId": download_id,
@@ -117,8 +146,10 @@ def test_kickoff_then_build_then_status_full_round_trip(monkeypatch):
         assert archive.read("p1.jpg") == b"photo-1-bytes"
         assert archive.read("p2.jpg") == b"photo-2-bytes"
 
-    status_result = lambda_handler(
-        {"action": "status", "downloadId": download_id}, _FakeLambdaContext()
+    status_response = lambda_handler(
+        _api_event("GET", f"/events/evt_1/downloads/{download_id}/status"), _FakeLambdaContext()
     )
+    assert status_response["statusCode"] == 200
+    status_result = json.loads(status_response["body"])
     assert status_result["status"] == "READY"
     assert zip_key in status_result["downloadUrl"]

@@ -1,10 +1,12 @@
 from aws_lambda_powertools import Logger
 
-from Handler.handler import handle
+from Handler.handler import app, handle_internal_action
 
 logger = Logger()
 
 
 @logger.inject_lambda_context(log_event=True)
 def lambda_handler(event, context):
-    return handle(event)
+    if "action" in event:  # self-invoked "build" call — bypasses API Gateway entirely
+        return handle_internal_action(event)
+    return app.resolve(event, context)
