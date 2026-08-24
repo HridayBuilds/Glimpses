@@ -13,7 +13,7 @@ def repoUrl = 'https://github.com/HridayBuilds/Glimpses.git'
 def credentialsId = 'github-glimpses-pat'
 def branch = '*/main'
 
-def jenkinsfiles = new File('jenkinsfiles.txt').readLines().findAll { it.trim() }
+def jenkinsfiles = readFileFromWorkspace('jenkinsfiles.txt').readLines().findAll { it.trim() }
 
 jenkinsfiles.each { path ->
     def jobName = path.split('/')[-3]
