@@ -1,19 +1,19 @@
-// Scans the repo checked out into this job's own workspace for every cicd/Jenkinsfile
-// and generates one pipeline job per match, named after the folder that owns it
-// (e.g. Backend/gallery/cicd/Jenkinsfile -> job "gallery",
-//       Infrastructure/modules/dynamodb/cicd/Jenkinsfile -> job "dynamodb").
+// Reads the list of cicd/Jenkinsfile paths (one per line, produced by a shell "find"
+// build step that must run before this one) and generates one pipeline job per match,
+// named after the folder that owns it (e.g. Backend/gallery/cicd/Jenkinsfile -> job
+// "gallery", Infrastructure/modules/dynamodb/cicd/Jenkinsfile -> job "dynamodb").
 // Rerun this job (Build Now) any time a module/Lambda folder is added, moved, or renamed.
+//
+// The scan itself is NOT done in this Groovy script — Job DSL scripts run inside
+// Jenkins' sandboxed interpreter, where a recursive file-walk closure is extremely
+// slow (continuation-passing overhead per file). Real `find` in a preceding shell
+// build step does the same scan in milliseconds.
 
 def repoUrl = 'https://github.com/HridayBuilds/Glimpses.git'
 def credentialsId = 'github-glimpses-pat'
 def branch = '*/main'
 
-def jenkinsfiles = []
-new File('.').eachFileRecurse { f ->
-    if (f.path.endsWith('cicd/Jenkinsfile')) {
-        jenkinsfiles << f.path.replaceFirst('^\\./', '')
-    }
-}
+def jenkinsfiles = new File('jenkinsfiles.txt').readLines().findAll { it.trim() }
 
 jenkinsfiles.each { path ->
     def jobName = path.split('/')[-3]
