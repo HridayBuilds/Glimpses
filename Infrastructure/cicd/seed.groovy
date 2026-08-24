@@ -52,7 +52,7 @@ jenkinsfiles.each { path ->
 </definition>
 """
             def newDefinition = new XmlParser().parseText(definitionXml)
-            def existingDefinition = (project / definition)[0]
+            def existingDefinition = project / definition
             existingDefinition.replaceNode(newDefinition)
         }
     }
