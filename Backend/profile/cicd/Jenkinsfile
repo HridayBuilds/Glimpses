@@ -35,21 +35,21 @@ pipeline {
         }
         stage('Terraform Init') {
             steps {
-                dir('infrastructure') {
+                dir('Infrastructure') {
                     sh 'terraform init'
                 }
             }
         }
         stage('Terraform Validate') {
             steps {
-                dir('infrastructure') {
+                dir('Infrastructure') {
                     sh 'terraform validate'
                 }
             }
         }
         stage('Terraform Apply - profile') {
             steps {
-                dir('infrastructure') {
+                dir('Infrastructure') {
                     sh 'terraform apply -target=module.profile -auto-approve'
                 }
             }

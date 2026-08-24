@@ -39,21 +39,21 @@ pipeline {
         }
         stage('Terraform Init') {
             steps {
-                dir('infrastructure') {
+                dir('Infrastructure') {
                     sh 'terraform init'
                 }
             }
         }
         stage('Terraform Validate') {
             steps {
-                dir('infrastructure') {
+                dir('Infrastructure') {
                     sh 'terraform validate'
                 }
             }
         }
         stage('Terraform Apply - heic_converter') {
             steps {
-                dir('infrastructure') {
+                dir('Infrastructure') {
                     sh 'terraform apply -target=module.heic_converter -auto-approve'
                 }
             }

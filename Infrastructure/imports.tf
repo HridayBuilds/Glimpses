@@ -104,8 +104,9 @@ module "events" {
   photos_bucket_arn       = module.buckets.photos_bucket_arn
   cloudfront_domain_name  = module.cloudfront.distribution_domain_name
   alarm_sns_topic_arn     = module.alarms.alarm_sns_topic_arn
-  # CascadeDelete (P-34) isn't built yet — left unset per the build order set 2026-08-23.
-  # No lambda:InvokeFunction policy is created for delete_event's self-invoke until then.
+
+  cascade_delete_function_name = module.cascade_delete.function_name
+  cascade_delete_function_arn  = module.cascade_delete.function_arn
 }
 
 module "membership" {
@@ -135,8 +136,27 @@ module "gallery" {
   photos_bucket_arn          = module.buckets.photos_bucket_arn
   cloudfront_domain_name     = module.cloudfront.distribution_domain_name
   alarm_sns_topic_arn        = module.alarms.alarm_sns_topic_arn
-  # CascadeDelete (P-44/P-52) isn't built yet — left unset per the build order set 2026-08-23.
-  # No lambda:InvokeFunction policy is created for delete/bulk-delete's invoke until then.
+
+  cascade_delete_function_name = module.cascade_delete.function_name
+  cascade_delete_function_arn  = module.cascade_delete.function_arn
+}
+
+module "cascade_delete" {
+  source = "../Backend/cascadeDelete/infra"
+
+  deploy_artifacts_bucket    = module.buckets.deploy_artifacts_bucket_name
+  events_table_name          = module.dynamodb.table_names["events"]
+  events_table_arn           = module.dynamodb.table_arns["events"]
+  events_stream_arn          = module.dynamodb.events_stream_arn
+  photos_table_name          = module.dynamodb.table_names["photos"]
+  photos_table_arn           = module.dynamodb.table_arns["photos"]
+  faces_table_name           = module.dynamodb.table_names["faces"]
+  faces_table_arn            = module.dynamodb.table_arns["faces"]
+  event_attendees_table_name = module.dynamodb.table_names["event_attendees"]
+  event_attendees_table_arn  = module.dynamodb.table_arns["event_attendees"]
+  photos_bucket_name         = module.buckets.photos_bucket_name
+  photos_bucket_arn          = module.buckets.photos_bucket_arn
+  alarm_sns_topic_arn        = module.alarms.alarm_sns_topic_arn
 }
 
 module "state_machine" {
@@ -146,4 +166,32 @@ module "state_machine" {
   db_api_function_arn    = module.db_api.function_arn
   photos_bucket_name     = module.buckets.photos_bucket_name
   photos_bucket_arn      = module.buckets.photos_bucket_arn
+}
+
+module "cognito" {
+  source = "./modules/cognito"
+}
+
+module "api_gateway" {
+  source = "./modules/api_gateway"
+
+  cognito_user_pool_arn = module.cognito.user_pool_arn
+
+  profile_function_name = module.profile.function_name
+  profile_function_arn  = module.profile.function_arn
+
+  events_function_name = module.events.function_name
+  events_function_arn  = module.events.function_arn
+
+  membership_function_name = module.membership.function_name
+  membership_function_arn  = module.membership.function_arn
+
+  upload_status_function_name = module.upload_status.function_name
+  upload_status_function_arn  = module.upload_status.function_arn
+
+  gallery_function_name = module.gallery.function_name
+  gallery_function_arn  = module.gallery.function_arn
+
+  download_function_name = module.download.function_name
+  download_function_arn  = module.download.function_arn
 }

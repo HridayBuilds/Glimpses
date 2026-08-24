@@ -93,37 +93,42 @@ def get_download_urls(payload):
     }
 
 
-# P-44: uploader match, or organizer match (Events.organizerID) only checked when the
-# uploader check fails, to avoid a wasted Events GetItem on the common self-delete path.
-# organizer_cache lets one bulk-delete call reuse a single Events lookup across photos,
-# since eventID is fixed for the whole request.
-def _is_authorized_to_delete(photo, caller_id, event_id, organizer_cache):
-    if photo["uploaderID"] == caller_id:
-        return True
-    if "organizerID" not in organizer_cache:
-        event = get_event(event_id)
-        organizer_cache["organizerID"] = event["organizerID"] if event else None
-    return organizer_cache["organizerID"] == caller_id
+# P-32: an ARCHIVED event denies every write, for every role, including the organizer —
+# evaluated before any role check, so this is looked up unconditionally on every delete,
+# not just the organizer-fallback path.
+def _get_active_event(event_id):
+    event = get_event(event_id)
+    if event is None:
+        raise ValueError(f"Unknown eventID: {event_id}")
+    if event["status"] != "ACTIVE":
+        raise ValueError("Event is archived and permanently read-only")
+    return event
+
+
+# P-44: uploader match, or organizer match (Events.organizerID).
+def _is_authorized_to_delete(photo, caller_id, event):
+    return photo["uploaderID"] == caller_id or event["organizerID"] == caller_id
 
 
 def delete_photo(payload):
     photo = _get_owned_photo(payload["eventID"], payload["photoID"])
-    if not _is_authorized_to_delete(photo, payload["callerID"], payload["eventID"], {}):
+    event = _get_active_event(payload["eventID"])
+    if not _is_authorized_to_delete(photo, payload["callerID"], event):
         raise ValueError("Not authorized to delete this photo")
     invoke_cascade_delete(payload["eventID"], [payload["photoID"]])
     return {"deleted": True}
 
 
 # P-52: per-photo authorization inside one multi-select — unauthorized/unknown photo IDs
-# are silently dropped from the batch rather than failing the whole request.
+# are silently dropped from the batch rather than failing the whole request. eventID is
+# fixed for the whole request, so the active-event check and Events lookup happen once.
 def bulk_delete_photos(payload):
+    event = _get_active_event(payload["eventID"])
     photos = batch_get_photos(payload["photoIDs"])
-    organizer_cache = {}
     authorized_ids = [
         photo["photoID"]
         for photo in photos
-        if photo["eventID"] == payload["eventID"]
-        and _is_authorized_to_delete(photo, payload["callerID"], payload["eventID"], organizer_cache)
+        if photo["eventID"] == payload["eventID"] and _is_authorized_to_delete(photo, payload["callerID"], event)
     ]
     if authorized_ids:
         invoke_cascade_delete(payload["eventID"], authorized_ids)

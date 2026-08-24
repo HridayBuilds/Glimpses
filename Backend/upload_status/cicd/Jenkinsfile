@@ -35,21 +35,21 @@ pipeline {
         }
         stage('Terraform Init') {
             steps {
-                dir('infrastructure') {
+                dir('Infrastructure') {
                     sh 'terraform init'
                 }
             }
         }
         stage('Terraform Validate') {
             steps {
-                dir('infrastructure') {
+                dir('Infrastructure') {
                     sh 'terraform validate'
                 }
             }
         }
         stage('Terraform Apply - upload_status') {
             steps {
-                dir('infrastructure') {
+                dir('Infrastructure') {
                     sh 'terraform apply -target=module.upload_status -auto-approve'
                 }
             }

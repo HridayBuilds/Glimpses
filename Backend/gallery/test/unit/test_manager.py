@@ -127,23 +127,25 @@ def test_get_download_urls_filters_to_own_event(monkeypatch):
     assert result == {"downloadUrls": [{"photoID": "p1", "downloadUrl": "https://example/photos/event/evt_1/p1.jpg"}]}
 
 
-def test_delete_photo_authorizes_uploader_without_events_lookup(monkeypatch):
+def test_delete_photo_authorizes_uploader(monkeypatch):
     monkeypatch.setattr(manager, "get_photo_by_id", lambda photo_id: _photo(uploaderID="user_1"))
     events_calls = []
-    monkeypatch.setattr(manager, "get_event", lambda event_id: events_calls.append(event_id) or {"organizerID": "someone_else"})
+    monkeypatch.setattr(
+        manager, "get_event", lambda event_id: events_calls.append(event_id) or {"organizerID": "someone_else", "status": "ACTIVE"}
+    )
     invoked = {}
     monkeypatch.setattr(manager, "invoke_cascade_delete", lambda event_id, photo_ids: invoked.update(eventID=event_id, photoIDs=photo_ids))
 
     result = manager.delete_photo({"eventID": "evt_1", "photoID": "p1", "callerID": "user_1"})
 
     assert result == {"deleted": True}
-    assert events_calls == []
+    assert events_calls == ["evt_1"]  # always looked up now, to enforce P-32's archived-event lock
     assert invoked == {"eventID": "evt_1", "photoIDs": ["p1"]}
 
 
 def test_delete_photo_authorizes_organizer(monkeypatch):
     monkeypatch.setattr(manager, "get_photo_by_id", lambda photo_id: _photo(uploaderID="user_1"))
-    monkeypatch.setattr(manager, "get_event", lambda event_id: {"organizerID": "user_9"})
+    monkeypatch.setattr(manager, "get_event", lambda event_id: {"organizerID": "user_9", "status": "ACTIVE"})
     invoked = {}
     monkeypatch.setattr(manager, "invoke_cascade_delete", lambda event_id, photo_ids: invoked.update(photoIDs=photo_ids))
 
@@ -155,10 +157,22 @@ def test_delete_photo_authorizes_organizer(monkeypatch):
 
 def test_delete_photo_rejects_unauthorized_caller(monkeypatch):
     monkeypatch.setattr(manager, "get_photo_by_id", lambda photo_id: _photo(uploaderID="user_1"))
-    monkeypatch.setattr(manager, "get_event", lambda event_id: {"organizerID": "user_9"})
+    monkeypatch.setattr(manager, "get_event", lambda event_id: {"organizerID": "user_9", "status": "ACTIVE"})
 
     try:
         manager.delete_photo({"eventID": "evt_1", "photoID": "p1", "callerID": "someone_else"})
+        assert False, "expected ValueError"
+    except ValueError:
+        pass
+
+
+# P-32: an ARCHIVED event denies every write, including the organizer's own delete.
+def test_delete_photo_rejects_when_event_archived(monkeypatch):
+    monkeypatch.setattr(manager, "get_photo_by_id", lambda photo_id: _photo(uploaderID="user_1"))
+    monkeypatch.setattr(manager, "get_event", lambda event_id: {"organizerID": "user_1", "status": "ARCHIVED"})
+
+    try:
+        manager.delete_photo({"eventID": "evt_1", "photoID": "p1", "callerID": "user_1"})
         assert False, "expected ValueError"
     except ValueError:
         pass
@@ -175,7 +189,9 @@ def test_bulk_delete_photos_drops_unauthorized_and_reuses_single_events_lookup(m
         ],
     )
     events_calls = []
-    monkeypatch.setattr(manager, "get_event", lambda event_id: events_calls.append(event_id) or {"organizerID": "user_1"})
+    monkeypatch.setattr(
+        manager, "get_event", lambda event_id: events_calls.append(event_id) or {"organizerID": "user_1", "status": "ACTIVE"}
+    )
     invoked = {}
     monkeypatch.setattr(manager, "invoke_cascade_delete", lambda event_id, photo_ids: invoked.update(photoIDs=photo_ids))
 
@@ -188,7 +204,7 @@ def test_bulk_delete_photos_drops_unauthorized_and_reuses_single_events_lookup(m
 
 def test_bulk_delete_photos_skips_invoke_when_nothing_authorized(monkeypatch):
     monkeypatch.setattr(manager, "batch_get_photos", lambda photo_ids: [_photo(photoID="p1", uploaderID="someone_else")])
-    monkeypatch.setattr(manager, "get_event", lambda event_id: {"organizerID": "someone_else"})
+    monkeypatch.setattr(manager, "get_event", lambda event_id: {"organizerID": "someone_else", "status": "ACTIVE"})
     invoked = []
     monkeypatch.setattr(manager, "invoke_cascade_delete", lambda event_id, photo_ids: invoked.append(photo_ids))
 
@@ -196,3 +212,13 @@ def test_bulk_delete_photos_skips_invoke_when_nothing_authorized(monkeypatch):
 
     assert result == {"deletedPhotoIDs": []}
     assert invoked == []
+
+
+def test_bulk_delete_photos_rejects_when_event_archived(monkeypatch):
+    monkeypatch.setattr(manager, "get_event", lambda event_id: {"organizerID": "user_1", "status": "ARCHIVED"})
+
+    try:
+        manager.bulk_delete_photos({"eventID": "evt_1", "photoIDs": ["p1"], "callerID": "user_1"})
+        assert False, "expected ValueError"
+    except ValueError:
+        pass

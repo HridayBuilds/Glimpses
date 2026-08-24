@@ -110,7 +110,7 @@ def _put_photo(dynamodb, **overrides):
 
 
 def _put_event(dynamodb, **overrides):
-    item = {"eventID": "evt_1", "organizerID": "user_9"}
+    item = {"eventID": "evt_1", "organizerID": "user_9", "status": "ACTIVE"}
     item.update(overrides)
     dynamodb.Table(os.environ["EVENTS_TABLE_NAME"]).put_item(Item=item)
     return item
@@ -215,6 +215,7 @@ def test_delete_photo_by_uploader_invokes_cascade_delete_once_configured(monkeyp
     _create_events_table(dynamodb)
     _create_event_attendees_table(dynamodb)
     _put_photo(dynamodb, uploaderID="user_1")
+    _put_event(dynamodb)
 
     response = lambda_handler(
         _api_event(
@@ -225,6 +226,27 @@ def test_delete_photo_by_uploader_invokes_cascade_delete_once_configured(monkeyp
 
     assert response["statusCode"] == 200
     assert json.loads(response["body"]) == {"deleted": True}
+
+
+@mock_aws
+def test_delete_photo_rejects_when_event_archived():
+    dynamodb = boto3.resource("dynamodb", region_name="ap-south-1")
+    _create_photos_table(dynamodb)
+    _create_events_table(dynamodb)
+    _create_event_attendees_table(dynamodb)
+    _put_photo(dynamodb, uploaderID="user_1")
+    _put_event(dynamodb, organizerID="user_1", status="ARCHIVED")
+
+    try:
+        lambda_handler(
+            _api_event(
+                "DELETE", "/events/evt_1/photos/p1", claims={"sub": "user_1"}, path_parameters={"event_id": "evt_1", "photo_id": "p1"}
+            ),
+            _FakeLambdaContext(),
+        )
+        assert False, "expected ValueError"
+    except ValueError:
+        pass
 
 
 @mock_aws

@@ -1,0 +1,31 @@
+pipeline {
+    agent any
+
+    environment {
+        AWS_PROFILE = 'glimpses'
+    }
+
+    stages {
+        stage('Terraform Init') {
+            steps {
+                dir('Infrastructure') {
+                    sh 'terraform init'
+                }
+            }
+        }
+        stage('Terraform Validate') {
+            steps {
+                dir('Infrastructure') {
+                    sh 'terraform validate'
+                }
+            }
+        }
+        stage('Terraform Apply - cognito') {
+            steps {
+                dir('Infrastructure') {
+                    sh 'terraform apply -target=module.cognito -auto-approve'
+                }
+            }
+        }
+    }
+}

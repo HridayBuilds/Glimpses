@@ -8,21 +8,21 @@ pipeline {
     stages {
         stage('Terraform Init') {
             steps {
-                dir('infrastructure') {
+                dir('Infrastructure') {
                     sh 'terraform init'
                 }
             }
         }
         stage('Terraform Validate') {
             steps {
-                dir('infrastructure') {
+                dir('Infrastructure') {
                     sh 'terraform validate'
                 }
             }
         }
         stage('Terraform Apply - state_machines') {
             steps {
-                dir('infrastructure') {
+                dir('Infrastructure') {
                     sh 'terraform apply -target=module.state_machines -auto-approve'
                 }
             }
