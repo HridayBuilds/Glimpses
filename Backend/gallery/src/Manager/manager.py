@@ -1,0 +1,130 @@
+import base64
+import json
+import os
+
+from DAO.dao import (
+    batch_get_photos,
+    generate_presigned_url,
+    get_attendee,
+    get_event,
+    get_photo_by_id,
+    invoke_cascade_delete,
+    query_photos_page,
+)
+
+# Implementation default — P-57 rules cursor pagination itself, not a page size.
+PAGE_SIZE = 50
+
+
+def _public_photo(photo):
+    cloudfront_domain = os.environ["CLOUDFRONT_DOMAIN"]
+    return {
+        "photoID": photo["photoID"],
+        "eventID": photo["eventID"],
+        "uploaderID": photo["uploaderID"],
+        "uploaderDisplayName": photo.get("uploaderDisplayName"),
+        "filename": photo["filename"],
+        "uploadedAt": photo["uploadedAt"],
+        "sizeBytes": int(photo.get("sizeBytes", 0)),
+        # T-09: CloudFront+OAC already serves photos/ and thumbnails/ publicly — plain
+        # URLs, not pre-signed (only download-urls mints those).
+        "photoUrl": f"https://{cloudfront_domain}/{photo['s3Key']}",
+        "thumbnailUrl": f"https://{cloudfront_domain}/{photo['thumbnailKey']}",
+    }
+
+
+def _get_owned_photo(event_id, photo_id):
+    photo = get_photo_by_id(photo_id)
+    if photo is None or photo["eventID"] != event_id:
+        raise ValueError(f"Unknown photoID: {photo_id}")
+    return photo
+
+
+# T-04's own LastEvaluatedKey is the cursor — opaque to the caller, base64-json-encoded.
+def _encode_cursor(exclusive_start_key):
+    return base64.b64encode(json.dumps(exclusive_start_key).encode()).decode()
+
+
+def _decode_cursor(cursor):
+    return json.loads(base64.b64decode(cursor.encode()).decode())
+
+
+def _list_event_photos(event_id, cursor):
+    exclusive_start_key = _decode_cursor(cursor) if cursor else None
+    items, last_evaluated_key = query_photos_page(event_id, exclusive_start_key, PAGE_SIZE)
+    return {
+        "photos": [_public_photo(item) for item in items],
+        "cursor": _encode_cursor(last_evaluated_key) if last_evaluated_key else None,
+    }
+
+
+# P-16/P-17: mine=true is a face-match filter (an attendee who appears in others' photos
+# but uploaded none themselves), not an upload-history filter — resolved off the caller's
+# own EventAttendees.matchedPhotoIDs, not a Photos query. Bounded by one attendee's match
+# set, so no GSI query and no cursor.
+def _list_mine_photos(event_id, caller_id):
+    attendee = get_attendee(caller_id, event_id)
+    matched_ids = list(attendee["matchedPhotoIDs"]) if attendee and attendee.get("matchedPhotoIDs") else []
+    photos = batch_get_photos(matched_ids)
+    photos.sort(key=lambda photo: photo["uploadedAt"], reverse=True)
+    return {"photos": [_public_photo(photo) for photo in photos], "cursor": None}
+
+
+def list_photos(payload):
+    if payload.get("mine"):
+        return _list_mine_photos(payload["eventID"], payload["callerID"])
+    return _list_event_photos(payload["eventID"], payload.get("cursor"))
+
+
+def get_photo(payload):
+    photo = _get_owned_photo(payload["eventID"], payload["photoID"])
+    return _public_photo(photo)
+
+
+def get_download_urls(payload):
+    bucket = os.environ["PHOTOS_BUCKET"]
+    photos = batch_get_photos(payload["photoIDs"])
+    return {
+        "downloadUrls": [
+            {"photoID": photo["photoID"], "downloadUrl": generate_presigned_url(bucket, photo["s3Key"])}
+            for photo in photos
+            if photo["eventID"] == payload["eventID"]
+        ]
+    }
+
+
+# P-44: uploader match, or organizer match (Events.organizerID) only checked when the
+# uploader check fails, to avoid a wasted Events GetItem on the common self-delete path.
+# organizer_cache lets one bulk-delete call reuse a single Events lookup across photos,
+# since eventID is fixed for the whole request.
+def _is_authorized_to_delete(photo, caller_id, event_id, organizer_cache):
+    if photo["uploaderID"] == caller_id:
+        return True
+    if "organizerID" not in organizer_cache:
+        event = get_event(event_id)
+        organizer_cache["organizerID"] = event["organizerID"] if event else None
+    return organizer_cache["organizerID"] == caller_id
+
+
+def delete_photo(payload):
+    photo = _get_owned_photo(payload["eventID"], payload["photoID"])
+    if not _is_authorized_to_delete(photo, payload["callerID"], payload["eventID"], {}):
+        raise ValueError("Not authorized to delete this photo")
+    invoke_cascade_delete(payload["eventID"], [payload["photoID"]])
+    return {"deleted": True}
+
+
+# P-52: per-photo authorization inside one multi-select — unauthorized/unknown photo IDs
+# are silently dropped from the batch rather than failing the whole request.
+def bulk_delete_photos(payload):
+    photos = batch_get_photos(payload["photoIDs"])
+    organizer_cache = {}
+    authorized_ids = [
+        photo["photoID"]
+        for photo in photos
+        if photo["eventID"] == payload["eventID"]
+        and _is_authorized_to_delete(photo, payload["callerID"], payload["eventID"], organizer_cache)
+    ]
+    if authorized_ids:
+        invoke_cascade_delete(payload["eventID"], authorized_ids)
+    return {"deletedPhotoIDs": authorized_ids}

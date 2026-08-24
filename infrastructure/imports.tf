@@ -121,6 +121,24 @@ module "membership" {
   alarm_sns_topic_arn        = module.alarms.alarm_sns_topic_arn
 }
 
+module "gallery" {
+  source = "../Backend/gallery/infra"
+
+  deploy_artifacts_bucket    = module.buckets.deploy_artifacts_bucket_name
+  photos_table_name          = module.dynamodb.table_names["photos"]
+  photos_table_arn           = module.dynamodb.table_arns["photos"]
+  events_table_name          = module.dynamodb.table_names["events"]
+  events_table_arn           = module.dynamodb.table_arns["events"]
+  event_attendees_table_name = module.dynamodb.table_names["event_attendees"]
+  event_attendees_table_arn  = module.dynamodb.table_arns["event_attendees"]
+  photos_bucket_name         = module.buckets.photos_bucket_name
+  photos_bucket_arn          = module.buckets.photos_bucket_arn
+  cloudfront_domain_name     = module.cloudfront.distribution_domain_name
+  alarm_sns_topic_arn        = module.alarms.alarm_sns_topic_arn
+  # CascadeDelete (P-44/P-52) isn't built yet — left unset per the build order set 2026-08-23.
+  # No lambda:InvokeFunction policy is created for delete/bulk-delete's invoke until then.
+}
+
 module "state_machine" {
   source = "./modules/state_machine"
 
