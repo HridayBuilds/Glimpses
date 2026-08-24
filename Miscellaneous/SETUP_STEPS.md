@@ -154,6 +154,51 @@ terraform init
 
 ---
 
+## 8. IAM permission gaps found during the first real deploy pass (2026-08-25)
+
+**Why:** step 1's policy list was drawn up before the `cloudfront`, `alarms`, `cognito`, and `state_machine` modules existed, so it never covered CloudFront, SNS, Cognito, EventBridge Scheduler, or plain EventBridge. Each gap surfaced as a `403 AccessDenied`/`AccessDeniedException` mid-`terraform apply`, one module at a time, once that module's job actually ran for the first time.
+
+**Gaps hit, in the order they surfaced:**
+- `cloudfront` job → `cloudfront:CreateOriginAccessControl` denied.
+- `alarms`/`cognito` — checked proactively once the CloudFront gap was found, same story: no SNS, no Cognito permissions attached at all.
+- `events` Lambda job → `scheduler:CreateSchedule` denied (the `archive_sweep` `aws_scheduler_schedule` resource).
+- `state_machine` job → `events:PutRule` denied (the `upload_complete` `aws_cloudwatch_event_rule` resource).
+- `api_gateway` job → `wafv2:ListTagsForResource` denied (the `aws_wafv2_web_acl` resource) — last gap hit, everything else in the module (all 29 routes/integrations, the deployment, the `prod` stage) had already created successfully by the time this surfaced.
+
+**Hit AWS's hard cap of 10 managed policies per IAM user** partway through fixing this — `glimpses-terraform` already had 9 (step 1's list) before adding `CloudFrontFullAccess` as the 10th. Fixed two ways:
+1. Detached `IAMUserChangePassword` — redundant, already fully covered by `IAMFullAccess`, freed one slot.
+2. Created **one custom bundled policy, `GlimpsesExtraPermissions`**, instead of attaching `AmazonSNSFullAccess`/`AmazonCognitoPowerUser`/etc. separately (each would cost its own slot). Every subsequent gap (`scheduler:*`, `events:*`) was added by pushing a new policy version of this same policy (`aws iam create-policy-version ... --set-as-default`) and deleting the now-superseded version (`aws iam delete-policy-version`) — IAM keeps at most 5 versions per policy.
+
+**Current `GlimpsesExtraPermissions` document** (as of this writing):
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["sns:*", "cognito-idp:*", "cognito-identity:*", "scheduler:*", "events:*", "wafv2:*"],
+      "Resource": "*"
+    }
+  ]
+}
+```
+
+**Result — `glimpses-terraform`'s final 10 attached policies:** `AmazonAPIGatewayAdministrator`, `CloudFrontFullAccess`, `IAMFullAccess`, `AmazonRekognitionFullAccess`, `CloudWatchFullAccess`, `AWSStepFunctionsFullAccess`, `AmazonDynamoDBFullAccess`, `AmazonS3FullAccess`, `AWSLambda_FullAccess`, `GlimpsesExtraPermissions`.
+
+**For `Sam`, self-deploying from scratch:** skip straight to attaching all of the above at IAM-user creation time (step 1) rather than discovering each gap module-by-module the way this build did — this section exists so that rediscovery isn't necessary.
+
+---
+
+## 9. Jenkins runner — `pip` not on `PATH` (all 10 Lambda build jobs)
+
+**Why:** Jenkins (Homebrew `jenkins-lts`) runs as a `launchd` background service with no `PATH` set in its plist, so its `sh` build steps only get macOS's baseline `PATH` (`/usr/bin:/bin:/usr/sbin:/sbin`, plus whatever `/etc/paths.d/*` Homebrew itself registered). A separate python.org-style Python install (`/Library/Frameworks/Python.framework/...`) only modified this machine's own shell rc files (`.zshrc`), which Jenkins' `sh` steps never source — so every Lambda's `Build` stage failed with `pip: command not found`, even though `pip` works fine in an interactive terminal.
+
+**Fix:** every Lambda `cicd/Jenkinsfile`'s build stage now calls `python3 -m pip install ...` instead of bare `pip install ...` — `/usr/bin/python3` (Apple's Xcode Command Line Tools copy, with its own bundled `pip`) **is** on Jenkins' baseline `PATH`, confirmed working.
+
+**For `Sam`:** if deploying from a machine where the "real" Python was also only added to a personal shell profile (common with python.org's installer, pyenv, etc.), the same fix applies — don't assume `pip`/`python3`/etc. resolve inside Jenkins just because they resolve in your terminal.
+
+---
+
 ## Next up
 
 - `infrastructure/modules/dynamodb/` — all 6 tables, per `T-04`'s fully-ruled schema.
