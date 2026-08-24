@@ -24,11 +24,17 @@ jenkinsfiles.each { path ->
             cpsScmFlowDefinition {
                 scm {
                     git {
-                        remote {
-                            url(repoUrl)
-                            credentials(credentialsId)
+                        userRemoteConfigs {
+                            userRemoteConfig {
+                                url(repoUrl)
+                                credentialsId(credentialsId)
+                            }
                         }
-                        branch(branch)
+                        branches {
+                            branchSpec {
+                                name(branch)
+                            }
+                        }
                     }
                 }
                 scriptPath(path)
