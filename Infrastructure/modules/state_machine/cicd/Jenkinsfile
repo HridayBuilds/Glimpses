@@ -20,10 +20,10 @@ pipeline {
                 }
             }
         }
-        stage('Terraform Apply - state_machines') {
+        stage('Terraform Apply - state_machine') {
             steps {
                 dir('Infrastructure') {
-                    sh 'terraform apply -target=module.state_machines -auto-approve'
+                    sh 'terraform apply -target=module.state_machine -auto-approve'
                 }
             }
         }
