@@ -197,8 +197,8 @@ Response `200`, `ATTENDEE`/organizer caller — adds:
 }
 ```
 
-#### `POST /events/{eventId}/join`
-No body. If the event's `joinPolicy` is `OPEN`, caller becomes `ATTENDEE` immediately; otherwise `PENDING` (needs organizer admit). Blocked users can't rejoin.
+#### `POST /events/join`
+Body: `{ "accessCode": "7F3K9M" }`. The event ID is never required in the URL — resolved server-side from the access code via the `Events` table's `accessCode-index` GSI (per `P-08`). If the event's `joinPolicy` is `OPEN`, caller becomes `ATTENDEE` immediately; otherwise `PENDING` (needs organizer admit). Blocked users can't rejoin. Unknown access codes raise `ValueError`.
 
 Response `200`:
 ```json

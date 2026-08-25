@@ -19,6 +19,11 @@ data "aws_iam_policy_document" "events_access" {
     actions   = ["dynamodb:GetItem"]
     resources = [var.events_table_arn]
   }
+  statement {
+    effect    = "Allow"
+    actions   = ["dynamodb:Query"]
+    resources = ["${var.events_table_arn}/index/accessCode-index"]
+  }
 }
 
 resource "aws_iam_role_policy" "events_access" {

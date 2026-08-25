@@ -3,6 +3,7 @@ import os
 from DAO.dao import (
     get_attendee,
     get_event,
+    get_event_by_access_code,
     get_users,
     list_attendees_by_status,
     put_attendee,
@@ -34,21 +35,24 @@ def _require_organizer(event_id, organizer_id):
 
 
 def join_event(payload):
-    event = _get_event_or_raise(payload["eventID"])
+    event = get_event_by_access_code(payload["accessCode"])
+    if event is None:
+        raise ValueError(f"Unknown accessCode: {payload['accessCode']}")
     if event["status"] != ACTIVE_EVENT_STATUS:
         raise ValueError("Event is not active")
 
+    event_id = event["eventID"]
     target_status = STATUS_ATTENDEE if event["joinPolicy"] == OPEN_JOIN_POLICY else STATUS_PENDING
 
-    existing = get_attendee(payload["userID"], payload["eventID"])
+    existing = get_attendee(payload["userID"], event_id)
     if existing is not None:
         if existing["status"] == STATUS_BLOCKED:
             raise ValueError("Blocked from this event")
-        update_attendee_status(payload["userID"], payload["eventID"], target_status)
+        update_attendee_status(payload["userID"], event_id, target_status)
     else:
-        put_attendee({"userID": payload["userID"], "eventID": payload["eventID"], "status": target_status})
+        put_attendee({"userID": payload["userID"], "eventID": event_id, "status": target_status})
 
-    return {"eventID": payload["eventID"], "status": target_status}
+    return {"eventID": event_id, "status": target_status}
 
 
 def leave_event(payload):

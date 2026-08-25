@@ -7,7 +7,7 @@ resource "aws_api_gateway_resource" "event_info" {
 
 resource "aws_api_gateway_resource" "event_join" {
   rest_api_id = aws_api_gateway_rest_api.this.id
-  parent_id   = aws_api_gateway_resource.event_id.id
+  parent_id   = aws_api_gateway_resource.events.id
   path_part   = "join"
 }
 
@@ -61,7 +61,7 @@ locals {
       http_method   = "POST"
       function_name = var.membership_function_name
       function_arn  = var.membership_function_arn
-      request_model = null
+      request_model = aws_api_gateway_model.event_join_body.name
     }
     event_leave_post = {
       resource_id   = aws_api_gateway_resource.event_leave.id

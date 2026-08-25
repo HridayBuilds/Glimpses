@@ -71,7 +71,17 @@ def _create_events_table(dynamodb):
     dynamodb.create_table(
         TableName=os.environ["EVENTS_TABLE_NAME"],
         KeySchema=[{"AttributeName": "eventID", "KeyType": "HASH"}],
-        AttributeDefinitions=[{"AttributeName": "eventID", "AttributeType": "S"}],
+        AttributeDefinitions=[
+            {"AttributeName": "eventID", "AttributeType": "S"},
+            {"AttributeName": "accessCode", "AttributeType": "S"},
+        ],
+        GlobalSecondaryIndexes=[
+            {
+                "IndexName": "accessCode-index",
+                "KeySchema": [{"AttributeName": "accessCode", "KeyType": "HASH"}],
+                "Projection": {"ProjectionType": "ALL"},
+            }
+        ],
         BillingMode="PAY_PER_REQUEST",
     )
 
@@ -86,7 +96,13 @@ def _create_users_table(dynamodb):
 
 
 def _put_event(dynamodb, **overrides):
-    item = {"eventID": "evt_1", "organizerID": "user_1", "status": "ACTIVE", "joinPolicy": "OPEN"}
+    item = {
+        "eventID": "evt_1",
+        "organizerID": "user_1",
+        "status": "ACTIVE",
+        "joinPolicy": "OPEN",
+        "accessCode": "AB23CD",
+    }
     item.update(overrides)
     dynamodb.Table(os.environ["EVENTS_TABLE_NAME"]).put_item(Item=item)
     return item
@@ -108,7 +124,7 @@ def test_join_open_event_admits_directly():
     _put_event(dynamodb, joinPolicy="OPEN")
 
     response = lambda_handler(
-        _api_event("POST", "/events/evt_1/join", claims={"sub": "user_2"}, path_parameters={"event_id": "evt_1"}),
+        _api_event("POST", "/events/join", body={"accessCode": "AB23CD"}, claims={"sub": "user_2"}),
         _FakeLambdaContext(),
     )
 
@@ -130,7 +146,7 @@ def test_join_approval_required_event_parks_in_lobby_then_organizer_admits():
     _put_user(dynamodb)
 
     join_response = lambda_handler(
-        _api_event("POST", "/events/evt_1/join", claims={"sub": "user_2"}, path_parameters={"event_id": "evt_1"}),
+        _api_event("POST", "/events/join", body={"accessCode": "AB23CD"}, claims={"sub": "user_2"}),
         _FakeLambdaContext(),
     )
     assert json.loads(join_response["body"])["status"] == "PENDING"
@@ -181,7 +197,7 @@ def test_get_event_info_gates_fields_by_membership_status():
     )
 
     lambda_handler(
-        _api_event("POST", "/events/evt_1/join", claims={"sub": "user_2"}, path_parameters={"event_id": "evt_1"}),
+        _api_event("POST", "/events/join", body={"accessCode": "AB23CD"}, claims={"sub": "user_2"}),
         _FakeLambdaContext(),
     )
 
@@ -235,7 +251,7 @@ def test_deny_blocks_rejoin():
     _put_event(dynamodb, joinPolicy="APPROVAL_REQUIRED")
 
     lambda_handler(
-        _api_event("POST", "/events/evt_1/join", claims={"sub": "user_2"}, path_parameters={"event_id": "evt_1"}),
+        _api_event("POST", "/events/join", body={"accessCode": "AB23CD"}, claims={"sub": "user_2"}),
         _FakeLambdaContext(),
     )
     deny_response = lambda_handler(
@@ -251,7 +267,7 @@ def test_deny_blocks_rejoin():
 
     try:
         lambda_handler(
-            _api_event("POST", "/events/evt_1/join", claims={"sub": "user_2"}, path_parameters={"event_id": "evt_1"}),
+            _api_event("POST", "/events/join", body={"accessCode": "AB23CD"}, claims={"sub": "user_2"}),
             _FakeLambdaContext(),
         )
         assert False, "expected ValueError"
@@ -268,7 +284,7 @@ def test_leave_then_rejoin_round_trip():
     _put_event(dynamodb, joinPolicy="OPEN")
 
     lambda_handler(
-        _api_event("POST", "/events/evt_1/join", claims={"sub": "user_2"}, path_parameters={"event_id": "evt_1"}),
+        _api_event("POST", "/events/join", body={"accessCode": "AB23CD"}, claims={"sub": "user_2"}),
         _FakeLambdaContext(),
     )
     leave_response = lambda_handler(
@@ -278,7 +294,7 @@ def test_leave_then_rejoin_round_trip():
     assert json.loads(leave_response["body"]) == {"eventID": "evt_1", "status": "LEFT"}
 
     rejoin_response = lambda_handler(
-        _api_event("POST", "/events/evt_1/join", claims={"sub": "user_2"}, path_parameters={"event_id": "evt_1"}),
+        _api_event("POST", "/events/join", body={"accessCode": "AB23CD"}, claims={"sub": "user_2"}),
         _FakeLambdaContext(),
     )
     assert json.loads(rejoin_response["body"]) == {"eventID": "evt_1", "status": "ATTENDEE"}
@@ -293,7 +309,7 @@ def test_eject_removes_admitted_attendee():
     _put_event(dynamodb, joinPolicy="OPEN")
 
     lambda_handler(
-        _api_event("POST", "/events/evt_1/join", claims={"sub": "user_2"}, path_parameters={"event_id": "evt_1"}),
+        _api_event("POST", "/events/join", body={"accessCode": "AB23CD"}, claims={"sub": "user_2"}),
         _FakeLambdaContext(),
     )
     eject_response = lambda_handler(

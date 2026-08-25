@@ -9,9 +9,10 @@ def _caller_id():
     return app.current_event.request_context.authorizer.claims["sub"]
 
 
-@app.post("/events/<event_id>/join")
-def join_event(event_id: str):
-    return manager.join_event({"eventID": event_id, "userID": _caller_id()})
+@app.post("/events/join")
+def join_event():
+    access_code = app.current_event.json_body["accessCode"]
+    return manager.join_event({"accessCode": access_code, "userID": _caller_id()})
 
 
 @app.post("/events/<event_id>/leave")

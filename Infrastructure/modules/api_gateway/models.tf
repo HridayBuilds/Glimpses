@@ -54,6 +54,21 @@ resource "aws_api_gateway_model" "event_update" {
   })
 }
 
+resource "aws_api_gateway_model" "event_join_body" {
+  rest_api_id  = aws_api_gateway_rest_api.this.id
+  name         = "EventJoinBody"
+  content_type = "application/json"
+  schema = jsonencode({
+    "$schema" = "http://json-schema.org/draft-04/schema#"
+    title     = "EventJoinBody"
+    type      = "object"
+    properties = {
+      accessCode = { type = "string", minLength = 1 }
+    }
+    required = ["accessCode"]
+  })
+}
+
 resource "aws_api_gateway_model" "photo_ids_body" {
   rest_api_id  = aws_api_gateway_rest_api.this.id
   name         = "PhotoIDsBody"

@@ -13,6 +13,7 @@ def _event(**overrides):
         "organizerID": "user_1",
         "status": "ACTIVE",
         "joinPolicy": "OPEN",
+        "accessCode": "AB23CD",
     }
     base.update(overrides)
     return base
@@ -25,57 +26,67 @@ def _attendee(**overrides):
 
 
 def test_join_event_open_policy_admits_directly(monkeypatch):
-    monkeypatch.setattr(manager, "get_event", lambda event_id: _event(joinPolicy="OPEN"))
+    monkeypatch.setattr(manager, "get_event_by_access_code", lambda access_code: _event(joinPolicy="OPEN"))
     monkeypatch.setattr(manager, "get_attendee", lambda user_id, event_id: None)
     put_items = []
     monkeypatch.setattr(manager, "put_attendee", lambda item: put_items.append(item))
 
-    result = manager.join_event({"eventID": "evt_1", "userID": "user_2"})
+    result = manager.join_event({"accessCode": "AB23CD", "userID": "user_2"})
 
     assert result == {"eventID": "evt_1", "status": "ATTENDEE"}
     assert put_items == [{"userID": "user_2", "eventID": "evt_1", "status": "ATTENDEE"}]
 
 
 def test_join_event_approval_required_parks_in_lobby(monkeypatch):
-    monkeypatch.setattr(manager, "get_event", lambda event_id: _event(joinPolicy="APPROVAL_REQUIRED"))
+    monkeypatch.setattr(manager, "get_event_by_access_code", lambda access_code: _event(joinPolicy="APPROVAL_REQUIRED"))
     monkeypatch.setattr(manager, "get_attendee", lambda user_id, event_id: None)
     put_items = []
     monkeypatch.setattr(manager, "put_attendee", lambda item: put_items.append(item))
 
-    result = manager.join_event({"eventID": "evt_1", "userID": "user_2"})
+    result = manager.join_event({"accessCode": "AB23CD", "userID": "user_2"})
 
     assert result == {"eventID": "evt_1", "status": "PENDING"}
     assert put_items[0]["status"] == "PENDING"
 
 
-def test_join_event_rejects_archived_event(monkeypatch):
-    monkeypatch.setattr(manager, "get_event", lambda event_id: _event(status="ARCHIVED"))
+def test_join_event_rejects_unknown_access_code(monkeypatch):
+    monkeypatch.setattr(manager, "get_event_by_access_code", lambda access_code: None)
 
     try:
-        manager.join_event({"eventID": "evt_1", "userID": "user_2"})
+        manager.join_event({"accessCode": "ZZ00ZZ", "userID": "user_2"})
+        assert False, "expected ValueError"
+    except ValueError:
+        pass
+
+
+def test_join_event_rejects_archived_event(monkeypatch):
+    monkeypatch.setattr(manager, "get_event_by_access_code", lambda access_code: _event(status="ARCHIVED"))
+
+    try:
+        manager.join_event({"accessCode": "AB23CD", "userID": "user_2"})
         assert False, "expected ValueError"
     except ValueError:
         pass
 
 
 def test_join_event_rejects_blocked_user(monkeypatch):
-    monkeypatch.setattr(manager, "get_event", lambda event_id: _event())
+    monkeypatch.setattr(manager, "get_event_by_access_code", lambda access_code: _event())
     monkeypatch.setattr(manager, "get_attendee", lambda user_id, event_id: _attendee(status="BLOCKED"))
 
     try:
-        manager.join_event({"eventID": "evt_1", "userID": "user_2"})
+        manager.join_event({"accessCode": "AB23CD", "userID": "user_2"})
         assert False, "expected ValueError"
     except ValueError:
         pass
 
 
 def test_join_event_rejoin_after_leave_uses_join_policy(monkeypatch):
-    monkeypatch.setattr(manager, "get_event", lambda event_id: _event(joinPolicy="OPEN"))
+    monkeypatch.setattr(manager, "get_event_by_access_code", lambda access_code: _event(joinPolicy="OPEN"))
     monkeypatch.setattr(manager, "get_attendee", lambda user_id, event_id: _attendee(status="LEFT"))
     updated = []
     monkeypatch.setattr(manager, "update_attendee_status", lambda user_id, event_id, status: updated.append(status))
 
-    result = manager.join_event({"eventID": "evt_1", "userID": "user_2"})
+    result = manager.join_event({"accessCode": "AB23CD", "userID": "user_2"})
 
     assert result == {"eventID": "evt_1", "status": "ATTENDEE"}
     assert updated == ["ATTENDEE"]

@@ -26,6 +26,16 @@ def get_event(event_id):
     return response.get("Item")
 
 
+def get_event_by_access_code(access_code):
+    response = _events_table().query(
+        IndexName="accessCode-index",
+        KeyConditionExpression="accessCode = :c",
+        ExpressionAttributeValues={":c": access_code},
+    )
+    items = response["Items"]
+    return items[0] if items else None
+
+
 def get_attendee(user_id, event_id):
     response = _event_attendees_table().get_item(Key={"userID": user_id, "eventID": event_id})
     return response.get("Item")
