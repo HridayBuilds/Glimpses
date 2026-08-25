@@ -1,12 +1,9 @@
-# macOS
 .DS_Store
 
-# Local tooling state — machine-specific, not project content
 .claude/
 .serena/
+CLAUDE.md
 
-# Secrets — never commit. v1 leaked an AWS key CSV, an OAuth client secret
-# and a CloudFront signing PEM; these patterns exist so it cannot recur.
 *.pem
 *.key
 *.p12
@@ -19,13 +16,9 @@ accessKeys*.csv
 terraform.tfvars
 *.auto.tfvars
 
-# Terraform working directory — downloaded provider binaries, machine-specific.
-# .terraform.lock.hcl stays tracked; .terraform/ itself never should be.
 **/.terraform/
 
-# graphify output — generated knowledge graph, not project content.
 graphify-out/
 
-# Python bytecode cache — regenerated locally, not source.
 __pycache__/
 *.pyc
