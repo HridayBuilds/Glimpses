@@ -102,6 +102,73 @@ def test_leave_event_rejects_non_attendee(monkeypatch):
         pass
 
 
+def _full_event(**overrides):
+    return _event(
+        name="Priya's Trip",
+        description="A weekend away",
+        createdAt="2026-08-01T00:00:00+00:00",
+        contributionPolicy="ATTENDEES_CAN_ADD",
+        accessCode="AB23CD",
+        **overrides,
+    )
+
+
+def test_get_event_info_returns_limited_fields_for_pending(monkeypatch):
+    monkeypatch.setattr(manager, "get_event", lambda event_id: _full_event())
+    monkeypatch.setattr(manager, "get_attendee", lambda user_id, event_id: _attendee(status="PENDING"))
+
+    result = manager.get_event_info({"eventID": "evt_1", "callerID": "user_2"})
+
+    assert result == {
+        "eventID": "evt_1",
+        "name": "Priya's Trip",
+        "description": "A weekend away",
+        "createdAt": "2026-08-01T00:00:00+00:00",
+    }
+
+
+def test_get_event_info_returns_full_fields_for_attendee(monkeypatch):
+    monkeypatch.setattr(manager, "get_event", lambda event_id: _full_event())
+    monkeypatch.setattr(manager, "get_attendee", lambda user_id, event_id: _attendee(status="ATTENDEE"))
+
+    result = manager.get_event_info({"eventID": "evt_1", "callerID": "user_2"})
+
+    assert result["accessCode"] == "AB23CD"
+    assert result["qrcodeUrl"].endswith("/qrcodes/event/evt_1/qrcode.png")
+    assert result["joinPolicy"] == "OPEN"
+
+
+def test_get_event_info_returns_full_fields_for_organizer(monkeypatch):
+    monkeypatch.setattr(manager, "get_event", lambda event_id: _full_event())
+    monkeypatch.setattr(manager, "get_attendee", lambda user_id, event_id: (_ for _ in ()).throw(AssertionError))
+
+    result = manager.get_event_info({"eventID": "evt_1", "callerID": "user_1"})
+
+    assert result["accessCode"] == "AB23CD"
+
+
+def test_get_event_info_rejects_non_member(monkeypatch):
+    monkeypatch.setattr(manager, "get_event", lambda event_id: _full_event())
+    monkeypatch.setattr(manager, "get_attendee", lambda user_id, event_id: None)
+
+    try:
+        manager.get_event_info({"eventID": "evt_1", "callerID": "someone_else"})
+        assert False, "expected ValueError"
+    except ValueError:
+        pass
+
+
+def test_get_event_info_rejects_blocked_attendee(monkeypatch):
+    monkeypatch.setattr(manager, "get_event", lambda event_id: _full_event())
+    monkeypatch.setattr(manager, "get_attendee", lambda user_id, event_id: _attendee(status="BLOCKED"))
+
+    try:
+        manager.get_event_info({"eventID": "evt_1", "callerID": "user_2"})
+        assert False, "expected ValueError"
+    except ValueError:
+        pass
+
+
 def test_list_attendees_rejects_non_organizer(monkeypatch):
     monkeypatch.setattr(manager, "get_event", lambda event_id: _event(organizerID="user_1"))
 

@@ -4,7 +4,7 @@
 
 Every route below is fronted by API Gateway (`prod` stage), goes through the WAF Web ACL, and requires Cognito auth — **every single route uses the `COGNITO_USER_POOLS` authorizer**, no exceptions, no public routes. Confirmed in `Infrastructure/modules/api_gateway/api_gateway.tf`: `aws_api_gateway_method.route` sets `authorization = "COGNITO_USER_POOLS"` on every route in `local.routes` with no per-route override.
 
-**Coverage check (2026-08-25):** all 30 routes across `local.routes` (`profile` ×5, `events` ×8, `membership` ×6, `upload_status` ×3, `gallery` ×5, `download` ×2 — verified against every `routes_*.tf`) are documented below — this file is the complete, current set of endpoints the frontend can call.
+**Coverage check (2026-08-25):** all 32 routes across `local.routes` (`profile` ×5, `events` ×9, `membership` ×7, `upload_status` ×3, `gallery` ×5, `download` ×2 — verified against every `routes_*.tf`) are documented below — this file is the complete, current set of endpoints the frontend can call. (Two routes added same day to close spec gaps: `events`' `GET /events/my-events` and `membership`'s `GET /events/{eventId}/info` — see those two entries below.)
 
 **Auth header:** `Authorization: Bearer <token>` — **must be the Cognito ID token, not the access token.** The authorizer checks the `aud` claim, which only ID tokens carry (access tokens carry `client_id` instead, no `aud`) — an access token here silently fails with a `401`. Get the ID token from `initiate-auth`'s `AuthenticationResult.IdToken` (or the browser SDK's equivalent).
 
@@ -99,6 +99,26 @@ No body. Lists all events the caller organizes.
 
 Response `200`: array of the same shape as the create response above.
 
+#### `GET /events/my-events`
+No body. Lists events the caller is a member of (as `PENDING` or `ATTENDEE` — `LEFT`/`BLOCKED` rows are excluded). Registered as a static sibling resource of `{eventId}` so it doesn't collide with the path-param route below.
+
+Response `200`: array of the same shape as the create response above, plus an `attendeeStatus` field (`"PENDING"` or `"ATTENDEE"`) per event:
+```json
+[
+  {
+    "eventID": "uuid",
+    "name": "Priya's Trip",
+    "description": "",
+    "status": "ACTIVE",
+    "joinPolicy": "OPEN",
+    "contributionPolicy": "ATTENDEES_CAN_ADD",
+    "accessCode": "7F3K9M",
+    "createdAt": "2026-08-25T05:32:00+00:00",
+    "attendeeStatus": "ATTENDEE"
+  }
+]
+```
+
 #### `GET /events/{eventId}`
 Response `200`: same single-event shape as above.
 
@@ -152,6 +172,30 @@ Response `200`:
 ### `membership` — Lambda: `glimpses-membership`
 
 Attendee status enum: `PENDING` / `ATTENDEE` / `LEFT` / `BLOCKED` (rows are never deleted, only transitioned).
+
+#### `GET /events/{eventId}/info`
+No body. Caller-role-gated event info — the one route on any Lambda that a `PENDING`/`ATTENDEE` caller (not just the organizer) can call. Organizer and `ATTENDEE` get the full shape (including `accessCode`/`qrcodeUrl`, closing the P-45 sharing gap); `PENDING` gets a name/description/createdAt-only shape (for the P-28 lobby screen, so a mistyped-but-valid code doesn't leave someone waiting on a stranger's event indefinitely). Anyone else (never joined, or `LEFT`/`BLOCKED`) raises (→ `502`, see error-shape note above). No organizer display name is included by design. Doesn't touch or loosen the existing organizer-only `GET /events/{eventId}` or `GET /events/{eventId}/qrcode` routes on the `events` Lambda — this is a separate, additive route.
+
+Response `200`, `PENDING` caller:
+```json
+{
+  "eventID": "uuid",
+  "name": "Priya's Trip",
+  "description": "",
+  "createdAt": "2026-08-25T05:32:00+00:00"
+}
+```
+
+Response `200`, `ATTENDEE`/organizer caller — adds:
+```json
+{
+  "status": "ACTIVE",
+  "joinPolicy": "OPEN",
+  "contributionPolicy": "ATTENDEES_CAN_ADD",
+  "accessCode": "7F3K9M",
+  "qrcodeUrl": "https://<cloudfront-domain>/qrcodes/event/{eventId}/qrcode.png"
+}
+```
 
 #### `POST /events/{eventId}/join`
 No body. If the event's `joinPolicy` is `OPEN`, caller becomes `ATTENDEE` immediately; otherwise `PENDING` (needs organizer admit). Blocked users can't rejoin.
@@ -245,6 +289,7 @@ Photo shape used across every route in this Lambda:
   "eventID": "uuid",
   "uploaderID": "uuid",
   "uploaderDisplayName": "Meera",
+  "uploaderEmail": "meera@example.com",
   "filename": "IMG_1234.jpg",
   "uploadedAt": "2026-08-25T05:32:00+00:00",
   "sizeBytes": 2048576,

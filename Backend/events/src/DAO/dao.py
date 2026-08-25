@@ -4,6 +4,7 @@ import os
 import boto3
 
 ACTIVE_STATUS = "ACTIVE"
+BATCH_GET_LIMIT = 100
 
 
 def _dynamodb():
@@ -12,6 +13,10 @@ def _dynamodb():
 
 def _events_table():
     return _dynamodb().Table(os.environ["EVENTS_TABLE_NAME"])
+
+
+def _event_attendees_table():
+    return _dynamodb().Table(os.environ["EVENT_ATTENDEES_TABLE_NAME"])
 
 
 def _s3():
@@ -54,6 +59,28 @@ def list_events_for_organizer(organizer_id):
         ExpressionAttributeValues={":o": organizer_id},
     )
     return response["Items"]
+
+
+def list_attendee_rows_for_user(user_id):
+    response = _event_attendees_table().query(
+        KeyConditionExpression="userID = :u",
+        ExpressionAttributeValues={":u": user_id},
+    )
+    return response["Items"]
+
+
+def batch_get_events(event_ids):
+    if not event_ids:
+        return []
+    table_name = os.environ["EVENTS_TABLE_NAME"]
+    dynamodb = _dynamodb()
+    items = []
+    for offset in range(0, len(event_ids), BATCH_GET_LIMIT):
+        batch = event_ids[offset : offset + BATCH_GET_LIMIT]
+        keys = [{"eventID": event_id} for event_id in batch]
+        response = dynamodb.batch_get_item(RequestItems={table_name: {"Keys": keys}})
+        items.extend(response["Responses"][table_name])
+    return items
 
 
 def access_code_exists(access_code):

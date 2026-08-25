@@ -22,6 +22,7 @@ def _public_photo(photo):
         "eventID": photo["eventID"],
         "uploaderID": photo["uploaderID"],
         "uploaderDisplayName": photo.get("uploaderDisplayName"),
+        "uploaderEmail": photo.get("uploaderEmail"),
         "filename": photo["filename"],
         "uploadedAt": photo["uploadedAt"],
         "sizeBytes": int(photo.get("sizeBytes", 0)),

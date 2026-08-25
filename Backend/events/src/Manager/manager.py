@@ -8,10 +8,12 @@ import qrcode
 
 from DAO.dao import (
     access_code_exists,
+    batch_get_events,
     create_collection,
     delete_collection,
     get_event,
     invoke_cascade_delete,
+    list_attendee_rows_for_user,
     list_events_for_organizer,
     list_stale_active_events,
     put_event,
@@ -31,6 +33,7 @@ ARCHIVE_AFTER_DAYS = 30
 DELETE_AFTER_ARCHIVE_DAYS = 30
 
 EDITABLE_FIELDS = ("name", "description", "joinPolicy", "contributionPolicy")
+MEMBER_ATTENDEE_STATUSES = ("PENDING", "ATTENDEE")
 
 
 def _now_iso():
@@ -117,6 +120,18 @@ def create_event(payload):
 def list_events(payload):
     events = list_events_for_organizer(payload["organizerID"])
     return [_public_event(event) for event in events]
+
+
+def list_my_events(payload):
+    rows = list_attendee_rows_for_user(payload["userID"])
+    attendee_status_by_event_id = {
+        row["eventID"]: row["status"] for row in rows if row["status"] in MEMBER_ATTENDEE_STATUSES
+    }
+    events = batch_get_events(list(attendee_status_by_event_id))
+    return [
+        {**_public_event(event), "attendeeStatus": attendee_status_by_event_id[event["eventID"]]}
+        for event in events
+    ]
 
 
 def get_event_detail(payload):

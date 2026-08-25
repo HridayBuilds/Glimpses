@@ -19,6 +19,11 @@ def leave_event(event_id: str):
     return manager.leave_event({"eventID": event_id, "userID": _caller_id()})
 
 
+@app.get("/events/<event_id>/info")
+def get_event_info(event_id: str):
+    return manager.get_event_info({"eventID": event_id, "callerID": _caller_id()})
+
+
 @app.get("/events/<event_id>/attendees")
 def list_attendees(event_id: str):
     status = app.current_event.get_query_string_value("status")

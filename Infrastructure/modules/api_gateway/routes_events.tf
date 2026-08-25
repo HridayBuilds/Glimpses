@@ -11,6 +11,12 @@ resource "aws_api_gateway_resource" "event_id" {
   path_part   = "{eventId}"
 }
 
+resource "aws_api_gateway_resource" "events_my_events" {
+  rest_api_id = aws_api_gateway_rest_api.this.id
+  parent_id   = aws_api_gateway_resource.events.id
+  path_part   = "my-events"
+}
+
 resource "aws_api_gateway_resource" "event_archive" {
   rest_api_id = aws_api_gateway_rest_api.this.id
   parent_id   = aws_api_gateway_resource.event_id.id
@@ -40,6 +46,13 @@ locals {
     }
     events_get = {
       resource_id   = aws_api_gateway_resource.events.id
+      http_method   = "GET"
+      function_name = var.events_function_name
+      function_arn  = var.events_function_arn
+      request_model = null
+    }
+    events_my_events_get = {
+      resource_id   = aws_api_gateway_resource.events_my_events.id
       http_method   = "GET"
       function_name = var.events_function_name
       function_arn  = var.events_function_arn

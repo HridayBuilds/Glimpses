@@ -12,6 +12,7 @@ resource "aws_lambda_function" "this" {
   environment {
     variables = {
       EVENTS_TABLE_NAME            = var.events_table_name
+      EVENT_ATTENDEES_TABLE_NAME   = var.event_attendees_table_name
       PHOTOS_BUCKET                = var.photos_bucket_name
       CLOUDFRONT_DOMAIN            = var.cloudfront_domain_name
       CASCADE_DELETE_FUNCTION_NAME = var.cascade_delete_function_name

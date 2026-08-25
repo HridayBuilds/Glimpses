@@ -14,6 +14,7 @@ resource "aws_lambda_function" "this" {
       EVENT_ATTENDEES_TABLE_NAME = var.event_attendees_table_name
       EVENTS_TABLE_NAME          = var.events_table_name
       USERS_TABLE_NAME           = var.users_table_name
+      CLOUDFRONT_DOMAIN          = var.cloudfront_domain_name
     }
   }
 

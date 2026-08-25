@@ -146,6 +146,62 @@ def test_create_list_get_update_and_archive_round_trip(monkeypatch):
     assert events_table.get_item(Key={"eventID": event_id})["Item"]["status"] == "ARCHIVED"
 
 
+def _create_event_attendees_table(dynamodb):
+    dynamodb.create_table(
+        TableName=os.environ["EVENT_ATTENDEES_TABLE_NAME"],
+        KeySchema=[
+            {"AttributeName": "userID", "KeyType": "HASH"},
+            {"AttributeName": "eventID", "KeyType": "RANGE"},
+        ],
+        AttributeDefinitions=[
+            {"AttributeName": "userID", "AttributeType": "S"},
+            {"AttributeName": "eventID", "AttributeType": "S"},
+        ],
+        BillingMode="PAY_PER_REQUEST",
+    )
+
+
+@mock_aws
+def test_list_my_events_returns_only_pending_and_attendee_rows():
+    dynamodb = boto3.resource("dynamodb", region_name="ap-south-1")
+    _create_events_table(dynamodb)
+    _create_event_attendees_table(dynamodb)
+
+    def _full_event(event_id, name):
+        return {
+            "eventID": event_id,
+            "organizerID": "organizer_1",
+            "name": name,
+            "description": "",
+            "status": "ACTIVE",
+            "joinPolicy": "OPEN",
+            "contributionPolicy": "ATTENDEES_CAN_ADD",
+            "accessCode": f"CODE{event_id}",
+            "createdAt": "2026-08-01T00:00:00+00:00",
+        }
+
+    events_table = dynamodb.Table(os.environ["EVENTS_TABLE_NAME"])
+    events_table.put_item(Item=_full_event("evt_1", "Priya's Trip"))
+    events_table.put_item(Item=_full_event("evt_2", "Rohan's Party"))
+    events_table.put_item(Item=_full_event("evt_3", "Old Trip"))
+
+    attendees_table = dynamodb.Table(os.environ["EVENT_ATTENDEES_TABLE_NAME"])
+    attendees_table.put_item(Item={"userID": "user_2", "eventID": "evt_1", "status": "ATTENDEE"})
+    attendees_table.put_item(Item={"userID": "user_2", "eventID": "evt_2", "status": "PENDING"})
+    attendees_table.put_item(Item={"userID": "user_2", "eventID": "evt_3", "status": "LEFT"})
+
+    response = lambda_handler(
+        _api_event("GET", "/events/my-events", claims={"sub": "user_2"}), _FakeLambdaContext()
+    )
+
+    assert response["statusCode"] == 200
+    body = json.loads(response["body"])
+    assert {(item["eventID"], item["attendeeStatus"]) for item in body} == {
+        ("evt_1", "ATTENDEE"),
+        ("evt_2", "PENDING"),
+    }
+
+
 @mock_aws
 def test_get_event_detail_rejects_non_organizer():
     dynamodb = boto3.resource("dynamodb", region_name="ap-south-1")

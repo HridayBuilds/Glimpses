@@ -97,13 +97,15 @@ module "upload_status" {
 module "events" {
   source = "../Backend/events/infra"
 
-  deploy_artifacts_bucket = module.buckets.deploy_artifacts_bucket_name
-  events_table_name       = module.dynamodb.table_names["events"]
-  events_table_arn        = module.dynamodb.table_arns["events"]
-  photos_bucket_name      = module.buckets.photos_bucket_name
-  photos_bucket_arn       = module.buckets.photos_bucket_arn
-  cloudfront_domain_name  = module.cloudfront.distribution_domain_name
-  alarm_sns_topic_arn     = module.alarms.alarm_sns_topic_arn
+  deploy_artifacts_bucket    = module.buckets.deploy_artifacts_bucket_name
+  events_table_name          = module.dynamodb.table_names["events"]
+  events_table_arn           = module.dynamodb.table_arns["events"]
+  event_attendees_table_name = module.dynamodb.table_names["event_attendees"]
+  event_attendees_table_arn  = module.dynamodb.table_arns["event_attendees"]
+  photos_bucket_name         = module.buckets.photos_bucket_name
+  photos_bucket_arn          = module.buckets.photos_bucket_arn
+  cloudfront_domain_name     = module.cloudfront.distribution_domain_name
+  alarm_sns_topic_arn        = module.alarms.alarm_sns_topic_arn
 
   cascade_delete_function_name = module.cascade_delete.function_name
   cascade_delete_function_arn  = module.cascade_delete.function_arn
@@ -119,6 +121,7 @@ module "membership" {
   events_table_arn           = module.dynamodb.table_arns["events"]
   users_table_name           = module.dynamodb.table_names["users"]
   users_table_arn            = module.dynamodb.table_arns["users"]
+  cloudfront_domain_name     = module.cloudfront.distribution_domain_name
   alarm_sns_topic_arn        = module.alarms.alarm_sns_topic_arn
 }
 

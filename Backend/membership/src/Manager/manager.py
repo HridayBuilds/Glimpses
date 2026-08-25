@@ -1,3 +1,5 @@
+import os
+
 from DAO.dao import (
     get_attendee,
     get_event,
@@ -74,6 +76,41 @@ def list_attendees(payload):
             for attendee in attendees
         ]
     }
+
+
+def _limited_event_info(event):
+    return {
+        "eventID": event["eventID"],
+        "name": event["name"],
+        "description": event.get("description", ""),
+        "createdAt": event["createdAt"],
+    }
+
+
+def _full_event_info(event):
+    info = _limited_event_info(event)
+    info.update(
+        {
+            "status": event["status"],
+            "joinPolicy": event["joinPolicy"],
+            "contributionPolicy": event["contributionPolicy"],
+            "accessCode": event["accessCode"],
+            "qrcodeUrl": f"https://{os.environ['CLOUDFRONT_DOMAIN']}/qrcodes/event/{event['eventID']}/qrcode.png",
+        }
+    )
+    return info
+
+
+def get_event_info(payload):
+    event = _get_event_or_raise(payload["eventID"])
+    is_organizer = event["organizerID"] == payload["callerID"]
+    attendee = None if is_organizer else get_attendee(payload["callerID"], payload["eventID"])
+
+    if is_organizer or (attendee is not None and attendee["status"] == STATUS_ATTENDEE):
+        return _full_event_info(event)
+    if attendee is not None and attendee["status"] == STATUS_PENDING:
+        return _limited_event_info(event)
+    raise ValueError("Not a member of this event")
 
 
 def admit_attendee(payload):

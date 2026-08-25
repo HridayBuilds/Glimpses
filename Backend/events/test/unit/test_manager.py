@@ -68,6 +68,31 @@ def test_list_events_returns_public_shape(monkeypatch):
     assert result == [manager._public_event(_event())]
 
 
+def test_list_my_events_returns_only_pending_and_attendee_rows(monkeypatch):
+    monkeypatch.setattr(
+        manager,
+        "list_attendee_rows_for_user",
+        lambda user_id: [
+            {"eventID": "evt_1", "status": "ATTENDEE"},
+            {"eventID": "evt_2", "status": "PENDING"},
+            {"eventID": "evt_3", "status": "LEFT"},
+            {"eventID": "evt_4", "status": "BLOCKED"},
+        ],
+    )
+    monkeypatch.setattr(
+        manager,
+        "batch_get_events",
+        lambda event_ids: [_event(eventID="evt_1"), _event(eventID="evt_2")],
+    )
+
+    result = manager.list_my_events({"userID": "user_1"})
+
+    assert {event["eventID"]: event["attendeeStatus"] for event in result} == {
+        "evt_1": "ATTENDEE",
+        "evt_2": "PENDING",
+    }
+
+
 def test_get_event_detail_raises_for_non_owner(monkeypatch):
     monkeypatch.setattr(manager, "get_event", lambda event_id: _event(organizerID="someone_else"))
 

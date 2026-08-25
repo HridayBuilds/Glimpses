@@ -39,6 +39,11 @@ variable "users_table_arn" {
   type        = string
 }
 
+variable "cloudfront_domain_name" {
+  description = "CloudFront distribution's default domain, for GET /events/{eventId}/info's qrcodeUrl (P-30: no custom domain)"
+  type        = string
+}
+
 variable "alarm_sns_topic_arn" {
   description = "ARN of the shared operator-alerts SNS topic (T-07), subscribed alarms publish here"
   type        = string

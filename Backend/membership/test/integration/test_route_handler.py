@@ -165,6 +165,68 @@ def test_join_approval_required_event_parks_in_lobby_then_organizer_admits():
 
 
 @mock_aws
+def test_get_event_info_gates_fields_by_membership_status():
+    dynamodb = boto3.resource("dynamodb", region_name="ap-south-1")
+    _create_event_attendees_table(dynamodb)
+    _create_events_table(dynamodb)
+    _create_users_table(dynamodb)
+    _put_event(
+        dynamodb,
+        joinPolicy="APPROVAL_REQUIRED",
+        name="Priya's Trip",
+        description="A weekend away",
+        contributionPolicy="ATTENDEES_CAN_ADD",
+        accessCode="AB23CD",
+        createdAt="2026-08-01T00:00:00+00:00",
+    )
+
+    lambda_handler(
+        _api_event("POST", "/events/evt_1/join", claims={"sub": "user_2"}, path_parameters={"event_id": "evt_1"}),
+        _FakeLambdaContext(),
+    )
+
+    pending_response = lambda_handler(
+        _api_event("GET", "/events/evt_1/info", claims={"sub": "user_2"}, path_parameters={"event_id": "evt_1"}),
+        _FakeLambdaContext(),
+    )
+    assert pending_response["statusCode"] == 200
+    pending_body = json.loads(pending_response["body"])
+    assert pending_body == {
+        "eventID": "evt_1",
+        "name": "Priya's Trip",
+        "description": "A weekend away",
+        "createdAt": "2026-08-01T00:00:00+00:00",
+    }
+
+    lambda_handler(
+        _api_event(
+            "POST",
+            "/events/evt_1/attendees/user_2/admit",
+            claims={"sub": "user_1"},
+            path_parameters={"event_id": "evt_1", "user_id": "user_2"},
+        ),
+        _FakeLambdaContext(),
+    )
+
+    attendee_response = lambda_handler(
+        _api_event("GET", "/events/evt_1/info", claims={"sub": "user_2"}, path_parameters={"event_id": "evt_1"}),
+        _FakeLambdaContext(),
+    )
+    attendee_body = json.loads(attendee_response["body"])
+    assert attendee_body["accessCode"] == "AB23CD"
+    assert attendee_body["qrcodeUrl"].endswith("/qrcodes/event/evt_1/qrcode.png")
+
+    try:
+        lambda_handler(
+            _api_event("GET", "/events/evt_1/info", claims={"sub": "user_3"}, path_parameters={"event_id": "evt_1"}),
+            _FakeLambdaContext(),
+        )
+        assert False, "expected ValueError"
+    except ValueError:
+        pass
+
+
+@mock_aws
 def test_deny_blocks_rejoin():
     dynamodb = boto3.resource("dynamodb", region_name="ap-south-1")
     _create_event_attendees_table(dynamodb)

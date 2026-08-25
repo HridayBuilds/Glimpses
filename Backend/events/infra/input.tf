@@ -19,6 +19,16 @@ variable "events_table_arn" {
   type        = string
 }
 
+variable "event_attendees_table_name" {
+  description = "Name of the EventAttendees DynamoDB table (T-04); read-only here for GET /events/my-events"
+  type        = string
+}
+
+variable "event_attendees_table_arn" {
+  description = "ARN of the EventAttendees DynamoDB table, for IAM (read-only)"
+  type        = string
+}
+
 variable "photos_bucket_name" {
   description = "Name of the shared glimpses-photos S3 bucket (T-09) — one bucket, six prefixes"
   type        = string

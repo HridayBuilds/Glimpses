@@ -22,6 +22,11 @@ def list_events():
     return manager.list_events({"organizerID": _organizer_id()})
 
 
+@app.get("/events/my-events")
+def list_my_events():
+    return manager.list_my_events({"userID": _organizer_id()})
+
+
 @app.get("/events/<event_id>")
 def get_event_detail(event_id: str):
     return manager.get_event_detail({"eventID": event_id, "organizerID": _organizer_id()})
