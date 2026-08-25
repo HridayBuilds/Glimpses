@@ -3,9 +3,6 @@ import os
 import boto3
 
 
-# Built lazily, not at import time — a module-level client/resource would bind to
-# whatever AWS mocking/config is (or isn't) active at first import, which can be before
-# a test's own mock context has started.
 def _dynamodb():
     return boto3.resource("dynamodb")
 
@@ -53,8 +50,6 @@ def delete_event_row(event_id):
     _events_table().delete_item(Key={"eventID": event_id})
 
 
-# ADD with a negative delta decrements — same UpdateExpression shape ingestion's
-# increment_event_counters uses, in reverse.
 def decrement_event_counters(event_id, photo_count_delta, size_bytes_delta):
     _events_table().update_item(
         Key={"eventID": event_id},
@@ -63,8 +58,6 @@ def decrement_event_counters(event_id, photo_count_delta, size_bytes_delta):
     )
 
 
-# T-05: idempotent — an already-archived event's collection is already gone (P-32's
-# archive-time DeleteCollection), and a double-delete race must not raise.
 def delete_collection(collection_id):
     try:
         _rekognition().delete_collection(CollectionId=collection_id)
@@ -72,8 +65,6 @@ def delete_collection(collection_id):
         pass
 
 
-# Same idempotency as delete_collection: a missing collection means there is nothing
-# left to remove faces from (P-52 photo delete on an archived event).
 def delete_faces_from_collection(collection_id, face_ids):
     if not face_ids:
         return
@@ -140,9 +131,6 @@ def query_attendees_by_event(event_id):
     )
 
 
-# P-34 whole-event teardown only (2026-08-24 ruling) — breaks the general "never delete
-# EventAttendees rows" precedent for this one case; single/bulk photo delete never
-# touches EventAttendees at all.
 def batch_delete_attendees(event_id, user_ids):
     with _event_attendees_table().batch_writer() as writer:
         for user_id in user_ids:
@@ -153,7 +141,7 @@ def delete_s3_objects(bucket, keys):
     if not keys:
         return
     s3 = _s3()
-    limit = 1000  # S3 DeleteObjects' own per-call cap
+    limit = 1000
     for offset in range(0, len(keys), limit):
         batch = keys[offset : offset + limit]
         s3.delete_objects(Bucket=bucket, Delete={"Objects": [{"Key": key} for key in batch]})

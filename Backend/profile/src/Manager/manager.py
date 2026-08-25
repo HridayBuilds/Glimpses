@@ -11,7 +11,7 @@ from DAO.dao import (
     update_display_name,
 )
 
-REQUIRED_FACE_COUNT = 1  # P-66: zero or two-plus faces is rejected, nothing guessed
+REQUIRED_FACE_COUNT = 1
 
 
 def _selfie_key(user_id):
@@ -39,16 +39,12 @@ def update_profile(payload):
     return {"userID": user_id}
 
 
-# P-15/T-09: the browser uploads directly to S3 with this URL — Profile never sees the
-# bytes, so P-66's face-count check can't happen here. See confirm_selfie below.
 def mint_selfie_upload_url(payload):
     bucket = os.environ["PHOTOS_BUCKET"]
     key = _selfie_key(payload["userID"])
     return {"uploadUrl": generate_presigned_put_url(bucket, key)}
 
 
-# Called by the browser once its S3 upload finishes (T-03/T-09 follow-up, 2026-08-23) —
-# validates what actually landed, since mint_selfie_upload_url never saw the bytes.
 def confirm_selfie(payload):
     bucket = os.environ["PHOTOS_BUCKET"]
     key = _selfie_key(payload["userID"])
@@ -59,8 +55,6 @@ def confirm_selfie(payload):
     return {"confirmed": True}
 
 
-# P-68: deletes the face reference and template, forward-looking only — match sets
-# already computed on EventAttendees are left in place, untouched by this call.
 def delete_selfie(payload):
     bucket = os.environ["PHOTOS_BUCKET"]
     key = _selfie_key(payload["userID"])

@@ -3,7 +3,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-import Manager.manager as manager  # noqa: E402
+import Manager.manager as manager
 
 
 def test_handle_action_dispatches_delete_event(monkeypatch):

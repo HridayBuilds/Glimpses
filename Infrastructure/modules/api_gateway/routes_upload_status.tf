@@ -1,4 +1,3 @@
-# Upload/status: POST .../upload-url, GET .../jobs/{jobId}/status, GET .../jobs/latest
 
 resource "aws_api_gateway_resource" "event_upload_url" {
   rest_api_id = aws_api_gateway_rest_api.this.id

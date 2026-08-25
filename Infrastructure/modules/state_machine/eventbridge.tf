@@ -28,10 +28,6 @@ resource "aws_iam_role_policy" "eventbridge_start_execution" {
   policy = data.aws_iam_policy_document.eventbridge_start_execution.json
 }
 
-# T-09: S3 Event Notification -> EventBridge -> StartExecution directly, no glue Lambda, no
-# client "upload complete" callback. A wildcard match, not separate prefix+suffix
-# conditions — EventBridge's content filtering can't AND two conditions on the same field —
-# against the exact upload key shape: uploads/event/{eventID}/user/{userId}/job/{jobId}/original.zip (T-09).
 resource "aws_cloudwatch_event_rule" "upload_complete" {
   name = "${var.name_prefix}-upload-complete"
 

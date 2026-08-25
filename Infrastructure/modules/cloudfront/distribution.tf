@@ -1,8 +1,3 @@
-# T-09: CloudFront + Origin Access Control (OAC) in front of the shared photos bucket.
-# The distribution itself doesn't restrict by prefix — the bucket policy below is the
-# real enforcement boundary, scoping the OAC's grant to exactly photos/, thumbnails/,
-# qrcodes/. uploads/, selfies/, downloads/ stay unreachable through CloudFront even if a
-# valid-looking path is guessed, since S3 rejects the OAC's request outside those prefixes.
 resource "aws_cloudfront_origin_access_control" "photos" {
   name                              = "${var.name_prefix}-photos-oac"
   origin_access_control_origin_type = "s3"
@@ -44,8 +39,6 @@ resource "aws_cloudfront_distribution" "photos" {
   }
 }
 
-# The actual enforcement: grants the OAC identity s3:GetObject on exactly photos/,
-# thumbnails/, qrcodes/ — every other prefix is never granted, not merely unlinked.
 data "aws_iam_policy_document" "photos_oac_access" {
   statement {
     effect  = "Allow"

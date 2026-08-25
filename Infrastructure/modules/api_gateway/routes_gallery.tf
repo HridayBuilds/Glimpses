@@ -1,8 +1,3 @@
-# Gallery/photos: GET .../photos, GET/DELETE .../photos/{photoId}, POST .../download-urls,
-# POST .../bulk-delete.
-#
-# The /events/{eventId}/photos resource declared here is shared with routes_download.tf,
-# since photos/download (the zip-kickoff route) belongs to the download Lambda, not gallery.
 
 resource "aws_api_gateway_resource" "event_photos" {
   rest_api_id = aws_api_gateway_rest_api.this.id

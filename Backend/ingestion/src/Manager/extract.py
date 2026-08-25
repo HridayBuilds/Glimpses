@@ -42,12 +42,9 @@ def handle_extract(payload):
         except Exception:
             failed_count += 1
             continue
-        if photo is not None:  # None means a duplicate — deliberately not counted as success or failure (P-38)
+        if photo is not None:
             succeeded.append(photo)
 
-    # T-02: the Distributed Map reads this list via an S3 ItemReader, never as a JSON
-    # array passed between states — at up to 1,000 photos/event (P-93) that array
-    # could approach Step Functions' 256KB state-transfer limit.
     manifest_key = f"uploads/event/{event_id}/user/{user_id}/job/{job_id}/manifest.json"
     put_object(bucket, manifest_key, json.dumps(succeeded).encode("utf-8"), content_type="application/json")
 
@@ -61,7 +58,6 @@ def handle_extract(payload):
 
 
 def _parse_upload_key(key):
-    # uploads/event/{eventID}/user/{userId}/job/{jobId}/original.zip (T-09)
     parts = key.split("/")
     return parts[2], parts[4], parts[6]
 
@@ -84,7 +80,7 @@ def _extract_one(event_id, user_id, filename, entry_bytes, uploaded_at, uploader
         put_object(photos_bucket, staging_key, entry_bytes)
         converted_key = invoke_heic_converter(photos_bucket, staging_key)
         jpeg_bytes = get_object(photos_bucket, converted_key)
-        delete_object(photos_bucket, staging_key)  # P-35: original HEIC discarded after conversion
+        delete_object(photos_bucket, staging_key)
     else:
         jpeg_bytes = entry_bytes if fmt == "jpeg" else normalize_to_jpeg(entry_bytes)
         put_object(photos_bucket, photo_key, jpeg_bytes, content_type="image/jpeg")

@@ -19,8 +19,5 @@ def status(event_id: str, download_id: str):
     return manager.status({"downloadId": download_id})
 
 
-# "build" is never reached through app.resolve() — it's the payload kickoff's own
-# self-invoke (a raw lambda:InvokeFunction call, InvocationType=Event) sends itself,
-# which never passes through API Gateway at all.
 def handle_internal_action(event):
     return manager.build(event)

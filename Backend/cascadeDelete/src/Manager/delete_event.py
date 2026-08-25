@@ -14,13 +14,6 @@ from DAO.dao import (
 )
 
 
-# P-34: whole-event teardown — Events, Photos, Faces, and (2026-08-24 ruling)
-# EventAttendees rows all go. Shared by both invocation shapes: events' delete endpoint
-# (organizer-triggered) and the Events TTL Stream (automatic 60-day delete, P-77).
-#
-# A missing Events row is treated as a successful no-op, not an error — this is the
-# double-delete race between a manual delete and the TTL sweep, or a duplicate async
-# invoke, that P-56/P-100's tolerated-failure philosophy already covers elsewhere.
 def delete_event_cascade(event_id):
     event = get_event(event_id)
     if event is None:

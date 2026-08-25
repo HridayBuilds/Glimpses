@@ -91,10 +91,6 @@ def get_event(event_id):
     return response.get("Item")
 
 
-# Also sets lastUploadAt (P-78: "activity" means a photo being added, and nothing else)
-# — the events Lambda's auto-archive sweep reads this off the status-lastUploadAt-index
-# GSI, which excludes any row missing the attribute entirely, so this is the only place
-# in the system that can honestly write it.
 def increment_event_counters(event_id, photo_count_delta=0, size_bytes_delta=0):
     _events_table().update_item(
         Key={"eventID": event_id},

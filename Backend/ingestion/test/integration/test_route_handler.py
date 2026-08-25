@@ -7,13 +7,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-import boto3  # noqa: E402
-from moto import mock_aws  # noqa: E402
-from PIL import Image  # noqa: E402
+import boto3
+from moto import mock_aws
+from PIL import Image
 
-import Manager.index_one_photo as index_one_photo  # noqa: E402
-import Manager.match_attendees as match_attendees  # noqa: E402
-from routeHandler import lambda_handler  # noqa: E402
+import Manager.index_one_photo as index_one_photo
+import Manager.match_attendees as match_attendees
+from routeHandler import lambda_handler
 
 
 class _FakeLambdaContext:
@@ -124,7 +124,7 @@ def test_extract_then_index_then_finalize_full_round_trip(monkeypatch):
 
     updated_event = events_table.get_item(Key={"eventID": "evt_1"})["Item"]
     assert updated_event["photoCount"] == 1
-    assert "lastUploadAt" in updated_event  # P-78: drives the events Lambda's auto-archive sweep
+    assert "lastUploadAt" in updated_event
 
     monkeypatch.setattr(
         index_one_photo,

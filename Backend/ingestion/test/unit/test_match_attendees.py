@@ -3,7 +3,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-import Manager.match_attendees as match_attendees  # noqa: E402
+import Manager.match_attendees as match_attendees
 
 
 def test_matches_and_stores_photo_ids(monkeypatch):

@@ -24,8 +24,6 @@ variable "photos_bucket_arn" {
   type        = string
 }
 
-# T-02: MaxConcurrency must equal the deploying account's actual Rekognition TPS quota,
-# not the published default — new/lightly-used accounts commonly start lower.
 variable "rekognition_index_max_concurrency" {
   description = "IndexPhotos Distributed Map's MaxConcurrency. This account's measured IndexFaces TPS quota is 5, not the published default of 50 (SETUP_STEPS.md #5)."
   type        = number

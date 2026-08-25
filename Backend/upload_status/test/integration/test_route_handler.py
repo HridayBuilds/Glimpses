@@ -5,10 +5,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-import boto3  # noqa: E402
-from moto import mock_aws  # noqa: E402
+import boto3
+from moto import mock_aws
 
-from routeHandler import lambda_handler  # noqa: E402
+from routeHandler import lambda_handler
 
 
 class _FakeLambdaContext:
@@ -18,9 +18,6 @@ class _FakeLambdaContext:
     aws_request_id = "test-request-id"
 
 
-# Mirrors the real AWS_PROXY envelope API Gateway sends — a Lambda proxy integration
-# does no request/response transformation itself, so the handler must be exercised
-# against this exact shape, not a hand-shortened dict.
 def _api_event(http_method, path, claims=None):
     return {
         "resource": path,
@@ -174,7 +171,6 @@ def test_latest_job_returns_most_recently_started_job_for_that_uploader():
             "failedCount": 0,
         }
     )
-    # A different uploader's job in the same event must never be picked up.
     jobs_table.put_item(
         Item={
             "jobId": "job_other_uploader",

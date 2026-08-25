@@ -6,9 +6,6 @@ JOBS_GSI = "eventUploaderKey-startedAt-index"
 PUT_EXPIRES_IN = 3600
 
 
-# Built lazily, not at import time — a module-level client/resource would bind to
-# whatever AWS mocking/config is (or isn't) active at first import, which can be before
-# a test's own mock context has started (the same db_api moto lesson).
 def _jobs_table():
     return boto3.resource("dynamodb").Table(os.environ["JOBS_TABLE_NAME"])
 

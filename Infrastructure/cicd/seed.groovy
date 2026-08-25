@@ -1,20 +1,3 @@
-// Reads the list of cicd/Jenkinsfile paths (one per line, produced by a shell "find"
-// build step that must run before this one) and generates one pipeline job per match,
-// named after the folder that owns it (e.g. Backend/gallery/cicd/Jenkinsfile -> job
-// "gallery", Infrastructure/modules/dynamodb/cicd/Jenkinsfile -> job "dynamodb").
-// Rerun this job (Build Now) any time a module/Lambda folder is added, moved, or renamed.
-//
-// The scan itself is NOT done in this Groovy script — Job DSL scripts run inside
-// Jenkins' sandboxed interpreter, where a recursive file-walk closure is extremely
-// slow (continuation-passing overhead per file). Real `find` in a preceding shell
-// build step does the same scan in milliseconds.
-//
-// The SCM/definition block is injected as raw XML via configure(), not Job DSL's
-// typed cpsScmFlowDefinition/scm/git DSL — that typed DSL's "git" method isn't
-// resolvable on this Jenkins/job-dsl-plugin/git-plugin combination (fails with
-// "DescribableListContext.git() is applicable" regardless of closure shape tried).
-// This XML shape is copied from an existing, already-working job's config.xml on
-// this same instance, so it's guaranteed compatible.
 
 def repoUrl = 'https://github.com/HridayBuilds/Glimpses.git'
 def credentialsId = 'github-glimpses-pat'

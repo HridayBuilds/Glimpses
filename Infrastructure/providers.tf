@@ -8,9 +8,6 @@ terraform {
     }
   }
 
-  # T-06: S3 backend, native locking (no DynamoDB lock table).
-  # Backend config cannot reference variables, so bucket/region are literals here
-  # even though provider region below is parameterised.
   backend "s3" {
     bucket       = "glimpses-terraform-state"
     key          = "glimpses/terraform.tfstate"

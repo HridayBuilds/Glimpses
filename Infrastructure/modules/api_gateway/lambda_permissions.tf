@@ -1,6 +1,3 @@
-# One permission per Lambda (not per route) — invocation rights don't need to be
-# narrower than "this REST API can call this function", since which exact route fired
-# is already decided by the resource/method tree above, not by this grant.
 
 resource "aws_lambda_permission" "profile" {
   statement_id  = "AllowAPIGatewayInvoke"

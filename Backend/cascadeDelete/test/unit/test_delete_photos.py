@@ -3,7 +3,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-import Manager.delete_photos as delete_photos  # noqa: E402
+import Manager.delete_photos as delete_photos
 
 
 def _photo(**overrides):
@@ -64,8 +64,6 @@ def test_delete_photos_cascade_deletes_faces_row_s3_and_decrements_counters(monk
     assert decrement_calls == [("evt_1", -1, -1234)]
 
 
-# P-32: an already-archived event's collection is gone — the photo/Faces-row/S3 cascade
-# still runs, just without a Rekognition DeleteFaces call.
 def test_delete_photos_cascade_skips_rekognition_when_event_missing(monkeypatch):
     monkeypatch.setattr(delete_photos, "get_event", lambda event_id: None)
     monkeypatch.setattr(delete_photos, "get_photo", lambda photo_id: _photo())

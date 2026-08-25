@@ -2,8 +2,6 @@ import uuid
 
 from DAO.dao import generate_presigned_put_url, get_job, query_latest_job
 
-# uploads/event/{eventID}/user/{userId}/job/{jobId}/original.zip (T-09) — the jobId
-# minted here is what InitializeJob later parses back out of this same key.
 UPLOAD_KEY_TEMPLATE = "uploads/event/{eventID}/user/{userID}/job/{jobId}/original.zip"
 
 
@@ -28,8 +26,6 @@ def get_latest_job(payload):
 
 
 def _job_response(job):
-    # DynamoDB returns numbers as Decimal, which the JSON encoder can't serialize —
-    # cast back to int for the response body.
     return {
         "jobId": job["jobId"],
         "status": job["status"],

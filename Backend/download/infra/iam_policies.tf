@@ -1,4 +1,3 @@
-# Permissions derived from this Lambda's actual AWS calls only (T-07).
 
 data "aws_iam_policy_document" "downloads_access" {
   statement {
@@ -14,7 +13,6 @@ resource "aws_iam_role_policy" "downloads_access" {
   policy = data.aws_iam_policy_document.downloads_access.json
 }
 
-# Read-only: this Lambda only ever looks up a photo's s3Key, never writes Photos.
 data "aws_iam_policy_document" "photos_access" {
   statement {
     effect    = "Allow"
@@ -29,8 +27,6 @@ resource "aws_iam_role_policy" "photos_access" {
   policy = data.aws_iam_policy_document.photos_access.json
 }
 
-# One bucket, prefix-scoped (T-09): read source photos under photos/, read+write the
-# built zip under downloads/ — uploads/, thumbnails/, selfies/, qrcodes/ are never granted.
 data "aws_iam_policy_document" "photos_bucket_access" {
   statement {
     effect    = "Allow"
@@ -51,8 +47,6 @@ resource "aws_iam_role_policy" "photos_bucket_access" {
   policy = data.aws_iam_policy_document.photos_bucket_access.json
 }
 
-# The build step is a self-invocation (T-03/T-04/T-06 follow-up): kickoff fires an async
-# InvocationType=Event call to this same function.
 data "aws_iam_policy_document" "self_invoke" {
   statement {
     effect    = "Allow"

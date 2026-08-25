@@ -7,7 +7,6 @@ from DAO.dao import (
     update_attendee_status,
 )
 
-# P-10/P-26: OPEN admits straight to ATTENDEE, APPROVAL_REQUIRED parks at PENDING.
 OPEN_JOIN_POLICY = "OPEN"
 
 STATUS_PENDING = "PENDING"
@@ -32,7 +31,6 @@ def _require_organizer(event_id, organizer_id):
     return event
 
 
-# P-26/P-10: OPEN admits straight in, APPROVAL_REQUIRED parks in the lobby.
 def join_event(payload):
     event = _get_event_or_raise(payload["eventID"])
     if event["status"] != ACTIVE_EVENT_STATUS:
@@ -42,19 +40,15 @@ def join_event(payload):
 
     existing = get_attendee(payload["userID"], payload["eventID"])
     if existing is not None:
-        # P-29: eject/deny both land on BLOCKED, and that blocks rejoining with the code.
         if existing["status"] == STATUS_BLOCKED:
             raise ValueError("Blocked from this event")
         update_attendee_status(payload["userID"], payload["eventID"], target_status)
     else:
-        # matchedPhotoIDs is deliberately omitted here — ingestion's ADD to it auto-creates
-        # the String Set on first match, and DynamoDB rejects an empty set on PutItem.
         put_attendee({"userID": payload["userID"], "eventID": payload["eventID"], "status": target_status})
 
     return {"eventID": payload["eventID"], "status": target_status}
 
 
-# P-46: self-service, ATTENDEE -> LEFT. Contributed photos and matchedPhotoIDs stay put.
 def leave_event(payload):
     existing = get_attendee(payload["userID"], payload["eventID"])
     if existing is None or existing["status"] != STATUS_ATTENDEE:
@@ -63,8 +57,6 @@ def leave_event(payload):
     return {"eventID": payload["eventID"], "status": STATUS_LEFT}
 
 
-# P-82/P-83: organizer-only lobby (status=PENDING) / roster (status=ATTENDEE) screens,
-# shown with display name and email — read live from Users, never snapshotted (P-84).
 def list_attendees(payload):
     _require_organizer(payload["eventID"], payload["organizerID"])
 
@@ -84,7 +76,6 @@ def list_attendees(payload):
     }
 
 
-# P-10: PENDING -> ATTENDEE.
 def admit_attendee(payload):
     _require_organizer(payload["eventID"], payload["organizerID"])
     attendee = get_attendee(payload["userID"], payload["eventID"])
@@ -94,7 +85,6 @@ def admit_attendee(payload):
     return {"userID": payload["userID"], "status": STATUS_ATTENDEE}
 
 
-# P-29: PENDING -> BLOCKED, same blocklist eject uses.
 def deny_attendee(payload):
     _require_organizer(payload["eventID"], payload["organizerID"])
     attendee = get_attendee(payload["userID"], payload["eventID"])
@@ -104,7 +94,6 @@ def deny_attendee(payload):
     return {"userID": payload["userID"], "status": STATUS_BLOCKED}
 
 
-# P-29: ATTENDEE -> BLOCKED, one blocklist serves eject and deny alike.
 def eject_attendee(payload):
     _require_organizer(payload["eventID"], payload["organizerID"])
     attendee = get_attendee(payload["userID"], payload["eventID"])

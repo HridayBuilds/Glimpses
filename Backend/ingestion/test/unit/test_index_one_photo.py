@@ -3,7 +3,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-import Manager.index_one_photo as index_one_photo  # noqa: E402
+import Manager.index_one_photo as index_one_photo
 
 
 def test_indexes_faces_and_stores_each_one(monkeypatch):

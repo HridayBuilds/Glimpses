@@ -18,7 +18,6 @@ resource "aws_dynamodb_table" "faces" {
     type = "S"
   }
 
-  # Serves CascadeDelete's single-photo lookup (Query eventID+photoID) and whole-event cleanup (Query eventID)
   global_secondary_index {
     name = "eventID-photoID-index"
     key_schema {

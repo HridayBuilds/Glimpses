@@ -3,10 +3,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-import boto3  # noqa: E402
-from moto import mock_aws  # noqa: E402
+import boto3
+from moto import mock_aws
 
-from routeHandler import lambda_handler  # noqa: E402
+from routeHandler import lambda_handler
 
 
 class _FakeLambdaContext:
@@ -64,4 +64,4 @@ def test_create_then_mark_success_round_trip():
     assert item["status"] == "SUCCESS"
     assert item["succeededCount"] == 594
     assert item["failedCount"] == 6
-    assert item["eventUploaderKey"] == "evt_1#user_1"  # untouched by a status-only update
+    assert item["eventUploaderKey"] == "evt_1#user_1"

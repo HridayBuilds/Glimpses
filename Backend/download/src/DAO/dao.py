@@ -4,12 +4,9 @@ import os
 import boto3
 
 PHOTOS_GSI = "eventID-uploadedAtFilename-index"
-BATCH_GET_LIMIT = 100  # BatchGetItem's own per-call key limit
+BATCH_GET_LIMIT = 100
 
 
-# Built lazily, not at import time — a module-level client/resource would bind to
-# whatever AWS mocking/config is (or isn't) active at first import, which can be before
-# a test's own mock context has started (the same db_api moto lesson).
 def _downloads_table():
     return boto3.resource("dynamodb").Table(os.environ["DOWNLOADS_TABLE_NAME"])
 
@@ -35,8 +32,6 @@ def get_download(download_id: str) -> dict | None:
     return response.get("Item")
 
 
-# "status" is a DynamoDB reserved word, so every attribute goes through
-# ExpressionAttributeNames unconditionally, same as db_api's update_job_status.
 def update_download_status(download_id: str, updates: dict) -> None:
     expression_parts = []
     expression_names = {}

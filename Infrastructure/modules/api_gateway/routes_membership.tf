@@ -1,4 +1,3 @@
-# Membership: POST .../join, POST .../leave, GET .../attendees, POST .../attendees/{userId}/admit|deny|eject
 
 resource "aws_api_gateway_resource" "event_join" {
   rest_api_id = aws_api_gateway_rest_api.this.id

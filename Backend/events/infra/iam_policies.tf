@@ -1,8 +1,4 @@
-# Permissions derived from this Lambda's actual AWS calls only (T-07).
 
-# GetItem/PutItem/UpdateItem for the CRUD endpoints, plus Query for all three GSIs
-# (organizerID-status-index for list, accessCode-index for uniqueness checks,
-# status-lastUploadAt-index for the archive sweep).
 data "aws_iam_policy_document" "events_access" {
   statement {
     effect    = "Allow"
@@ -17,8 +13,6 @@ resource "aws_iam_role_policy" "events_access" {
   policy = data.aws_iam_policy_document.events_access.json
 }
 
-# One bucket, prefix-scoped (T-09): qrcodes/ only — every other prefix is untouched by
-# this Lambda.
 data "aws_iam_policy_document" "photos_bucket_access" {
   statement {
     effect    = "Allow"
@@ -33,8 +27,6 @@ resource "aws_iam_role_policy" "photos_bucket_access" {
   policy = data.aws_iam_policy_document.photos_bucket_access.json
 }
 
-# CreateCollection/DeleteCollection: no resource-level IAM scoping for Rekognition
-# collection management (T-05).
 data "aws_iam_policy_document" "rekognition_access" {
   statement {
     effect    = "Allow"
@@ -49,8 +41,6 @@ resource "aws_iam_role_policy" "rekognition_access" {
   policy = data.aws_iam_policy_document.rekognition_access.json
 }
 
-# delete_event hands off the actual cascade to CascadeDelete (P-34) — this Lambda only
-# ever fires the async InvocationType=Event call, never touches Photos/Faces/EventAttendees.
 data "aws_iam_policy_document" "invoke_cascade_delete" {
   statement {
     effect    = "Allow"

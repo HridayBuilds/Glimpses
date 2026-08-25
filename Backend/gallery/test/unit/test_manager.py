@@ -6,7 +6,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-import Manager.manager as manager  # noqa: E402
+import Manager.manager as manager
 
 
 def _photo(**overrides):
@@ -139,7 +139,7 @@ def test_delete_photo_authorizes_uploader(monkeypatch):
     result = manager.delete_photo({"eventID": "evt_1", "photoID": "p1", "callerID": "user_1"})
 
     assert result == {"deleted": True}
-    assert events_calls == ["evt_1"]  # always looked up now, to enforce P-32's archived-event lock
+    assert events_calls == ["evt_1"]
     assert invoked == {"eventID": "evt_1", "photoIDs": ["p1"]}
 
 
@@ -166,7 +166,6 @@ def test_delete_photo_rejects_unauthorized_caller(monkeypatch):
         pass
 
 
-# P-32: an ARCHIVED event denies every write, including the organizer's own delete.
 def test_delete_photo_rejects_when_event_archived(monkeypatch):
     monkeypatch.setattr(manager, "get_photo_by_id", lambda photo_id: _photo(uploaderID="user_1"))
     monkeypatch.setattr(manager, "get_event", lambda event_id: {"organizerID": "user_1", "status": "ARCHIVED"})
@@ -199,7 +198,7 @@ def test_bulk_delete_photos_drops_unauthorized_and_reuses_single_events_lookup(m
 
     assert result == {"deletedPhotoIDs": ["p1", "p2", "p3"]}
     assert invoked == {"photoIDs": ["p1", "p2", "p3"]}
-    assert events_calls == ["evt_1"]  # single lookup, reused across p2 and p3's organizer checks
+    assert events_calls == ["evt_1"]
 
 
 def test_bulk_delete_photos_skips_invoke_when_nothing_authorized(monkeypatch):

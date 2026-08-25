@@ -3,7 +3,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-from Converter.format_sniffer import sniff_format  # noqa: E402
+from Converter.format_sniffer import sniff_format
 
 
 def test_sniffs_jpeg():

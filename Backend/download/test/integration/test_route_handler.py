@@ -7,11 +7,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-import boto3  # noqa: E402
-from moto import mock_aws  # noqa: E402
+import boto3
+from moto import mock_aws
 
-import Manager.manager as manager  # noqa: E402
-from routeHandler import lambda_handler  # noqa: E402
+import Manager.manager as manager
+from routeHandler import lambda_handler
 
 
 class _FakeLambdaContext:
@@ -21,9 +21,6 @@ class _FakeLambdaContext:
     aws_request_id = "test-request-id"
 
 
-# Mirrors the real AWS_PROXY envelope API Gateway sends — a Lambda proxy integration
-# does no request/response transformation itself, so the handler must be exercised
-# against this exact shape, not a hand-shortened dict.
 def _api_event(http_method, path, body=None, claims=None):
     return {
         "resource": path,
@@ -106,9 +103,6 @@ def test_kickoff_then_build_then_status_full_round_trip(monkeypatch):
             }
         )
 
-    # The real self-invoke (a fire-and-forget Lambda call) isn't exercised here — instead,
-    # the "build" payload it would send is captured, then fed straight back into
-    # lambda_handler, exactly as the real async invocation would run it.
     captured_build_payload = {}
     monkeypatch.setattr(
         manager,

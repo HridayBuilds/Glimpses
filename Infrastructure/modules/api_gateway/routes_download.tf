@@ -1,6 +1,3 @@
-# download: POST .../photos/download (zip kickoff), GET .../downloads/{downloadId}/status
-# (poll). photos/download hangs off the same event_photos resource routes_gallery.tf
-# declares, since a literal sub-path can only be owned by one Lambda at a time.
 
 resource "aws_api_gateway_resource" "event_photos_download" {
   rest_api_id = aws_api_gateway_rest_api.this.id

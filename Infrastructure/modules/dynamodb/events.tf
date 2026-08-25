@@ -31,7 +31,6 @@ resource "aws_dynamodb_table" "events" {
     type = "S"
   }
 
-  # Organizer dashboard: "show this organizer their events"
   global_secondary_index {
     name = "organizerID-status-index"
     key_schema {
@@ -45,7 +44,6 @@ resource "aws_dynamodb_table" "events" {
     projection_type = "ALL"
   }
 
-  # Join flow: "which event does this access code belong to"
   global_secondary_index {
     name = "accessCode-index"
     key_schema {
@@ -55,7 +53,6 @@ resource "aws_dynamodb_table" "events" {
     projection_type = "ALL"
   }
 
-  # P-77/P-78 archive sweep: "which ACTIVE events are >30 days past their last upload"
   global_secondary_index {
     name = "status-lastUploadAt-index"
     key_schema {
@@ -69,7 +66,6 @@ resource "aws_dynamodb_table" "events" {
     projection_type = "ALL"
   }
 
-  # P-77: archive-to-delete TTL, attribute written at archive time (archivedAt + 30d)
   ttl {
     attribute_name = "deleteAt"
     enabled        = true

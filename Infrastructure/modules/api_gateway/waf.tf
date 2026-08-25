@@ -1,6 +1,3 @@
-# T-03 (2026-08-24 ruling): WAF on, minimal shape — one Web ACL, one rate-based rule,
-# no managed rule groups, ~$6/month against the $200 credit — against Rohan's threat
-# model (P-07), the reason REST API was chosen over HTTP API in the first place.
 resource "aws_wafv2_web_acl" "this" {
   name  = "${var.name_prefix}-api-waf"
   scope = "REGIONAL"
@@ -19,7 +16,7 @@ resource "aws_wafv2_web_acl" "this" {
 
     statement {
       rate_based_statement {
-        limit              = 2000 # requests per 5-minute window per IP; adjustable
+        limit              = 2000
         aggregate_key_type = "IP"
       }
     }

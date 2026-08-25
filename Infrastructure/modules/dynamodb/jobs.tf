@@ -18,7 +18,6 @@ resource "aws_dynamodb_table" "jobs" {
     type = "S"
   }
 
-  # "This uploader's own most recent job in this event" (P-100), no cross-uploader mixing
   global_secondary_index {
     name = "eventUploaderKey-startedAt-index"
     key_schema {

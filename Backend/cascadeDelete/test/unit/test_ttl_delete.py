@@ -3,7 +3,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-import Manager.ttl_delete as ttl_delete  # noqa: E402
+import Manager.ttl_delete as ttl_delete
 
 
 def test_handle_stream_records_cascades_each_record_by_old_image_event_id(monkeypatch):

@@ -3,7 +3,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-import Manager.match_one_attendee as match_one_attendee  # noqa: E402
+import Manager.match_one_attendee as match_one_attendee
 
 
 def test_resolves_each_stream_record(monkeypatch):

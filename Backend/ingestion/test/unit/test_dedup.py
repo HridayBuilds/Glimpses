@@ -4,7 +4,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-from Converter.dedup import compute_content_hash  # noqa: E402
+from Converter.dedup import compute_content_hash
 
 
 def test_computes_sha256_hash():

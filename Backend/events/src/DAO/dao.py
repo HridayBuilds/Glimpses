@@ -6,9 +6,6 @@ import boto3
 ACTIVE_STATUS = "ACTIVE"
 
 
-# Built lazily, not at import time — a module-level client/resource would bind to
-# whatever AWS mocking/config is (or isn't) active at first import, which can be before
-# a test's own mock context has started.
 def _dynamodb():
     return boto3.resource("dynamodb")
 
@@ -68,7 +65,6 @@ def access_code_exists(access_code):
     return response["Count"] > 0
 
 
-# P-77/P-78 archive sweep: every still-ACTIVE event whose lastUploadAt is 30+ days old.
 def list_stale_active_events(cutoff_iso):
     response = _events_table().query(
         IndexName="status-lastUploadAt-index",
@@ -79,8 +75,6 @@ def list_stale_active_events(cutoff_iso):
     return response["Items"]
 
 
-# T-05: one Rekognition collection per event, created/deleted by application code —
-# Terraform has no visibility into a per-event runtime resource.
 def create_collection(collection_id):
     _rekognition().create_collection(CollectionId=collection_id)
 
@@ -98,8 +92,6 @@ def put_object(bucket, key, body, content_type=None, content_disposition=None):
     _s3().put_object(**kwargs)
 
 
-# CascadeDelete (P-34) isn't built yet — CASCADE_DELETE_FUNCTION_NAME is unset until its
-# Terraform module lands, per the build order set 2026-08-23. No-op until then.
 def invoke_cascade_delete(event_id):
     function_name = os.environ.get("CASCADE_DELETE_FUNCTION_NAME")
     if not function_name:

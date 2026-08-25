@@ -3,7 +3,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-from Manager.finalize import handle_finalize  # noqa: E402
+from Manager.finalize import handle_finalize
 
 
 def test_all_succeeded():

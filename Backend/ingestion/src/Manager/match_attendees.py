@@ -2,7 +2,7 @@ import os
 
 from DAO.dao import add_matched_photo_ids, get_event, get_faces, search_faces_by_image, selfie_exists
 
-SIMILARITY_THRESHOLD = 80  # P-80: fixed, not configurable
+SIMILARITY_THRESHOLD = 80
 
 
 def handle_match_attendees(payload):
@@ -14,7 +14,7 @@ def resolve_and_store_matches(event_id, user_id):
     selfie_key = f"selfies/user/{user_id}/selfie.jpg"
 
     if not selfie_exists(bucket, selfie_key):
-        return {"eventID": event_id, "userID": user_id, "matchedCount": 0}  # P-64: no selfie set — untouched
+        return {"eventID": event_id, "userID": user_id, "matchedCount": 0}
 
     event = get_event(event_id)
     collection_id = event["rekognitionCollectionID"]

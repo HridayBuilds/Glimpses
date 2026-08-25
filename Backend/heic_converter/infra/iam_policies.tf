@@ -1,5 +1,3 @@
-# Permissions derived from this Lambda's actual AWS calls only (T-07): it reads the
-# source HEIC and writes the converted JPEG, nothing else.
 data "aws_iam_policy_document" "s3_access" {
   statement {
     effect    = "Allow"

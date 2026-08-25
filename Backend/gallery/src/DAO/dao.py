@@ -4,18 +4,13 @@ import os
 import boto3
 
 PHOTOS_GSI = "eventID-uploadedAtFilename-index"
-BATCH_GET_LIMIT = 100  # BatchGetItem's own per-call key limit
+BATCH_GET_LIMIT = 100
 
 
-# Built lazily, not at import time — a module-level client/resource would bind to
-# whatever AWS mocking/config is (or isn't) active at first import, which can be before
-# a test's own mock context has started (the same db_api moto lesson).
 def _photos_table():
     return boto3.resource("dynamodb").Table(os.environ["PHOTOS_TABLE_NAME"])
 
 
-# Read-only — gallery never writes Photos. CascadeDelete owns the actual row deletion
-# (T-07 discipline: permissions derived from actual AWS calls only).
 def _events_table():
     return boto3.resource("dynamodb").Table(os.environ["EVENTS_TABLE_NAME"])
 
@@ -42,7 +37,7 @@ def query_photos_page(event_id, exclusive_start_key, limit):
         "IndexName": PHOTOS_GSI,
         "KeyConditionExpression": "eventID = :eventID",
         "ExpressionAttributeValues": {":eventID": event_id},
-        "ScanIndexForward": False,  # P-57: newest-first
+        "ScanIndexForward": False,
         "Limit": limit,
     }
     if exclusive_start_key is not None:
@@ -70,7 +65,6 @@ def get_event(event_id):
     return response.get("Item")
 
 
-# Own row only, never Query/Scan across other attendees (P-16/P-17 mine=true resolution).
 def get_attendee(user_id, event_id):
     response = _event_attendees_table().get_item(Key={"userID": user_id, "eventID": event_id})
     return response.get("Item")
@@ -80,8 +74,6 @@ def generate_presigned_url(bucket, key, expires_in=3600):
     return _s3().generate_presigned_url("get_object", Params={"Bucket": bucket, "Key": key}, ExpiresIn=expires_in)
 
 
-# CascadeDelete isn't built yet — CASCADE_DELETE_FUNCTION_NAME is unset until its
-# Terraform module lands, same no-op-until-built pattern events' delete_event already uses.
 def invoke_cascade_delete(event_id, photo_ids):
     function_name = os.environ.get("CASCADE_DELETE_FUNCTION_NAME")
     if not function_name:

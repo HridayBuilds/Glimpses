@@ -5,11 +5,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-import boto3  # noqa: E402
-from moto import mock_aws  # noqa: E402
+import boto3
+from moto import mock_aws
 
-import Manager.manager as manager  # noqa: E402
-from routeHandler import lambda_handler  # noqa: E402
+import Manager.manager as manager
+from routeHandler import lambda_handler
 
 
 class _FakeLambdaContext:
@@ -19,9 +19,6 @@ class _FakeLambdaContext:
     aws_request_id = "test-request-id"
 
 
-# Mirrors the real AWS_PROXY envelope API Gateway sends — a Lambda proxy integration
-# does no request/response transformation itself, so the handler must be exercised
-# against this exact shape, not a hand-shortened dict.
 def _api_event(http_method, path, body=None, claims=None):
     return {
         "resource": path,
@@ -123,12 +120,8 @@ def test_selfie_mint_confirm_then_get_returns_selfie_url(monkeypatch):
     assert mint_response["statusCode"] == 200
     assert "uploadUrl" in json.loads(mint_response["body"])
 
-    # The real browser PUT against the pre-signed URL isn't exercised here — the object
-    # is written directly, exactly what that PUT would leave behind.
     s3.put_object(Bucket=bucket, Key="selfies/user/user_1/selfie.jpg", Body=b"selfie-bytes")
 
-    # moto has no Rekognition detect_faces support (NotImplementedError) — monkeypatched
-    # the same way download's test captures invoke_self_async instead of exercising it.
     monkeypatch.setattr(manager, "detect_face_count", lambda bucket, key: 1)
 
     confirm_response = lambda_handler(

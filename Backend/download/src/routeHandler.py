@@ -7,6 +7,6 @@ logger = Logger()
 
 @logger.inject_lambda_context(log_event=True)
 def lambda_handler(event, context):
-    if "action" in event:  # self-invoked "build" call — bypasses API Gateway entirely
+    if "action" in event:
         return handle_internal_action(event)
     return app.resolve(event, context)

@@ -62,9 +62,6 @@ def get_qrcode_url(event_id: str):
     return manager.get_qrcode_url({"eventID": event_id, "organizerID": _organizer_id()})
 
 
-# "run_archive_sweep" is never reached through app.resolve() — it's the EventBridge
-# Scheduler's once-a-day self-invoke (lambda:InvokeFunction), which never passes
-# through API Gateway at all.
 def handle_internal_action(event):
     if event["action"] == "run_archive_sweep":
         return manager.run_archive_sweep()

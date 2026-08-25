@@ -7,7 +7,7 @@ from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-from Converter.converter import heic_to_jpeg  # noqa: E402
+from Converter.converter import heic_to_jpeg
 
 
 def test_heic_to_jpeg_converts_valid_heic():

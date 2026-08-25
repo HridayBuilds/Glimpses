@@ -1,4 +1,3 @@
-# Profile: GET/PUT /profile, PUT/DELETE /profile/selfie, POST /profile/selfie/confirm
 
 resource "aws_api_gateway_resource" "profile" {
   rest_api_id = aws_api_gateway_rest_api.this.id

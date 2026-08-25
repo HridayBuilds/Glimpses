@@ -12,14 +12,6 @@ from DAO.dao import (
 )
 
 
-# P-44/P-52: single/bulk-photo cascade. gallery already authorized the caller and picked
-# the photoIDs — this only ever runs the cascade itself. EventAttendees is untouched:
-# CascadeDelete does not scrub matchedPhotoIDs on photo delete (already-locked ruling —
-# a stale id is filtered out for free at read time, since BatchGetItem against Photos
-# simply returns nothing for a missing id).
-#
-# A missing Photos row is a successful no-op, not an error — same double-delete race
-# delete_event_cascade tolerates.
 def delete_photos_cascade(event_id, photo_ids):
     event = get_event(event_id)
     collection_id = event["rekognitionCollectionID"] if event else None

@@ -1,6 +1,3 @@
-# Request Models — one JSON Schema per route that actually carries a body, derived from
-# what each Handler reads off body.get(...). Routes with no body (path-params-only, e.g.
-# every membership action) get no model, and validation is a no-op for them by design.
 
 resource "aws_api_gateway_request_validator" "body" {
   name                        = "${var.name_prefix}-validate-body"

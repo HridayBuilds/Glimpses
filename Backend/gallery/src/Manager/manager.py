@@ -12,7 +12,6 @@ from DAO.dao import (
     query_photos_page,
 )
 
-# Implementation default — P-57 rules cursor pagination itself, not a page size.
 PAGE_SIZE = 50
 
 
@@ -26,8 +25,6 @@ def _public_photo(photo):
         "filename": photo["filename"],
         "uploadedAt": photo["uploadedAt"],
         "sizeBytes": int(photo.get("sizeBytes", 0)),
-        # T-09: CloudFront+OAC already serves photos/ and thumbnails/ publicly — plain
-        # URLs, not pre-signed (only download-urls mints those).
         "photoUrl": f"https://{cloudfront_domain}/{photo['s3Key']}",
         "thumbnailUrl": f"https://{cloudfront_domain}/{photo['thumbnailKey']}",
     }
@@ -40,7 +37,6 @@ def _get_owned_photo(event_id, photo_id):
     return photo
 
 
-# T-04's own LastEvaluatedKey is the cursor — opaque to the caller, base64-json-encoded.
 def _encode_cursor(exclusive_start_key):
     return base64.b64encode(json.dumps(exclusive_start_key).encode()).decode()
 
@@ -58,10 +54,6 @@ def _list_event_photos(event_id, cursor):
     }
 
 
-# P-16/P-17: mine=true is a face-match filter (an attendee who appears in others' photos
-# but uploaded none themselves), not an upload-history filter — resolved off the caller's
-# own EventAttendees.matchedPhotoIDs, not a Photos query. Bounded by one attendee's match
-# set, so no GSI query and no cursor.
 def _list_mine_photos(event_id, caller_id):
     attendee = get_attendee(caller_id, event_id)
     matched_ids = list(attendee["matchedPhotoIDs"]) if attendee and attendee.get("matchedPhotoIDs") else []
@@ -93,9 +85,6 @@ def get_download_urls(payload):
     }
 
 
-# P-32: an ARCHIVED event denies every write, for every role, including the organizer —
-# evaluated before any role check, so this is looked up unconditionally on every delete,
-# not just the organizer-fallback path.
 def _get_active_event(event_id):
     event = get_event(event_id)
     if event is None:
@@ -105,7 +94,6 @@ def _get_active_event(event_id):
     return event
 
 
-# P-44: uploader match, or organizer match (Events.organizerID).
 def _is_authorized_to_delete(photo, caller_id, event):
     return photo["uploaderID"] == caller_id or event["organizerID"] == caller_id
 
@@ -119,9 +107,6 @@ def delete_photo(payload):
     return {"deleted": True}
 
 
-# P-52: per-photo authorization inside one multi-select — unauthorized/unknown photo IDs
-# are silently dropped from the batch rather than failing the whole request. eventID is
-# fixed for the whole request, so the active-event check and Events lookup happen once.
 def bulk_delete_photos(payload):
     event = _get_active_event(payload["eventID"])
     photos = batch_get_photos(payload["photoIDs"])

@@ -6,10 +6,6 @@ pipeline {
     }
 
     stages {
-        // Pillow/pillow-heif ship native compiled extensions, so dependencies must be
-        // built for Lambda's Linux runtime regardless of the machine Jenkins runs on —
-        // --platform/--only-binary below force that, rather than whatever wheel the
-        // local OS/architecture would otherwise resolve to.
         stage('Build') {
             steps {
                 dir('Backend/heic_converter') {

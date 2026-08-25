@@ -4,12 +4,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-import boto3  # noqa: E402
-from moto import mock_aws  # noqa: E402
+import boto3
+from moto import mock_aws
 
-import Manager.delete_event as delete_event  # noqa: E402
-import Manager.delete_photos as delete_photos  # noqa: E402
-from routeHandler import lambda_handler  # noqa: E402
+import Manager.delete_event as delete_event
+import Manager.delete_photos as delete_photos
+from routeHandler import lambda_handler
 
 
 class _FakeLambdaContext:

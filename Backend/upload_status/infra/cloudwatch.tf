@@ -1,10 +1,8 @@
 resource "aws_cloudwatch_log_group" "this" {
   name              = "/aws/lambda/${aws_lambda_function.this.function_name}"
-  retention_in_days = 3 # T-07: log_event=True captures request data, so retention kept short
+  retention_in_days = 3
 }
 
-# T-07: identical alarm shape on every Lambda — Errors > 0 over 5 minutes, to the
-# separately-remembered operator-alerts SNS topic.
 resource "aws_cloudwatch_metric_alarm" "errors" {
   alarm_name          = "${var.name_prefix}-upload-status-errors"
   comparison_operator = "GreaterThanThreshold"

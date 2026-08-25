@@ -6,7 +6,7 @@ from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-from Converter.thumbnail import make_thumbnail, normalize_to_jpeg  # noqa: E402
+from Converter.thumbnail import make_thumbnail, normalize_to_jpeg
 
 
 def _make_jpeg_bytes(size=(800, 600)):

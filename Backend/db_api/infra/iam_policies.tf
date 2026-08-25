@@ -1,5 +1,3 @@
-# Permissions derived from this Lambda's actual AWS calls only (T-07): it only ever
-# writes Jobs rows (PutItem on create, UpdateItem on status updates) — it never reads.
 data "aws_iam_policy_document" "jobs_access" {
   statement {
     effect    = "Allow"

@@ -1,9 +1,3 @@
-# T-01/T-03 auth config, ruled 2026-08-23: email+password login (P-02), no social
-# providers (P-03, so no aws_cognito_identity_provider is configured), numeric-code
-# email verification and password reset (P-91), display name captured at signup (P-84),
-# MFA off and long (30-day) refresh token expiry — both set explicitly below, even though
-# they match Cognito's own defaults, so the ruling stays visible in code rather than
-# resting on an unstated default (the same drift this rebuild exists to avoid).
 resource "aws_cognito_user_pool" "this" {
   name = "${var.name_prefix}-users"
 

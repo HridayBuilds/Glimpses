@@ -1,9 +1,3 @@
-# Events: POST/GET /events, GET/PUT/DELETE /events/{eventId}, POST .../archive,
-# GET .../stats, GET .../qrcode.
-#
-# The /events/{eventId} resource declared here is the shared parent every other
-# route file (membership/upload_status/gallery/download) hangs its own children off —
-# events owns the base path, the other Lambdas own sub-trees under it.
 
 resource "aws_api_gateway_resource" "events" {
   rest_api_id = aws_api_gateway_rest_api.this.id

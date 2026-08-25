@@ -3,7 +3,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-import Manager.delete_event as delete_event  # noqa: E402
+import Manager.delete_event as delete_event
 
 
 def _event(**overrides):

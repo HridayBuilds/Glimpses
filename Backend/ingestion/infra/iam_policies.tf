@@ -1,6 +1,4 @@
-# Permissions derived from this Lambda's actual AWS calls only (T-07).
 
-# Extract writes new rows + queries the dedup GSI; nothing else in this Lambda touches Photos.
 data "aws_iam_policy_document" "photos_access" {
   statement {
     effect    = "Allow"
@@ -15,7 +13,6 @@ resource "aws_iam_role_policy" "photos_access" {
   policy = data.aws_iam_policy_document.photos_access.json
 }
 
-# IndexOnePhoto/MatchAttendees read the event's Rekognition collection ID; Extract increments counters.
 data "aws_iam_policy_document" "events_access" {
   statement {
     effect    = "Allow"
@@ -30,9 +27,6 @@ resource "aws_iam_role_policy" "events_access" {
   policy = data.aws_iam_policy_document.events_access.json
 }
 
-# IndexOnePhoto writes one row per indexed face; MatchAttendees/MatchOneAttendee resolve
-# SearchFaces hits back to photoIDs via GetItem/BatchGetItem on the PK (rekognitionFaceID) —
-# no GSI needed for that direction (T-04 follow-up).
 data "aws_iam_policy_document" "faces_access" {
   statement {
     effect    = "Allow"
@@ -47,9 +41,6 @@ resource "aws_iam_role_policy" "faces_access" {
   policy = data.aws_iam_policy_document.faces_access.json
 }
 
-# MatchAttendees/MatchOneAttendee write the matchedPhotoIDs String Set; ListAttendees
-# reads eventID-status-index (below) — MatchOneAttendee's own trigger still delivers its
-# changed keys via the DynamoDB Stream record, not a read here.
 data "aws_iam_policy_document" "event_attendees_access" {
   statement {
     effect    = "Allow"
@@ -57,8 +48,6 @@ data "aws_iam_policy_document" "event_attendees_access" {
     resources = [var.event_attendees_table_arn]
   }
 
-  # ListAttendees queries eventID-status-index for the "who's currently admitted" list
-  # MatchAttendees' Distributed Map fans out over.
   statement {
     effect    = "Allow"
     actions   = ["dynamodb:Query"]
@@ -78,8 +67,6 @@ resource "aws_iam_role_policy" "event_attendees_access" {
   policy = data.aws_iam_policy_document.event_attendees_access.json
 }
 
-# Read-only: Extract snapshots the uploader's displayName/email onto each Photos row at
-# write time (P-99); this Lambda never writes Users.
 data "aws_iam_policy_document" "users_access" {
   statement {
     effect    = "Allow"
@@ -94,10 +81,6 @@ resource "aws_iam_role_policy" "users_access" {
   policy = data.aws_iam_policy_document.users_access.json
 }
 
-# One bucket, prefix-scoped (T-09): read the uploaded zip, read+write the converted
-# photo/thumbnail, and read photos/selfies so Rekognition (via this role's credentials)
-# can fetch the images it's asked to index/search — downloads/ and qrcodes/ are never
-# granted here.
 data "aws_iam_policy_document" "photos_bucket_access" {
   statement {
     effect    = "Allow"
@@ -118,12 +101,11 @@ resource "aws_iam_role_policy" "photos_bucket_access" {
   policy = data.aws_iam_policy_document.photos_bucket_access.json
 }
 
-# IndexOnePhoto/MatchAttendees call Rekognition against the event's collection.
 data "aws_iam_policy_document" "rekognition_access" {
   statement {
     effect    = "Allow"
     actions   = ["rekognition:IndexFaces", "rekognition:SearchFacesByImage"]
-    resources = ["*"] # Rekognition collection operations do not support resource-level IAM scoping
+    resources = ["*"]
   }
 }
 
@@ -133,7 +115,6 @@ resource "aws_iam_role_policy" "rekognition_access" {
   policy = data.aws_iam_policy_document.rekognition_access.json
 }
 
-# Extract synchronously invokes heic_converter to convert HEIC uploads to JPEG (P-35).
 data "aws_iam_policy_document" "invoke_heic_converter" {
   statement {
     effect    = "Allow"

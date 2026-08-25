@@ -1,6 +1,3 @@
-# P-77/P-78 archive sweep: EventBridge Scheduler invokes this same Lambda once a day via
-# its internal "action" entry point (Handler.handle_internal_action), never through API
-# Gateway — mirrors the self-invoke shape download's build step already uses.
 
 data "aws_iam_policy_document" "scheduler_assume_role" {
   statement {

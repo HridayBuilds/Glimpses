@@ -1,6 +1,3 @@
-# Jenkins's push target for every Lambda's build.zip (T-06's deploy discipline) — Terraform
-# only ever creates this bucket, never writes to it; the code push itself is a Jenkins
-# `aws s3 cp`/`update-function-code` step, out of band.
 resource "aws_s3_bucket" "deploy_artifacts" {
   bucket = "${var.name_prefix}-deploy-artifacts"
 }

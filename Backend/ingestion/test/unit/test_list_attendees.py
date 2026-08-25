@@ -3,7 +3,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-import Manager.list_attendees as list_attendees  # noqa: E402
+import Manager.list_attendees as list_attendees
 
 
 def test_list_attendees_returns_admitted_userids(monkeypatch):

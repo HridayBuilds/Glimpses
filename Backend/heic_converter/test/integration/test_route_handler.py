@@ -9,7 +9,7 @@ from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-from routeHandler import lambda_handler  # noqa: E402
+from routeHandler import lambda_handler
 
 
 class _FakeLambdaContext:

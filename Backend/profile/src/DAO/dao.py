@@ -3,16 +3,11 @@ import os
 import boto3
 from botocore.exceptions import ClientError
 
-# T-09: paired with the object's Cache-Control metadata (set below via the presigned PUT's
-# signed params) so the browser's cache doesn't go stale before the signature would.
 SELFIE_CACHE_CONTROL = "private, max-age=86400"
 GET_EXPIRES_IN = 86400
 PUT_EXPIRES_IN = 3600
 
 
-# Built lazily, not at import time — a module-level client/resource would bind to
-# whatever AWS mocking/config is (or isn't) active at first import, which can be before
-# a test's own mock context has started.
 def _dynamodb():
     return boto3.resource("dynamodb")
 
@@ -34,9 +29,6 @@ def get_user(user_id):
     return response.get("Item")
 
 
-# Cognito confirms sign-up on its own; nothing else writes this row, so the first
-# GET /profile after signup creates it lazily from the token's own claims. Conditional
-# on userID not already existing, so two racing first-calls don't clobber each other.
 def create_user(user_id, email, display_name):
     try:
         _users_table().put_item(
@@ -80,8 +72,6 @@ def selfie_exists(bucket, key):
         _s3().head_object(Bucket=bucket, Key=key)
         return True
     except ClientError as error:
-        # This role has no s3:ListBucket (T-07, least-privilege) — without it, S3 masks
-        # a missing key as 403 instead of 404 on HeadObject, so both mean "not found" here.
         if error.response["Error"]["Code"] in ("404", "NoSuchKey", "403"):
             return False
         raise
@@ -91,9 +81,6 @@ def delete_object(bucket, key):
     _s3().delete_object(Bucket=bucket, Key=key)
 
 
-# S3Object reference, not inline Bytes — avoids the 5MB inline-payload limit and matches
-# ingestion's own index_faces/search_faces_by_image calls. Requires s3:GetObject on the
-# key, same as those two calls do.
 def detect_face_count(bucket, key):
     response = _rekognition().detect_faces(Image={"S3Object": {"Bucket": bucket, "Name": key}})
     return len(response["FaceDetails"])

@@ -1,6 +1,3 @@
-# T-03 (2026-08-09 follow-up): REST API, not HTTP API, for AWS WAF support against
-# Rohan's threat model (P-07). Endpoint type REGIONAL, single prod stage, no custom
-# domain — all ruled 2026-08-24, see LOCKED_TECH_DECISIONS.md's decision log.
 resource "aws_api_gateway_rest_api" "this" {
   name = "${var.name_prefix}-api"
 
@@ -9,8 +6,6 @@ resource "aws_api_gateway_rest_api" "this" {
   }
 }
 
-# T-01/T-03 (2026-08-23): Cognito enforces auth on every route below — no unauthenticated
-# path exists, even join/leave need a caller identity (P-16/P-46).
 resource "aws_api_gateway_authorizer" "cognito" {
   name          = "${var.name_prefix}-cognito-authorizer"
   rest_api_id   = aws_api_gateway_rest_api.this.id
@@ -18,9 +13,6 @@ resource "aws_api_gateway_authorizer" "cognito" {
   provider_arns = [var.cognito_user_pool_arn]
 }
 
-# One route table entry per locked path+method (T-03 §3) — the explicit-tree option
-# ruled 2026-08-24, so each real endpoint gets its own method/integration and can carry
-# its own request model, not a single {proxy+} shared across a Lambda's whole territory.
 locals {
   routes = merge(
     local.profile_routes,
@@ -51,7 +43,7 @@ resource "aws_api_gateway_integration" "route" {
   rest_api_id             = aws_api_gateway_rest_api.this.id
   resource_id             = each.value.resource_id
   http_method             = aws_api_gateway_method.route[each.key].http_method
-  integration_http_method = "POST" # Lambda proxy integrations always invoke via POST, regardless of the method's own verb
+  integration_http_method = "POST"
   type                    = "AWS_PROXY"
   uri                     = "arn:aws:apigateway:${var.aws_region}:lambda:path/2015-03-31/functions/${each.value.function_arn}/invocations"
 }

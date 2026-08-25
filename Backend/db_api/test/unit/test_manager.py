@@ -3,7 +3,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-import Manager.manager as manager  # noqa: E402
+import Manager.manager as manager
 
 
 def test_create_builds_item_with_derived_eventUploaderKey_and_zeroed_counts(monkeypatch):

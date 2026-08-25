@@ -5,9 +5,6 @@ import boto3
 BATCH_GET_LIMIT = 100
 
 
-# Built lazily, not at import time — a module-level client/resource would bind to
-# whatever AWS mocking/config is (or isn't) active at first import, which can be before
-# a test's own mock context has started.
 def _dynamodb():
     return boto3.resource("dynamodb")
 
@@ -16,15 +13,10 @@ def _event_attendees_table():
     return _dynamodb().Table(os.environ["EVENT_ATTENDEES_TABLE_NAME"])
 
 
-# Read-only — Membership never writes Events. Needed for joinPolicy/status at join time
-# and organizerID authorization on the roster/lobby and admit/deny/eject endpoints.
 def _events_table():
     return _dynamodb().Table(os.environ["EVENTS_TABLE_NAME"])
 
 
-# Read-only — Membership never writes Users. Needed for P-82's "name and email" on the
-# roster/lobby screen; read live at roster-read time, not snapshotted (P-84: displayName
-# is freely editable, so a snapshot would go stale).
 def _users_table():
     return _dynamodb().Table(os.environ["USERS_TABLE_NAME"])
 
