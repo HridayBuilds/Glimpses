@@ -34,6 +34,20 @@ def get_user(user_id):
     return response.get("Item")
 
 
+# Cognito confirms sign-up on its own; nothing else writes this row, so the first
+# GET /profile after signup creates it lazily from the token's own claims. Conditional
+# on userID not already existing, so two racing first-calls don't clobber each other.
+def create_user(user_id, email, display_name):
+    try:
+        _users_table().put_item(
+            Item={"userID": user_id, "email": email, "displayName": display_name},
+            ConditionExpression="attribute_not_exists(userID)",
+        )
+    except ClientError as error:
+        if error.response["Error"]["Code"] != "ConditionalCheckFailedException":
+            raise
+
+
 def update_display_name(user_id, display_name):
     _users_table().update_item(
         Key={"userID": user_id},

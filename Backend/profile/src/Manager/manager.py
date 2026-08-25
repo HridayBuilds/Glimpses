@@ -1,6 +1,7 @@
 import os
 
 from DAO.dao import (
+    create_user,
     delete_object,
     detect_face_count,
     generate_presigned_get_url,
@@ -21,7 +22,8 @@ def get_profile(payload):
     user_id = payload["userID"]
     user = get_user(user_id)
     if user is None:
-        raise ValueError(f"Unknown userID: {user_id}")
+        create_user(user_id, payload["email"], payload["name"])
+        user = get_user(user_id)
 
     bucket = os.environ["PHOTOS_BUCKET"]
     key = _selfie_key(user_id)

@@ -3,7 +3,7 @@
 data "aws_iam_policy_document" "users_access" {
   statement {
     effect    = "Allow"
-    actions   = ["dynamodb:GetItem", "dynamodb:UpdateItem"]
+    actions   = ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem"]
     resources = [var.users_table_arn]
   }
 }

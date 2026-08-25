@@ -29,14 +29,25 @@ def test_get_profile_returns_selfie_url_when_selfie_exists(monkeypatch):
     assert result["selfieUrl"] == "https://example/selfies/user/user_1/selfie.jpg"
 
 
-def test_get_profile_raises_for_unknown_user(monkeypatch):
-    monkeypatch.setattr(manager, "get_user", lambda user_id: None)
+def test_get_profile_creates_user_when_unknown(monkeypatch):
+    created = {}
+    users = {}
 
-    try:
-        manager.get_profile({"userID": "missing"})
-        assert False, "expected ValueError"
-    except ValueError:
-        pass
+    def fake_get_user(user_id):
+        return users.get(user_id)
+
+    def fake_create_user(user_id, email, display_name):
+        created.update(userID=user_id, email=email, displayName=display_name)
+        users[user_id] = {"userID": user_id, "email": email, "displayName": display_name}
+
+    monkeypatch.setattr(manager, "get_user", fake_get_user)
+    monkeypatch.setattr(manager, "create_user", fake_create_user)
+    monkeypatch.setattr(manager, "selfie_exists", lambda bucket, key: False)
+
+    result = manager.get_profile({"userID": "missing", "email": "meera@example.com", "name": "Meera"})
+
+    assert created == {"userID": "missing", "email": "meera@example.com", "displayName": "Meera"}
+    assert result == {"userID": "missing", "displayName": "Meera", "email": "meera@example.com"}
 
 
 def test_update_profile_updates_display_name(monkeypatch):

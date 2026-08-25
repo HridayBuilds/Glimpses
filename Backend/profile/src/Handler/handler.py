@@ -9,9 +9,16 @@ def _user_id():
     return app.current_event.request_context.authorizer.claims["sub"]
 
 
+def _claims():
+    return app.current_event.request_context.authorizer.claims
+
+
 @app.get("/profile")
 def get_profile():
-    return manager.get_profile({"userID": _user_id()})
+    claims = _claims()
+    return manager.get_profile(
+        {"userID": claims["sub"], "email": claims.get("email", ""), "name": claims.get("name", "")}
+    )
 
 
 @app.put("/profile")

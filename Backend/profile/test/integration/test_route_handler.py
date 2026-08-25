@@ -83,6 +83,29 @@ def test_get_then_put_profile_round_trip():
 
 
 @mock_aws
+def test_get_profile_creates_user_on_first_call():
+    dynamodb = boto3.resource("dynamodb", region_name="ap-south-1")
+    _create_users_table(dynamodb)
+    users_table = dynamodb.Table(os.environ["USERS_TABLE_NAME"])
+
+    s3 = boto3.client("s3", region_name="ap-south-1")
+    s3.create_bucket(
+        Bucket=os.environ["PHOTOS_BUCKET"], CreateBucketConfiguration={"LocationConstraint": "ap-south-1"}
+    )
+
+    claims = {"sub": "user_new", "email": "meera@example.com", "name": "Meera"}
+    get_response = lambda_handler(_api_event("GET", "/profile", claims=claims), _FakeLambdaContext())
+
+    assert get_response["statusCode"] == 200
+    assert json.loads(get_response["body"]) == {
+        "userID": "user_new",
+        "displayName": "Meera",
+        "email": "meera@example.com",
+    }
+    assert users_table.get_item(Key={"userID": "user_new"})["Item"]["email"] == "meera@example.com"
+
+
+@mock_aws
 def test_selfie_mint_confirm_then_get_returns_selfie_url(monkeypatch):
     dynamodb = boto3.resource("dynamodb", region_name="ap-south-1")
     _create_users_table(dynamodb)
