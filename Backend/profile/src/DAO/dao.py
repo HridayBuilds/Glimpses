@@ -66,7 +66,9 @@ def selfie_exists(bucket, key):
         _s3().head_object(Bucket=bucket, Key=key)
         return True
     except ClientError as error:
-        if error.response["Error"]["Code"] in ("404", "NoSuchKey"):
+        # This role has no s3:ListBucket (T-07, least-privilege) — without it, S3 masks
+        # a missing key as 403 instead of 404 on HeadObject, so both mean "not found" here.
+        if error.response["Error"]["Code"] in ("404", "NoSuchKey", "403"):
             return False
         raise
 
