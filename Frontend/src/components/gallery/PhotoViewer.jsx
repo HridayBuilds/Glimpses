@@ -1,11 +1,52 @@
+import { useState } from 'react'
 import { motion, useMotionValue, useTransform, useDragControls, animate } from 'motion/react'
+import { useQueryClient } from '@tanstack/react-query'
+import toast from 'react-hot-toast'
+import { getDownloadUrls, deletePhoto } from '../../lib/galleryApi'
+import ConfirmDialog from '../common/ConfirmDialog'
 
 function formatDate(iso) {
   return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
-function PhotoViewer({ photo, onClose }) {
+function PhotoViewer({ eventId, photo, onClose }) {
   const dragControls = useDragControls()
+  const queryClient = useQueryClient()
+  const [downloading, setDownloading] = useState(false)
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+
+  const handleDelete = async () => {
+    setDeleting(true)
+    try {
+      await deletePhoto(eventId, photo.photoID)
+      queryClient.invalidateQueries({ queryKey: ['events', eventId, 'photos'] })
+      toast.success('Photo deleted')
+      onClose()
+    } catch {
+      toast.error('Something went wrong. Try again.')
+    } finally {
+      setDeleting(false)
+      setConfirmingDelete(false)
+    }
+  }
+
+  const handleDownload = async () => {
+    setDownloading(true)
+    // Opened synchronously, before the await, so the browser still ties it to the click gesture.
+    const tab = window.open('', '_blank')
+    try {
+      const { downloadUrls } = await getDownloadUrls(eventId, [photo.photoID])
+      const url = downloadUrls[0]?.downloadUrl
+      if (url && tab) tab.location.href = url
+      else tab?.close()
+    } catch {
+      tab?.close()
+      toast.error('Something went wrong. Try again.')
+    } finally {
+      setDownloading(false)
+    }
+  }
   const y = useMotionValue(0)
   const scale = useTransform(y, (v) => Math.max(0.86, 1 - Math.abs(v) / 2600))
   const radius = useTransform(y, (v) => Math.min(28, Math.abs(v) / 6))
@@ -49,7 +90,21 @@ function PhotoViewer({ photo, onClose }) {
             ✕
           </button>
           <div className="text-[13.5px] tabular-nums text-white/50">{formatDate(photo.uploadedAt)}</div>
-          <div className="w-8" />
+          <div className="flex gap-2">
+            <button
+              onClick={handleDownload}
+              disabled={downloading}
+              className="cursor-pointer rounded-[10px] border border-white/[0.12] bg-white/10 px-3 py-2 text-[14px] text-[#F5F5F7] transition-transform duration-[90ms] ease-out active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Download
+            </button>
+            <button
+              onClick={() => setConfirmingDelete(true)}
+              className="cursor-pointer rounded-[10px] border border-[rgba(255,89,89,0.28)] bg-[rgba(255,89,89,0.13)] px-3 py-2 text-[14px] text-[#FF8A8A] transition-transform duration-[90ms] ease-out active:scale-95"
+            >
+              Delete
+            </button>
+          </div>
         </div>
 
         <div
@@ -77,6 +132,16 @@ function PhotoViewer({ photo, onClose }) {
           <div className="text-[14px] leading-[1.6] text-white/45">{photo.uploaderEmail}</div>
         </div>
       </motion.div>
+
+      <ConfirmDialog
+        open={confirmingDelete}
+        title="Delete this photo?"
+        body="It is removed from the event for everyone. There is no trash to recover it from."
+        cta="Delete"
+        danger
+        onCancel={() => setConfirmingDelete(false)}
+        onConfirm={deleting ? undefined : handleDelete}
+      />
     </motion.div>
   )
 }

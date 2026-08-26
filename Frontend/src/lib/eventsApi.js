@@ -14,3 +14,13 @@ export async function getMyEvents() {
   const { data } = await api.get('/events/my-events')
   return data
 }
+
+export async function archiveEvent(eventId) {
+  const { data } = await api.post(`/events/${eventId}/archive`)
+  return data
+}
+
+export async function deleteEvent(eventId) {
+  const { data } = await api.delete(`/events/${eventId}`)
+  return data
+}

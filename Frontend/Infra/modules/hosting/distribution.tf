@@ -1,18 +1,18 @@
-resource "aws_cloudfront_origin_access_control" "site" {
+resource "aws_cloudfront_origin_access_control" "hosting" {
   name                              = "${var.name_prefix}-frontend-oac"
   origin_access_control_origin_type = "s3"
   signing_behavior                  = "always"
   signing_protocol                  = "sigv4"
 }
 
-resource "aws_cloudfront_distribution" "site" {
+resource "aws_cloudfront_distribution" "hosting" {
   enabled             = true
   default_root_object = "index.html"
 
   origin {
-    domain_name              = aws_s3_bucket.site.bucket_regional_domain_name
+    domain_name              = aws_s3_bucket.hosting.bucket_regional_domain_name
     origin_id                = "frontend-bucket"
-    origin_access_control_id = aws_cloudfront_origin_access_control.site.id
+    origin_access_control_id = aws_cloudfront_origin_access_control.hosting.id
   }
 
   # Hashed build assets (e.g. assets/app.a8f3d1.js) are safe to cache forever —
@@ -79,11 +79,11 @@ resource "aws_cloudfront_distribution" "site" {
   }
 }
 
-data "aws_iam_policy_document" "site_oac_access" {
+data "aws_iam_policy_document" "hosting_oac_access" {
   statement {
     effect    = "Allow"
     actions   = ["s3:GetObject"]
-    resources = ["${aws_s3_bucket.site.arn}/*"]
+    resources = ["${aws_s3_bucket.hosting.arn}/*"]
 
     principals {
       type        = "Service"
@@ -93,12 +93,12 @@ data "aws_iam_policy_document" "site_oac_access" {
     condition {
       test     = "StringEquals"
       variable = "AWS:SourceArn"
-      values   = [aws_cloudfront_distribution.site.arn]
+      values   = [aws_cloudfront_distribution.hosting.arn]
     }
   }
 }
 
-resource "aws_s3_bucket_policy" "site_oac_access" {
-  bucket = aws_s3_bucket.site.id
-  policy = data.aws_iam_policy_document.site_oac_access.json
+resource "aws_s3_bucket_policy" "hosting_oac_access" {
+  bucket = aws_s3_bucket.hosting.id
+  policy = data.aws_iam_policy_document.hosting_oac_access.json
 }

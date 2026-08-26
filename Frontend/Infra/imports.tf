@@ -1,3 +1,3 @@
-module "site" {
-  source = "./modules/site"
+module "hosting" {
+  source = "./modules/hosting"
 }

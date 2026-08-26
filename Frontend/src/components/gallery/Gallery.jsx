@@ -1,15 +1,77 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useQuery, useInfiniteQuery } from '@tanstack/react-query'
-import { listPhotos } from '../../lib/galleryApi'
+import { useQuery, useInfiniteQuery, useQueryClient } from '@tanstack/react-query'
+import toast from 'react-hot-toast'
+import { listPhotos, bulkDeletePhotos } from '../../lib/galleryApi'
+import { requestDownload, getDownloadStatus } from '../../lib/downloadApi'
 import PhotoViewer from './PhotoViewer'
+import ConfirmDialog from '../common/ConfirmDialog'
 
 function Gallery({ eventId, eventName, isOrganizer, onSettings }) {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const [mode, setMode] = useState('mine')
   const [selecting, setSelecting] = useState(false)
   const [selected, setSelected] = useState([])
   const [openPhotoId, setOpenPhotoId] = useState(null)
+  const [confirmingBulkDelete, setConfirmingBulkDelete] = useState(false)
+  const [bulkDeleting, setBulkDeleting] = useState(false)
+
+  // null | 'building' | 'ready'
+  const [zip, setZip] = useState(null)
+  const [downloadId, setDownloadId] = useState(null)
+  const [zipUrl, setZipUrl] = useState(null)
+
+  const downloadQuery = useQuery({
+    queryKey: ['events', eventId, 'downloads', downloadId, 'status'],
+    queryFn: () => getDownloadStatus(eventId, downloadId),
+    enabled: zip === 'building' && !!downloadId,
+    refetchInterval: (query) => {
+      const status = query.state.data?.status
+      return status === 'READY' || status === 'FAILED' ? false : 2500
+    },
+  })
+
+  const downloadStatus = downloadQuery.data?.status
+
+  useEffect(() => {
+    if (zip !== 'building') return
+    if (downloadStatus === 'READY') {
+      setZip('ready')
+      setZipUrl(downloadQuery.data.downloadUrl)
+    } else if (downloadStatus === 'FAILED' || (downloadQuery.isError && !downloadQuery.isFetching)) {
+      setZip(null)
+      setDownloadId(null)
+      toast.error('Something went wrong. Try again.')
+    }
+  }, [zip, downloadStatus, downloadQuery.data, downloadQuery.isError, downloadQuery.isFetching])
+
+  const startZip = async () => {
+    setZip('building')
+    setZipUrl(null)
+    try {
+      const { downloadId: newDownloadId } = await requestDownload(eventId, selected.length ? selected : undefined)
+      setDownloadId(newDownloadId)
+    } catch {
+      setZip(null)
+      toast.error('Something went wrong. Try again.')
+    }
+  }
+
+  const dismissZip = () => {
+    setZip(null)
+    setDownloadId(null)
+    setZipUrl(null)
+  }
+
+  const downloadZip = () => {
+    if (zipUrl) window.open(zipUrl, '_blank')
+    dismissZip()
+    setSelecting(false)
+    setSelected([])
+  }
+
+  const zipSelected = zip === 'building' ? undefined : zip === 'ready' ? downloadZip : startZip
 
   const mineQuery = useQuery({
     queryKey: ['events', eventId, 'photos', 'mine'],
@@ -56,6 +118,26 @@ function Gallery({ eventId, eventName, isOrganizer, onSettings }) {
   }
 
   const selectAll = () => setSelected(photos.map((p) => p.photoID))
+
+  const handleBulkDelete = async () => {
+    setBulkDeleting(true)
+    try {
+      const { deletedPhotoIDs } = await bulkDeletePhotos(eventId, selected)
+      queryClient.invalidateQueries({ queryKey: ['events', eventId, 'photos'] })
+      if (deletedPhotoIDs.length === selected.length) {
+        toast.success(`Deleted ${deletedPhotoIDs.length} ${deletedPhotoIDs.length === 1 ? 'photo' : 'photos'}`)
+      } else {
+        toast.error(`Deleted ${deletedPhotoIDs.length} of ${selected.length} photos — some couldn't be deleted`)
+      }
+      setSelecting(false)
+      setSelected([])
+    } catch {
+      toast.error('Something went wrong. Try again.')
+    } finally {
+      setBulkDeleting(false)
+      setConfirmingBulkDelete(false)
+    }
+  }
 
   const openPhoto = photos.find((p) => p.photoID === openPhotoId) ?? null
 
@@ -154,6 +236,44 @@ function Gallery({ eventId, eventName, isOrganizer, onSettings }) {
         </div>
       )}
 
+      {zip && (
+        <div className="mx-auto mt-3 max-w-[1080px] px-4">
+          <div className="rounded-[14px] border border-white/10 bg-white/[0.05] p-[15px]">
+            <div className="mb-2.5 flex items-center justify-between gap-2.5">
+              <div className="flex min-w-0 items-center gap-2.5">
+                {zip === 'building' && (
+                  <div className="h-3.5 w-3.5 flex-none animate-spin rounded-full border-2 border-white/20 border-t-[#FF7A59]" />
+                )}
+                <div className="text-[14.5px] font-semibold tracking-[-0.008em]">
+                  {zip === 'ready' ? 'Download ready' : 'Preparing download…'}
+                </div>
+              </div>
+            </div>
+            {zip === 'building' && (
+              <p className="text-pretty text-[13px] leading-[1.55] text-white/42">
+                Nothing is packed until you ask for it, so this takes a moment. You can keep browsing.
+              </p>
+            )}
+            {zip === 'ready' && (
+              <div className="flex gap-2.5">
+                <button
+                  onClick={dismissZip}
+                  className="flex-none cursor-pointer rounded-[10px] border border-white/10 bg-white/[0.07] px-3.5 py-2.5 text-[14px] text-[#F5F5F7]"
+                >
+                  Dismiss
+                </button>
+                <button
+                  onClick={downloadZip}
+                  className="flex-1 cursor-pointer rounded-[10px] border-none bg-[#FF7A59] py-2.5 text-[14.5px] font-semibold text-[#200C05] transition-transform duration-[90ms] ease-out active:scale-[0.97]"
+                >
+                  Download ZIP
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {photos.length > 0 && (
         <div className="mx-auto max-w-[1080px] px-4 pb-[140px] pt-3">
           <div className="grid grid-cols-[repeat(auto-fill,minmax(104px,1fr))] gap-1 sm:grid-cols-[repeat(auto-fill,minmax(150px,1fr))]">
@@ -210,11 +330,42 @@ function Gallery({ eventId, eventName, isOrganizer, onSettings }) {
               >
                 Select all
               </button>
+              <button
+                onClick={() => setConfirmingBulkDelete(true)}
+                disabled={selected.length === 0}
+                className="flex-none cursor-pointer rounded-[10px] border border-[rgba(255,89,89,0.3)] bg-[rgba(255,89,89,0.14)] px-3.5 py-2.5 text-[14px] text-[#FF8A8A] transition-transform duration-[90ms] ease-out active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Delete
+              </button>
+              <button
+                onClick={zipSelected}
+                disabled={zip === 'building'}
+                className="flex flex-none cursor-pointer items-center gap-2 whitespace-nowrap rounded-[10px] border-none px-3.5 py-2.5 text-[14px] font-semibold transition-transform duration-[90ms] ease-out active:scale-95 disabled:cursor-not-allowed"
+                style={{
+                  background: zip === 'building' ? 'rgba(255,255,255,0.1)' : '#FF7A59',
+                  color: zip === 'building' ? 'rgba(245,245,247,0.75)' : '#200C05',
+                }}
+              >
+                {zip === 'building' && (
+                  <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-[rgba(245,245,247,0.25)] border-t-[rgba(245,245,247,0.85)]" />
+                )}
+                {zip === 'building' ? 'Preparing download…' : zip === 'ready' ? 'Save ZIP' : 'Download ZIP'}
+              </button>
             </div>
         </div>
       )}
 
-      {openPhoto && <PhotoViewer photo={openPhoto} onClose={() => setOpenPhotoId(null)} />}
+      {openPhoto && <PhotoViewer eventId={eventId} photo={openPhoto} onClose={() => setOpenPhotoId(null)} />}
+
+      <ConfirmDialog
+        open={confirmingBulkDelete}
+        title={`Delete ${selected.length} ${selected.length === 1 ? 'photo' : 'photos'}?`}
+        body="They are removed from the event for everyone. There is no trash to recover them from."
+        cta="Delete"
+        danger
+        onCancel={() => setConfirmingBulkDelete(false)}
+        onConfirm={bulkDeleting ? undefined : handleBulkDelete}
+      />
     </div>
   )
 }

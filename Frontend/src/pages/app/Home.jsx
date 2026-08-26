@@ -37,11 +37,19 @@ function EventCard({ event, onOpen }) {
 function Home() {
   const navigate = useNavigate()
 
-  const { data: organized, isLoading: loadingOrganized } = useQuery({
+  const {
+    data: organized,
+    isLoading: loadingOrganized,
+    isError: errorOrganized,
+  } = useQuery({
     queryKey: ['events', 'organized'],
     queryFn: getOrganizedEvents,
   })
-  const { data: joined, isLoading: loadingJoined } = useQuery({
+  const {
+    data: joined,
+    isLoading: loadingJoined,
+    isError: errorJoined,
+  } = useQuery({
     queryKey: ['events', 'my-events'],
     queryFn: getMyEvents,
   })
@@ -74,6 +82,7 @@ function Home() {
         </div>
         <div className="mb-8 grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-2.5">
           {loadingOrganized && <p className="text-[14px] text-white/45">Loading…</p>}
+          {errorOrganized && <p className="text-[14px] text-white/45">Couldn't load your events. Try again shortly.</p>}
           {organized?.length === 0 && <p className="text-[14px] text-white/45">You haven't created an event yet.</p>}
           {organized?.map((event) => (
             <EventCard key={event.eventID} event={event} onOpen={openEvent(event.eventID)} />
@@ -83,6 +92,7 @@ function Home() {
         <div className="mb-3 text-[13px] font-bold uppercase tracking-[0.08em] text-white/90">Events I joined</div>
         <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-2.5">
           {loadingJoined && <p className="text-[14px] text-white/45">Loading…</p>}
+          {errorJoined && <p className="text-[14px] text-white/45">Couldn't load your events. Try again shortly.</p>}
           {joined?.length === 0 && <p className="text-[14px] text-white/45">You haven't joined an event yet.</p>}
           {joined?.map((event) => (
             <EventCard key={event.eventID} event={event} onOpen={openEvent(event.eventID)} />
