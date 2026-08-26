@@ -1,0 +1,31 @@
+pipeline {
+    agent any
+
+    environment {
+        AWS_PROFILE = 'glimpses'
+    }
+
+    stages {
+        stage('Terraform Init') {
+            steps {
+                dir('Frontend/Infra') {
+                    sh 'terraform init'
+                }
+            }
+        }
+        stage('Terraform Validate') {
+            steps {
+                dir('Frontend/Infra') {
+                    sh 'terraform validate'
+                }
+            }
+        }
+        stage('Terraform Apply') {
+            steps {
+                dir('Frontend/Infra') {
+                    sh 'terraform apply -auto-approve'
+                }
+            }
+        }
+    }
+}

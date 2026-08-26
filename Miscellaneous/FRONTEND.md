@@ -11,7 +11,16 @@ Basic scaffold done at `Frontend/` (Vite + React, confirmed against npm/context7
 - Installed but not yet wired into screens: `react-router-dom` 7.18.2, `react-hook-form` 7.86.0, `@tanstack/react-query` 5.102.5, `react-hot-toast` 2.6.0, `axios` 1.20.0, `amazon-cognito-identity-js` 6.3.20, `jszip` 3.10.1, `motion` 13.1.1.
 - `src/main.jsx` wraps the app in `QueryClientProvider` + `Toaster`. `src/App.jsx` has a `BrowserRouter` with a single placeholder route. Empty `src/pages/`, `src/components/`, `src/context/`, `src/lib/` created for upcoming work.
 - Default Vite template content (demo assets, counter, docs links) removed. `npm run build` verified working.
-- Not yet done: auth screens, axios interceptor, route guards, event/gallery screens, `Frontend/Infra/` Terraform, Jenkins jobs.
+- Not yet done: auth screens, axios interceptor, route guards, event/gallery screens, the "Frontend app" Jenkins job (build + sync + invalidate).
+
+`Frontend/Infra/` Terraform written (2026-08-26), matching `Infrastructure/`'s shape: own root (`providers.tf`/`variables.tf`/`imports.tf`), one module (`modules/site/`), `cicd/Jenkinsfile`.
+
+- **Own state, shared state bucket:** `backend "s3"` points at the same `glimpses-terraform-state` bucket as `Infrastructure/`, but a different key (`glimpses/frontend/terraform.tfstate`) — a real separate state, no new bucket needed.
+- **`modules/site/`** = one S3 bucket (`glimpses-frontend`, private, `block_public_*` all true — no S3 "static website hosting" toggle) + one CloudFront distribution reading it via **OAC**, the same private-bucket-behind-OAC pattern as the existing `photos` bucket/distribution, not the public S3-website-endpoint pattern FRONTEND.md's wording could also be read as — chosen for consistency with what's already built and because it's strictly more secure (no public bucket at all).
+- **Cache split**, done via `ordered_cache_behavior { path_pattern = "assets/*" }` (Vite's hashed JS/CSS output dir) with a 1-year TTL, vs. `default_cache_behavior` (everything else, including `index.html`) with TTLs forced to 0 — un-cached, so a deploy is visible immediately.
+- **SPA routing fix:** `custom_error_response` maps both 403 and 404 → `/index.html` with response code 200, so client-side routes work on refresh/deep link.
+- **Jenkins job ("Frontend infra"):** `Frontend/Infra/cicd/Jenkinsfile` — plain `init`/`validate`/`apply` in `Frontend/Infra` (no `-target`, since this is its own root, not a module inside the shared `Infrastructure` state).
+- Verified: `terraform fmt` clean, `terraform validate` passes.
 
 ## Stack
 
