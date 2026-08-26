@@ -1,6 +1,17 @@
 # Frontend
 
-Decisions below are ruled (2026-08-25). Nothing implemented yet — screens are being designed in Claude Design first; this file is the reference for what gets built once that's ready.
+Decisions below are ruled (2026-08-25). Screens are being designed in Claude Design first; this file is the reference for what gets built once that's ready.
+
+## Progress (2026-08-26)
+
+Basic scaffold done at `Frontend/` (Vite + React, confirmed against npm/context7 as latest stable, not snapshot, as of 2026-08-26):
+
+- `react`/`react-dom` 19.2.8, `vite` 8.2.2, `@vitejs/plugin-react` 6.1.0 — requires Node `^20.19.0 || >=22.12.0` (local Node 22.20.0 OK).
+- `tailwindcss`/`@tailwindcss/vite` 4.3.3 — v4 uses the Vite plugin + `@import "tailwindcss"` in `src/index.css`, no `tailwind.config.js`.
+- Installed but not yet wired into screens: `react-router-dom` 7.18.2, `react-hook-form` 7.86.0, `@tanstack/react-query` 5.102.5, `react-hot-toast` 2.6.0, `axios` 1.20.0, `amazon-cognito-identity-js` 6.3.20, `jszip` 3.10.1, `motion` 13.1.1.
+- `src/main.jsx` wraps the app in `QueryClientProvider` + `Toaster`. `src/App.jsx` has a `BrowserRouter` with a single placeholder route. Empty `src/pages/`, `src/components/`, `src/context/`, `src/lib/` created for upcoming work.
+- Default Vite template content (demo assets, counter, docs links) removed. `npm run build` verified working.
+- Not yet done: auth screens, axios interceptor, route guards, event/gallery screens, `Frontend/Infra/` Terraform, Jenkins jobs.
 
 ## Stack
 
@@ -10,9 +21,11 @@ Decisions below are ruled (2026-08-25). Nothing implemented yet — screens are 
 - **react-hook-form** for forms (login/signup/create-event/etc.).
 - **React Query** for data fetching, specifically for the poll-until-done endpoints (`jobs/{jobId}/status`, `downloads/{downloadId}/status`) via `refetchInterval`.
 - **react-hot-toast** for notifications.
-- **Font Awesome** for icons.
+- **Custom inline SVGs** for icons, matching the Claude Design mockups — **Font Awesome only as a fallback** for any icon the mockups don't cover.
 - **axios**, with an interceptor that attaches the Cognito ID token to every request and refreshes + retries on `401`.
 - **amazon-cognito-identity-js** (or equivalent open-source SRP-capable Cognito client) for auth — no Cognito Hosted UI, screens are custom.
+- **React Context** for cross-screen app state (current event, upload/zip progress that must survive navigation, multi-select mode) — chosen over Redux/Zustand since state needs here are shallow and don't need a dedicated store library.
+- **`motion`** (the Framer Motion successor) for the photo-viewer's full-screen drag-to-dismiss sheet — spring-based, pointer-capture drag, matches the `apple-design` skill's fluid-interface principles (velocity handoff, momentum projection, rubber-banding) more directly than hand-rolled pointer events.
 - Client-side zip library (e.g. JSZip, open-source) for the multi-photo upload fallback — see Upload flow below.
 - All libraries: open-source only.
 
@@ -42,12 +55,17 @@ Confirmed against `Infrastructure/modules/cognito/cognito.tf`:
 - Auth flows enabled: SRP and plain password (`ALLOW_USER_SRP_AUTH`, `ALLOW_USER_PASSWORD_AUTH`); refresh tokens valid 30 days.
 - App client has **no secret** — safe for a browser app, and means pool/client IDs are non-sensitive config (see Config delivery above).
 - Every API call attaches `Authorization: Bearer <idToken>` — must be the **ID token**, not the access token (the authorizer checks the `aud` claim, which only the ID token carries). The axios interceptor handles attaching it and refreshing on `401`.
+- **Token storage: localStorage, not an httpOnly cookie.** An httpOnly cookie can only be set by a `Set-Cookie` response header from a server — the browser talks directly to Cognito via SRP in this design, with no auth-proxy Lambda in between that could set one, and API Gateway's authorizer reads the token from the `Authorization` header, not a cookie. Adding real httpOnly-cookie support would mean a new auth-proxy Lambda plus CSRF mitigation (cookies auto-attach; bearer headers don't) — out of scope for now. Mitigate the real risk (XSS) directly instead: no `dangerouslySetInnerHTML`/`eval`, minimal dependencies, CSP header on the frontend CloudFront distribution.
 
 ## Upload flow
 
 - `POST /events/{eventId}/upload-url` (`Backend/upload_status/src/Manager/manager.py`) mints exactly **one** presigned PUT URL per job, always targeting a single `original.zip` object — there is no per-file or multi-file upload path in the backend; Step Functions' `Extract` step unzips it server-side afterward.
 - For a "pick multiple photos" UX, the frontend must zip client-side before the PUT (open-source lib, e.g. JSZip). A "bring your own zip" path also works without any client-side zip library.
-- Batch-size handling for the client-side zip step (progress UI, any soft cap on very large selections) is deferred until Claude Design produces concrete screens to build against.
+- **Batch cap: 500 photos** on the multi-select-then-client-zip path (JSZip). **No cap** on the "bring your own zip" path, since the frontend never touches the individual files there — it's a single file PUT regardless of what's inside.
+
+## Marketing site
+
+A public marketing site (`Glimpses Site.dc.html` in the design project — Landing/About/How-it-works pages, sticky glass header, Log in/Sign up entry points into the app) is **in scope** for this build, alongside the app itself.
 
 ## Known backend constraint to design around
 
