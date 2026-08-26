@@ -40,7 +40,7 @@ Basic scaffold done at `Frontend/` (Vite + React, confirmed against npm/context7
 
 ## Hosting & infra
 
-- S3 bucket (static website hosting) as origin, fronted by a **second, independent CloudFront distribution** — not the existing photos distribution (`Infrastructure/modules/cloudfront`), which is scoped to `photos/`/`thumbnails/`/`qrcodes/` via OAC and has a different cache lifecycle (cache-forever images vs. `index.html`, which must never be stale after a deploy).
+- Private S3 bucket (no public S3-website-hosting toggle — locked down via `block_public_*`, readable only by CloudFront through an Origin Access Control, same pattern as the existing `photos` bucket) as origin, fronted by a **second, independent CloudFront distribution** — not the existing photos distribution (`Infrastructure/modules/cloudfront`), which is scoped to `photos/`/`thumbnails/`/`qrcodes/` via OAC and has a different cache lifecycle (cache-forever images vs. `index.html`, which must never be stale after a deploy).
 - New distribution needs: custom error response (403/404 → `/index.html`, HTTP 200) for SPA client-side routing to work on refresh/deep link, and split cache behavior (hashed JS/CSS bundles cached long/immutable, `index.html` never cached).
 - Combining into one multi-origin distribution was considered and rejected — CORS to API Gateway is unavoidable either way (different domain regardless), so the only thing a single distribution would save is one domain, not worth mixing two different cache lifecycles into one resource.
 - Terraform for all frontend infra (S3 bucket, this CloudFront distribution, and any future frontend-only modules) lives under **`Frontend/Infra/`**, as its **own independent Terraform root and state** — deliberately separate from `Infrastructure/`'s single shared state (which every backend module currently applies into via `terraform apply -target=module.X`), so a frontend deploy can never touch backend state.
@@ -79,3 +79,33 @@ A public marketing site (`Glimpses Site.dc.html` in the design project — Landi
 ## Known backend constraint to design around
 
 Every Lambda failure (any raised `ValueError` — not-found, not-authorized, bad state, or an actual bug) surfaces as a generic `502` with an unhelpful body (`Infrastructure`/Lambdas don't register a Powertools exception handler yet). The frontend cannot distinguish these cases by status code today — screens need a generic error state, not per-case messaging, until the backend adds proper exception handling.
+
+## Build plan (phased, ruled 2026-08-26)
+
+Ordered so each phase only depends on what's already built. Live progress/checkboxes/session-resume notes are tracked separately in `Miscellaneous/FRONTEND_PROGRESS.md` — this section is the stable plan, that file is the moving state.
+
+**Phase 0 — Scaffold.** Vite + React + Tailwind, base deps installed, folder skeleton. *Done.*
+
+**Phase 1 — Marketing site.** `Glimpses Site.dc.html`'s Landing/About/How-it-works pages, sticky glass header, nav (`page` enum, `narrow` responsive prop). Fully static, no auth, no API calls — safe to build first and get pixel-matching right without any backend dependency.
+
+**Phase 2 — Auth.** Login, signup, email-verification-code, forgot-password/reset screens (from `Glimpses.dc.html`'s auth states: `code`, `codeErr`, `verifyDone`, `pw`, `pw2`). `amazon-cognito-identity-js` wiring, an `AuthContext` (React Context) holding the current user/tokens, the axios instance + interceptor (attach ID token, refresh + retry on 401), and route guards (redirect unauthenticated users out of the app shell, matches `Glimpses.dc.html`'s `screen`/`stack` navigation model).
+
+**Phase 3 — Profile.** Profile screen (`GET`/`PUT /profile`), selfie capture/upload for face registration (`POST /profile/selfie` — ties to `state.selfie`/`state.consent` in the mockup).
+
+**Phase 4 — Events: create & join.** Create-event form, "my events" list (`GET /events/my-events`), join-by-code screen (`POST /events/join`, `state.joinCode`/`joinState`), event info/lobby screen for pending attendees (`GET /events/{eventId}/info`).
+
+**Phase 5 — Membership management.** Organizer-facing pending-attendee admit/deny (`state.pending` list, `POST .../admit`, `.../deny`), eject/block for existing attendees (`POST .../eject`), attendee list (`GET .../attendees`).
+
+**Phase 6 — Gallery & photo viewer.** "Photos of me" / "Everything" toggle (`state.galleryMode`/`galleryVariant`), multi-select mode (`state.selecting`/`selected`), full-screen photo viewer with `motion`-based drag-to-dismiss (`state.openPhoto`/`dragY`).
+
+**Phase 7 — Upload flow.** Multi-select-then-client-zip (JSZip, 500-photo cap) and bring-your-own-zip paths, both hitting the single `upload-url` presigned PUT; job-status polling via React Query (`state.upload`/`uploadPct`/`uploadKind`/`zip`/`zipPct`).
+
+**Phase 8 — Download flow.** Select photos → request zip build → poll `downloads/{downloadId}/status` → download link, matching the same poll-until-done pattern as uploads.
+
+**Phase 9 — Deletion.** Single-photo delete, bulk-delete, event archive/delete (`cascadeDelete`-backed routes) — confirm dialogs (`state.confirm`).
+
+**Phase 10 — Polish pass.** Generic error/toast states for the flat-502 backend constraint, loading/empty states, responsive layout (`state.wide`) across all screens built so far.
+
+**Phase 11 — Deploy wiring.** The "Frontend app" Jenkins job (pull `terraform output` from `cognito`/`api_gateway`/`Frontend/Infra` states → `.env.production` → `npm run build` → S3 sync → CloudFront invalidate), then a real end-to-end pass against the deployed backend.
+
+**Phase 12 — Docs.** Update `README.md`/setup docs once the app is live end-to-end.
