@@ -1,17 +1,12 @@
-import { useState } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
-import toast from 'react-hot-toast'
 import AppHeader from '../../components/app/AppHeader'
-import ConfirmDialog from '../../components/common/ConfirmDialog'
+import LoadingSpinner from '../../components/common/LoadingSpinner'
 import { getAttendees, admitAttendee, denyAttendee, ejectAttendee } from '../../lib/membershipApi'
-import { archiveEvent, deleteEvent } from '../../lib/eventsApi'
 
 function Roster() {
   const { eventId } = useParams()
-  const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const [confirming, setConfirming] = useState(null) // null | 'archive' | 'delete'
 
   const {
     data: pending,
@@ -37,36 +32,16 @@ function Roster() {
   const denyMutation = useMutation({ mutationFn: (userId) => denyAttendee(eventId, userId), onSuccess: invalidate })
   const ejectMutation = useMutation({ mutationFn: (userId) => ejectAttendee(eventId, userId), onSuccess: invalidate })
 
-  const archiveMutation = useMutation({
-    mutationFn: () => archiveEvent(eventId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['events'] })
-      toast.success('Event archived')
-      navigate(`/app/events/${eventId}`)
-    },
-    onError: () => toast.error('Something went wrong. Try again.'),
-    onSettled: () => setConfirming(null),
-  })
-
-  const deleteMutation = useMutation({
-    mutationFn: () => deleteEvent(eventId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['events'] })
-      toast.success('Event deleted')
-      navigate('/app')
-    },
-    onError: () => toast.error('Something went wrong. Try again.'),
-    onSettled: () => setConfirming(null),
-  })
-
   const hasPending = (pending?.length ?? 0) > 0
 
   return (
     <div className="min-h-svh bg-[radial-gradient(120%_60%_at_50%_0%,#131317_0%,#08080A_60%)] text-[#F5F5F7]">
-      <AppHeader title="Attendees" backTo={`/app/events/${eventId}`} />
+      <AppHeader title="Event Lobby" backTo={`/app/events/${eventId}`} />
 
       <div className="mx-auto max-w-[560px] px-5 pb-20 pt-4">
-        {loadingPending && loadingAttendees && <p className="text-[15px] text-white/45">Loading…</p>}
+        {loadingPending && loadingAttendees && (
+          <LoadingSpinner messages={['Loading the lobby…', 'Fetching attendees…']} />
+        )}
         {(errorPending || errorAttendees) && (
           <p className="text-[15px] text-white/45">Couldn't load attendees. Try again shortly.</p>
         )}
@@ -138,47 +113,7 @@ function Roster() {
           Ejecting removes access immediately. Photos they've already uploaded stay in the event, still attributed to
           them.
         </p>
-
-        <div className="my-[22px] h-px bg-white/[0.07]" />
-
-        <div className="mb-2.5 text-[12px] font-semibold uppercase tracking-[0.09em] text-white/36">Danger zone</div>
-        <button
-          onClick={() => setConfirming('archive')}
-          className="mb-2.5 w-full cursor-pointer rounded-[14px] border border-white/[0.09] bg-white/[0.05] px-4 py-3.5 text-left transition-transform duration-100 ease-out active:scale-[0.99]"
-        >
-          <div className="text-[15.5px] font-semibold tracking-[-0.01em]">Archive event</div>
-          <div className="mt-[5px] text-[14px] leading-[1.5] text-white/50 text-pretty">
-            Photos stay viewable and downloadable, but no one new can join and no more photos can be added.
-          </div>
-        </button>
-        <button
-          onClick={() => setConfirming('delete')}
-          className="w-full cursor-pointer rounded-[14px] border border-[rgba(255,89,89,0.25)] bg-[rgba(255,89,89,0.08)] px-4 py-3.5 text-left text-[#FF8A8A] transition-transform duration-100 ease-out active:scale-[0.99]"
-        >
-          <div className="text-[15.5px] font-semibold tracking-[-0.01em]">Delete permanently</div>
-          <div className="mt-[5px] text-[14px] leading-[1.5] text-white/50 text-pretty">
-            Every photo and match is destroyed. There's no trash and no undo.
-          </div>
-        </button>
       </div>
-
-      <ConfirmDialog
-        open={confirming === 'archive'}
-        title="Archive event?"
-        body="Photos stay viewable and downloadable by everyone, but no one new can join and no more photos can be added. This can't be undone. There's no un-archiving."
-        cta="Archive"
-        onCancel={() => setConfirming(null)}
-        onConfirm={archiveMutation.isPending ? undefined : archiveMutation.mutate}
-      />
-      <ConfirmDialog
-        open={confirming === 'delete'}
-        title="Delete event permanently?"
-        body="Every photo and match is destroyed. There's no trash and no undo."
-        cta="Delete forever"
-        danger
-        onCancel={() => setConfirming(null)}
-        onConfirm={deleteMutation.isPending ? undefined : deleteMutation.mutate}
-      />
     </div>
   )
 }

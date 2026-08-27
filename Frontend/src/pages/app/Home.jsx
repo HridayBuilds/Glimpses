@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { getOrganizedEvents, getMyEvents } from '../../lib/eventsApi'
 import SelfieToast from '../../components/profile/SelfieToast'
+import LoadingSpinner from '../../components/common/LoadingSpinner'
 
 const STATE_STYLE = {
   ACTIVE: { label: 'Active', color: '#8FE3B8', bg: 'rgba(111,216,176,0.14)' },
@@ -83,7 +84,7 @@ function Home() {
   return (
     <div className="min-h-svh bg-[radial-gradient(120%_60%_at_50%_0%,#131317_0%,#08080A_60%)] text-[#F5F5F7]">
       <div className="sticky top-0 z-20 flex items-center justify-between bg-[rgba(10,10,12,0.7)] px-5 pb-3.5 pt-4 backdrop-blur-2xl backdrop-saturate-[1.8]">
-        <div className="w-[34px] flex-none" />
+        <div className="w-[76px] flex-none" />
         <div className="flex-1 text-center text-[13px] font-semibold uppercase tracking-[0.14em] text-white/42">
           Glimpses
         </div>
@@ -91,12 +92,13 @@ function Home() {
           onClick={() => navigate('/app/profile')}
           aria-label="Your profile"
           title="Your profile"
-          className="flex h-[34px] w-[34px] flex-none items-center justify-center rounded-full border border-white/[0.12] bg-white/[0.09] text-[#F5F5F7] transition-transform duration-100 ease-out active:scale-[0.94]"
+          className="flex h-[34px] flex-none items-center gap-1.5 rounded-full border border-white/[0.12] bg-white/[0.09] px-3 text-[#F5F5F7] transition-transform duration-100 ease-out active:scale-[0.94]"
         >
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
             <circle cx="12" cy="8" r="4" stroke="currentColor" strokeWidth="2" />
             <path d="M4 20c1.6-4 4.8-6 8-6s6.4 2 8 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
           </svg>
+          <span className="text-[13.5px] font-medium">Profile</span>
         </button>
       </div>
 
@@ -110,7 +112,9 @@ function Home() {
           </button>
         </div>
         <div className="mb-8 grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-2.5">
-          {loadingOrganized && <p className="text-[14px] text-white/45">Loading…</p>}
+          {loadingOrganized && (
+            <LoadingSpinner compact messages={['Loading your events…', 'Almost there…']} />
+          )}
           {errorOrganized && <p className="text-[14px] text-white/45">Couldn't load your events. Try again shortly.</p>}
           {organized?.length === 0 && <p className="text-[14px] text-white/45">You haven't created an event yet.</p>}
           {organized?.map((event) => (
@@ -120,7 +124,7 @@ function Home() {
 
         <div className="mb-3 text-[13px] font-bold uppercase tracking-[0.08em] text-white/90">Events I joined</div>
         <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-2.5">
-          {loadingJoined && <p className="text-[14px] text-white/45">Loading…</p>}
+          {loadingJoined && <LoadingSpinner compact messages={['Loading your events…', 'Almost there…']} />}
           {errorJoined && <p className="text-[14px] text-white/45">Couldn't load your events. Try again shortly.</p>}
           {joined?.length === 0 && <p className="text-[14px] text-white/45">You haven't joined an event yet.</p>}
           {joined?.map((event) => (

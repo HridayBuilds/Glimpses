@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import AppHeader from '../../components/app/AppHeader'
 import ImageSlot from '../../components/common/ImageSlot'
+import LoadingSpinner from '../../components/common/LoadingSpinner'
 import ConfirmDialog from '../../components/common/ConfirmDialog'
 import SelfieOptionsSheet from '../../components/profile/SelfieOptionsSheet'
 import CameraCapture from '../../components/profile/CameraCapture'
@@ -113,7 +114,7 @@ function Profile() {
     <div className="min-h-svh bg-[radial-gradient(120%_60%_at_50%_0%,#131317_0%,#08080A_60%)] text-[#F5F5F7]">
       <AppHeader title="Account" />
       <div className="mx-auto max-w-[460px] px-5 pb-20 pt-[22px]">
-        {isLoading && <p className="text-[15px] text-white/45">Loading…</p>}
+        {isLoading && <LoadingSpinner messages={['Loading your profile…', 'Almost there…']} />}
         {isError && <p className="text-[15px] text-white/45">Couldn't load your profile. Try again shortly.</p>}
 
         {profile && (

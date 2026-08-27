@@ -10,6 +10,18 @@ resource "aws_s3_bucket_public_access_block" "photos" {
   restrict_public_buckets = true
 }
 
+resource "aws_s3_bucket_cors_configuration" "photos" {
+  bucket = aws_s3_bucket.photos.id
+
+  cors_rule {
+    allowed_methods = ["GET", "PUT", "HEAD"]
+    allowed_origins = ["*"]
+    allowed_headers = ["*"]
+    expose_headers  = ["ETag"]
+    max_age_seconds = 3000
+  }
+}
+
 resource "aws_s3_bucket_notification" "photos_eventbridge" {
   bucket      = aws_s3_bucket.photos.id
   eventbridge = true

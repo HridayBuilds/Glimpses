@@ -19,6 +19,9 @@ import JoinEvent from './pages/app/JoinEvent'
 import JoinLink from './pages/app/JoinLink'
 import EventEntry from './pages/app/EventEntry'
 import Roster from './pages/app/Roster'
+import EventSettings from './pages/app/EventSettings'
+import ShareEvent from './pages/app/ShareEvent'
+import EventAnalytics from './pages/app/EventAnalytics'
 import UploadFlow from './pages/app/UploadFlow'
 
 function App() {
@@ -81,6 +84,30 @@ function App() {
           element={
             <RequireAuth>
               <Roster />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/app/events/:eventId/settings"
+          element={
+            <RequireAuth>
+              <EventSettings />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/app/events/:eventId/share"
+          element={
+            <RequireAuth>
+              <ShareEvent />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/app/events/:eventId/analytics"
+          element={
+            <RequireAuth>
+              <EventAnalytics />
             </RequireAuth>
           }
         />

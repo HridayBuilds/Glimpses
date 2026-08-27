@@ -13,7 +13,7 @@ function CreateEvent() {
     mutationFn: (name) => createEvent(name),
     onSuccess: (event) => {
       queryClient.invalidateQueries({ queryKey: ['events'] })
-      navigate(`/app/events/${event.eventID}`)
+      navigate(`/app/events/${event.eventID}/settings`, { state: { setup: true } })
     },
     onError: () => toast.error('Could not create the event — try again.'),
   })

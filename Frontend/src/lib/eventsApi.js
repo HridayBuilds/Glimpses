@@ -24,3 +24,23 @@ export async function deleteEvent(eventId) {
   const { data } = await api.delete(`/events/${eventId}`)
   return data
 }
+
+export async function getEventDetail(eventId) {
+  const { data } = await api.get(`/events/${eventId}`)
+  return data
+}
+
+export async function updateEventDetail(eventId, fields) {
+  const { data } = await api.put(`/events/${eventId}`, fields)
+  return data
+}
+
+export async function getEventStats(eventId) {
+  const { data } = await api.get(`/events/${eventId}/stats`)
+  return data
+}
+
+export async function getQrcodeUrl(eventId) {
+  const { data } = await api.get(`/events/${eventId}/qrcode`)
+  return data
+}

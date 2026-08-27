@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { getEventInfo } from '../../lib/membershipApi'
 import { getOrganizedEvents } from '../../lib/eventsApi'
 import Gallery from '../../components/gallery/Gallery'
+import LoadingSpinner from '../../components/common/LoadingSpinner'
 
 function formatDate(iso) {
   return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' })
@@ -29,14 +30,7 @@ function EventEntry() {
   const isPending = info && !info.accessCode
 
   if (info && !isPending) {
-    return (
-      <Gallery
-        eventId={eventId}
-        eventName={info.name}
-        isOrganizer={isOrganizer}
-        onSettings={() => navigate(`/app/events/${eventId}/roster`)}
-      />
-    )
+    return <Gallery eventId={eventId} eventName={info.name} isOrganizer={isOrganizer} />
   }
 
   return (
@@ -47,7 +41,7 @@ function EventEntry() {
         </button>
       </div>
 
-      {isLoading && <p className="px-5 pt-6 text-[15px] text-white/45">Loading…</p>}
+      {isLoading && <LoadingSpinner messages={['Loading this event…', 'Fetching the details…', 'Almost there…']} />}
       {isError && <p className="px-5 pt-6 text-[15px] text-white/45">Couldn't load this event. Try again shortly.</p>}
 
       {info && isPending && (
