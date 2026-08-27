@@ -3,7 +3,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import AppHeader from '../../components/app/AppHeader'
 import LoadingSpinner from '../../components/common/LoadingSpinner'
-import { getEventDetail, getQrcodeUrl } from '../../lib/eventsApi'
+import { getEventInfo } from '../../lib/membershipApi'
 
 function ShareEvent() {
   const { eventId } = useParams()
@@ -12,14 +12,19 @@ function ShareEvent() {
   const isSetup = !!location.state?.setup
   const [copied, setCopied] = useState(false)
 
-  const { data: event, isLoading: loadingEvent } = useQuery({
-    queryKey: ['events', eventId, 'detail'],
-    queryFn: () => getEventDetail(eventId),
+  // GET /events/{id}/info (membership) rather than the events Lambda's
+  // organizer-only detail/qrcode routes — this page is also reachable by an
+  // admitted attendee (via the gallery's "Share Event" option), and membership
+  // already returns accessCode + qrcodeUrl to any admitted member, not just the organizer.
+  const {
+    data: event,
+    isLoading,
+    isError: errorQr,
+  } = useQuery({
+    queryKey: ['events', eventId, 'info'],
+    queryFn: () => getEventInfo(eventId),
   })
-  const { data: qrcode, isLoading: loadingQr, isError: errorQr } = useQuery({
-    queryKey: ['events', eventId, 'qrcode'],
-    queryFn: () => getQrcodeUrl(eventId),
-  })
+  const qrcode = event
 
   const copyCode = () => {
     if (!event?.accessCode) return
@@ -28,8 +33,6 @@ function ShareEvent() {
       setTimeout(() => setCopied(false), 1600)
     })
   }
-
-  const isLoading = loadingEvent || loadingQr
 
   return (
     <div className="min-h-svh bg-[radial-gradient(120%_60%_at_50%_0%,#131317_0%,#08080A_60%)] text-[#F5F5F7]">
