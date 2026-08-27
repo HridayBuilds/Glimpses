@@ -33,6 +33,16 @@ pipeline {
                 }
             }
         }
+        stage('Fetch frontend domain') {
+            steps {
+                dir('Frontend/frontend') {
+                    sh 'terraform init'
+                    script {
+                        env.FRONTEND_DOMAIN = sh(script: 'terraform output -raw distribution_domain_name', returnStdout: true).trim()
+                    }
+                }
+            }
+        }
         stage('Terraform Init') {
             steps {
                 dir('Infrastructure') {
@@ -50,7 +60,7 @@ pipeline {
         stage('Terraform Apply - events') {
             steps {
                 dir('Infrastructure') {
-                    sh 'terraform apply -target=module.events -auto-approve'
+                    sh 'terraform apply -target=module.events -var frontend_domain_name=${FRONTEND_DOMAIN} -auto-approve'
                 }
             }
         }

@@ -105,6 +105,7 @@ module "events" {
   photos_bucket_name         = module.buckets.photos_bucket_name
   photos_bucket_arn          = module.buckets.photos_bucket_arn
   cloudfront_domain_name     = module.cloudfront.distribution_domain_name
+  frontend_domain_name       = var.frontend_domain_name
   alarm_sns_topic_arn        = module.alarms.alarm_sns_topic_arn
 
   cascade_delete_function_name = module.cascade_delete.function_name

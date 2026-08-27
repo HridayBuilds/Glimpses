@@ -9,3 +9,8 @@ variable "alarm_email" {
   type        = string
   default     = "hridaymulchandani21@gmail.com"
 }
+
+variable "frontend_domain_name" {
+  description = "Frontend app's CloudFront distribution's default domain, fetched by Jenkins from Frontend/frontend's own Terraform state and passed in at apply time"
+  type        = string
+}

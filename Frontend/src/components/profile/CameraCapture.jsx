@@ -1,15 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
-
-function cameraErrorMessage(err) {
-  if (err?.name === 'NotFoundError' || err?.name === 'OverconstrainedError') {
-    return 'No camera found on this device.'
-  }
-  if (err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError') {
-    return 'Camera access was denied.'
-  }
-  return 'Could not access your camera.'
-}
+import { cameraErrorMessage } from '../../lib/camera'
 
 function CameraCapture({ open, onCancel, onCapture }) {
   const videoRef = useRef(null)
@@ -71,7 +62,26 @@ function CameraCapture({ open, onCancel, onCapture }) {
 
   return (
     <div className="fixed inset-0 z-[95] flex flex-col bg-black">
-      <video ref={videoRef} autoPlay playsInline muted className="flex-1 w-full object-cover" />
+      <div className="relative min-h-0 flex-1 overflow-hidden">
+        <video ref={videoRef} autoPlay playsInline muted className="h-full w-full object-cover" />
+        <svg
+          className="pointer-events-none absolute inset-0 h-full w-full"
+          viewBox="0 0 100 100"
+          preserveAspectRatio="none"
+        >
+          <defs>
+            <mask id="face-guide-mask">
+              <rect x="0" y="0" width="100" height="100" fill="white" />
+              <ellipse cx="50" cy="46" rx="26" ry="34" fill="black" />
+            </mask>
+          </defs>
+          <rect x="0" y="0" width="100" height="100" fill="rgba(0,0,0,0.55)" mask="url(#face-guide-mask)" />
+          <ellipse cx="50" cy="46" rx="26" ry="34" fill="none" stroke="#FF7A59" strokeWidth="0.5" />
+        </svg>
+        <div className="pointer-events-none absolute left-0 right-0 bottom-4 text-center text-[13.5px] font-medium text-white/80">
+          Fit your face inside the outline
+        </div>
+      </div>
       <div className="flex items-center justify-between gap-4 bg-black px-6 py-6">
         <button
           onClick={onCancel}

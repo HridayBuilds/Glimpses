@@ -16,6 +16,7 @@ import Privacy from './pages/app/Privacy'
 import Home from './pages/app/Home'
 import CreateEvent from './pages/app/CreateEvent'
 import JoinEvent from './pages/app/JoinEvent'
+import JoinLink from './pages/app/JoinLink'
 import EventEntry from './pages/app/EventEntry'
 import Roster from './pages/app/Roster'
 import UploadFlow from './pages/app/UploadFlow'
@@ -40,6 +41,14 @@ function App() {
           element={
             <RequireAuth>
               <JoinEvent />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/j/:code"
+          element={
+            <RequireAuth>
+              <JoinLink />
             </RequireAuth>
           }
         />

@@ -71,7 +71,7 @@ def _public_event(event):
 
 
 def _generate_and_store_qrcode(event_id, access_code):
-    join_url = f"https://{os.environ['CLOUDFRONT_DOMAIN']}/j/{access_code}"
+    join_url = f"https://{os.environ['FRONTEND_DOMAIN']}/j/{access_code}"
     image = qrcode.make(join_url)
     buffer = io.BytesIO()
     image.save(buffer, format="PNG")

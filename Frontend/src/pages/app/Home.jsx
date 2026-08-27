@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { useNavigate, useLocation, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
+import toast from 'react-hot-toast'
 import { getOrganizedEvents, getMyEvents } from '../../lib/eventsApi'
-import AddSelfiePrompt from '../../components/profile/AddSelfiePrompt'
+import SelfieToast from '../../components/profile/SelfieToast'
 
 const STATE_STYLE = {
   ACTIVE: { label: 'Active', color: '#8FE3B8', bg: 'rgba(111,216,176,0.14)' },
@@ -39,12 +40,23 @@ function EventCard({ event, onOpen }) {
 function Home() {
   const navigate = useNavigate()
   const location = useLocation()
-  const [showSelfiePrompt, setShowSelfiePrompt] = useState(false)
 
   useEffect(() => {
     if (location.state?.promptSelfie) {
-      setShowSelfiePrompt(true)
       navigate(location.pathname, { replace: true })
+      toast.custom(
+        (t) => (
+          <SelfieToast
+            visible={t.visible}
+            onAddSelfie={() => {
+              toast.dismiss(t.id)
+              navigate('/app/profile')
+            }}
+            onDismiss={() => toast.dismiss(t.id)}
+          />
+        ),
+        { duration: 12000 },
+      )
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -77,9 +89,14 @@ function Home() {
         </div>
         <button
           onClick={() => navigate('/app/profile')}
-          className="h-[34px] w-[34px] flex-none rounded-full border border-white/[0.12] bg-white/[0.09] text-[13px] font-semibold text-[#F5F5F7] transition-transform duration-100 ease-out active:scale-[0.94]"
+          aria-label="Your profile"
+          title="Your profile"
+          className="flex h-[34px] w-[34px] flex-none items-center justify-center rounded-full border border-white/[0.12] bg-white/[0.09] text-[#F5F5F7] transition-transform duration-100 ease-out active:scale-[0.94]"
         >
-          ME
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
+            <circle cx="12" cy="8" r="4" stroke="currentColor" strokeWidth="2" />
+            <path d="M4 20c1.6-4 4.8-6 8-6s6.4 2 8 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          </svg>
         </button>
       </div>
 
@@ -115,7 +132,7 @@ function Home() {
           onClick={() => navigate('/join')}
           className="mt-[22px] w-full rounded-2xl border border-dashed border-white/[0.16] bg-white/[0.05] py-[17px] text-[15.5px] font-medium text-[#F5F5F7] transition-transform duration-100 ease-out active:scale-[0.985]"
         >
-          Join an event with a code
+          Join with a code or QR
         </button>
         <div className="mt-[26px] text-center">
           <Link to="/app/privacy" className="text-[13.5px] text-white/40">
@@ -123,15 +140,6 @@ function Home() {
           </Link>
         </div>
       </div>
-
-      <AddSelfiePrompt
-        open={showSelfiePrompt}
-        onAddSelfie={() => {
-          setShowSelfiePrompt(false)
-          navigate('/app/profile')
-        }}
-        onDismiss={() => setShowSelfiePrompt(false)}
-      />
     </div>
   )
 }

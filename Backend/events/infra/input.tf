@@ -40,7 +40,12 @@ variable "photos_bucket_arn" {
 }
 
 variable "cloudfront_domain_name" {
-  description = "CloudFront distribution's default domain (P-30: join links/QR codes never use a custom domain)"
+  description = "Photos CloudFront distribution's default domain; used for qrcodeUrl, where the QR PNG itself is stored"
+  type        = string
+}
+
+variable "frontend_domain_name" {
+  description = "Frontend app's CloudFront distribution's default domain (P-30: join links/QR codes never use a custom domain); used for the QR's encoded join URL"
   type        = string
 }
 
