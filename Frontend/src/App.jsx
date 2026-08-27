@@ -3,6 +3,7 @@ import MarketingLayout from './components/marketing/MarketingLayout'
 import Landing from './pages/marketing/Landing'
 import About from './pages/marketing/About'
 import HowItWorks from './pages/marketing/HowItWorks'
+import MarketingPrivacy from './pages/marketing/Privacy'
 import Signup from './pages/auth/Signup'
 import Login from './pages/auth/Login'
 import VerifyCode from './pages/auth/VerifyCode'
@@ -26,6 +27,7 @@ function App() {
           <Route path="/" element={<Landing />} />
           <Route path="/about" element={<About />} />
           <Route path="/how-it-works" element={<HowItWorks />} />
+          <Route path="/privacy" element={<MarketingPrivacy />} />
         </Route>
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />

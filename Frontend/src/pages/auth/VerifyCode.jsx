@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { useAuth } from '../../context/AuthContext'
@@ -15,10 +15,15 @@ function VerifyCode() {
   const [codeErr, setCodeErr] = useState(false)
   const [verifyDone, setVerifyDone] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const inputRef = useRef(null)
 
   useEffect(() => {
     if (!email) navigate('/signup', { replace: true })
   }, [email, navigate])
+
+  useEffect(() => {
+    if (email && !verifyDone) inputRef.current?.focus()
+  }, [email, verifyDone])
 
   if (!email) return null
 
@@ -26,6 +31,11 @@ function VerifyCode() {
     if (v === 'del') return setCode((c) => c.slice(0, -1))
     setCodeErr(false)
     setCode((c) => (c.length >= 6 ? c : c + v))
+  }
+
+  const onTypeCode = (e) => {
+    setCodeErr(false)
+    setCode(e.target.value.replace(/\D/g, '').slice(0, 6))
   }
 
   const submitCode = async () => {
@@ -62,21 +72,14 @@ function VerifyCode() {
             </div>
             <h1 className="mb-2.5 mt-6 text-[32px] font-bold leading-[1.08] tracking-[-0.022em]">Email confirmed</h1>
             <p className="mb-8 text-[16px] leading-[1.55] text-white/55 text-pretty">
-              {email} is verified. Add a profile selfie whenever you're ready — it's what makes 'just the photos I'm
-              in' possible.
+              {email} is verified. Log in to get started.
             </p>
             <div className="flex flex-col gap-2.5">
               <button
-                onClick={() => navigate('/app/profile')}
+                onClick={() => navigate('/login', { state: { email, justVerified: true } })}
                 className="w-full rounded-xl bg-[#FF7A59] py-4 text-[16px] font-semibold text-[#200C05] transition-transform duration-100 ease-out active:scale-[0.975]"
               >
-                Add a profile selfie
-              </button>
-              <button
-                onClick={() => navigate('/app')}
-                className="w-full rounded-xl border border-white/10 bg-white/[0.07] py-4 text-[16px] font-medium text-[#F5F5F7] transition-transform duration-100 ease-out active:scale-[0.975]"
-              >
-                Go to my events
+                Log in
               </button>
             </div>
           </div>
@@ -88,19 +91,33 @@ function VerifyCode() {
             <p className="mb-[30px] text-[16px] leading-[1.55] text-white/55 text-pretty">
               Enter the six-digit code sent to {email}
             </p>
-            <div className="mb-4 flex gap-2.5">
-              {[0, 1, 2, 3, 4, 5].map((i) => (
-                <div
-                  key={i}
-                  className="flex aspect-[0.78] flex-1 items-center justify-center rounded-xl text-[26px] font-semibold tabular-nums transition-colors duration-150"
-                  style={{
-                    background: code[i] ? 'rgba(255,255,255,0.09)' : 'rgba(255,255,255,0.04)',
-                    border: `1px solid ${codeErr ? 'rgba(255,89,89,0.45)' : i === code.length ? 'rgba(255,122,89,0.7)' : 'rgba(255,255,255,0.09)'}`,
-                  }}
-                >
-                  {code[i] || ''}
-                </div>
-              ))}
+            <div className="relative mb-4">
+              <input
+                ref={inputRef}
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                autoComplete="one-time-code"
+                maxLength={6}
+                value={code}
+                onChange={onTypeCode}
+                aria-label="Six-digit verification code"
+                className="absolute inset-0 z-10 h-full w-full cursor-default opacity-0"
+              />
+              <div className="flex gap-2.5">
+                {[0, 1, 2, 3, 4, 5].map((i) => (
+                  <div
+                    key={i}
+                    className="flex aspect-[0.78] flex-1 items-center justify-center rounded-xl text-[26px] font-semibold tabular-nums transition-colors duration-75"
+                    style={{
+                      background: code[i] ? 'rgba(255,255,255,0.09)' : 'rgba(255,255,255,0.04)',
+                      border: `1px solid ${codeErr ? 'rgba(255,89,89,0.45)' : i === code.length ? 'rgba(255,122,89,0.7)' : 'rgba(255,255,255,0.09)'}`,
+                    }}
+                  >
+                    {code[i] || ''}
+                  </div>
+                ))}
+              </div>
             </div>
             {codeErr && (
               <div className="mb-4 flex items-start gap-2.5 rounded-xl border border-[#FF5959]/25 bg-[#FF5959]/[0.09] px-3.5 py-3">

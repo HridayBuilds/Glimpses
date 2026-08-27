@@ -10,12 +10,16 @@ function Login() {
   const navigate = useNavigate()
   const location = useLocation()
   const [submitting, setSubmitting] = useState(false)
-  const { register, handleSubmit } = useForm({ defaultValues: { email: '', password: '' } })
+  const { register, handleSubmit } = useForm({ defaultValues: { email: location.state?.email || '', password: '' } })
 
   const onSubmit = async ({ email, password }) => {
     setSubmitting(true)
     try {
       await login(email, password)
+      if (location.state?.justVerified) {
+        navigate('/app', { replace: true, state: { promptSelfie: true } })
+        return
+      }
       const dest = location.state?.from?.pathname || '/app'
       navigate(dest, { replace: true })
     } catch (err) {

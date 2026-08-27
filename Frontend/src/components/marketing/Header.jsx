@@ -39,6 +39,9 @@ function Header() {
           <NavButton to="/how-it-works" active={location.pathname === '/how-it-works'}>
             How it works
           </NavButton>
+          <NavButton to="/privacy" active={location.pathname === '/privacy'}>
+            Privacy
+          </NavButton>
         </div>
         <div className="hidden items-center gap-3.5 sm:ml-0 sm:flex">
           <button
@@ -49,7 +52,7 @@ function Header() {
           </button>
           <button
             onClick={() => navigate('/signup')}
-            className="whitespace-nowrap rounded-full bg-[#FF7A59] px-[22px] py-2.5 text-[14.5px] font-semibold text-[#200C05] transition-transform duration-100 ease-out active:scale-95"
+            className="whitespace-nowrap rounded-full bg-[#FF7A59] px-[16px] py-[7px] text-[13.5px] font-semibold text-[#200C05] transition-transform duration-100 ease-out active:scale-95"
           >
             Sign up
           </button>
@@ -81,6 +84,9 @@ function Header() {
             onClick={() => setMenuOpen(false)}
           >
             How it works
+          </NavButton>
+          <NavButton to="/privacy" active={location.pathname === '/privacy'} onClick={() => setMenuOpen(false)}>
+            Privacy
           </NavButton>
           <button
             onClick={() => {

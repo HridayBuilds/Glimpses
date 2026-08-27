@@ -1,6 +1,8 @@
-import { useNavigate, Link } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { useNavigate, useLocation, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { getOrganizedEvents, getMyEvents } from '../../lib/eventsApi'
+import AddSelfiePrompt from '../../components/profile/AddSelfiePrompt'
 
 const STATE_STYLE = {
   ACTIVE: { label: 'Active', color: '#8FE3B8', bg: 'rgba(111,216,176,0.14)' },
@@ -36,6 +38,16 @@ function EventCard({ event, onOpen }) {
 
 function Home() {
   const navigate = useNavigate()
+  const location = useLocation()
+  const [showSelfiePrompt, setShowSelfiePrompt] = useState(false)
+
+  useEffect(() => {
+    if (location.state?.promptSelfie) {
+      setShowSelfiePrompt(true)
+      navigate(location.pathname, { replace: true })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const {
     data: organized,
@@ -111,6 +123,15 @@ function Home() {
           </Link>
         </div>
       </div>
+
+      <AddSelfiePrompt
+        open={showSelfiePrompt}
+        onAddSelfie={() => {
+          setShowSelfiePrompt(false)
+          navigate('/app/profile')
+        }}
+        onDismiss={() => setShowSelfiePrompt(false)}
+      />
     </div>
   )
 }
