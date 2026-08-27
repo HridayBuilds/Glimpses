@@ -6,7 +6,8 @@ import toast from 'react-hot-toast'
 import AppHeader from '../../components/app/AppHeader'
 import ImageSlot from '../../components/common/ImageSlot'
 import ConfirmDialog from '../../components/common/ConfirmDialog'
-import ConsentSheet from '../../components/profile/ConsentSheet'
+import SelfieOptionsSheet from '../../components/profile/SelfieOptionsSheet'
+import CameraCapture from '../../components/profile/CameraCapture'
 import { useAuth } from '../../context/AuthContext'
 import { getProfile, updateProfile, uploadSelfie, deleteSelfie } from '../../lib/profileApi'
 
@@ -16,7 +17,8 @@ function Profile() {
   const queryClient = useQueryClient()
   const fileInputRef = useRef(null)
 
-  const [consentOpen, setConsentOpen] = useState(false)
+  const [optionsOpen, setOptionsOpen] = useState(false)
+  const [cameraOpen, setCameraOpen] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
 
@@ -59,21 +61,35 @@ function Profile() {
 
   const onSaveName = handleSubmit(({ displayName }) => saveNameMutation.mutateAsync(displayName))
 
-  const acceptConsent = () => {
-    setConsentOpen(false)
+  const onTakeSelfie = () => {
+    setOptionsOpen(false)
+    setCameraOpen(true)
+  }
+
+  const onChooseFile = () => {
+    setOptionsOpen(false)
     fileInputRef.current?.click()
   }
 
-  const onFileChange = async (e) => {
-    const file = e.target.files[0]
-    e.target.value = ''
-    if (!file) return
+  const saveSelfieFile = async (file) => {
     setUploading(true)
     try {
       await uploadSelfieMutation.mutateAsync(file)
     } finally {
       setUploading(false)
     }
+  }
+
+  const onFileChange = async (e) => {
+    const file = e.target.files[0]
+    e.target.value = ''
+    if (!file) return
+    await saveSelfieFile(file)
+  }
+
+  const onCameraCapture = async (file) => {
+    setCameraOpen(false)
+    await saveSelfieFile(file)
   }
 
   const onConfirmDelete = async () => {
@@ -111,12 +127,22 @@ function Profile() {
               </div>
               <div className="min-w-0">
                 <div className="mb-[5px] text-[15.5px] font-semibold tracking-[-0.01em]">{selfieTitle}</div>
-                <div className="text-[14px] leading-[1.55] text-white/50">{selfieBody}</div>
+                <div className="text-[14px] leading-[1.55] text-white/50">
+                  {selfieBody}
+                  {!hasSelfie && (
+                    <>
+                      {' '}
+                      <Link to="/app/profile/selfie-info" className="font-medium text-[#FF7A59]">
+                        info
+                      </Link>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
             <div className="mt-3 flex gap-2.5">
               <button
-                onClick={() => setConsentOpen(true)}
+                onClick={() => setOptionsOpen(true)}
                 disabled={uploading}
                 className="flex-1 rounded-xl border border-white/10 bg-white/[0.07] py-3.5 text-[15px] font-medium text-[#F5F5F7] transition-transform duration-100 ease-out active:scale-[0.975] disabled:opacity-60"
               >
@@ -148,7 +174,7 @@ function Profile() {
                   <button
                     type="submit"
                     disabled={isSubmitting}
-                    className="mt-1 self-start text-[14.5px] font-semibold text-[#FF7A59] disabled:opacity-60"
+                    className="mt-1 w-full rounded-md bg-[#FF7A59] py-3 text-[15px] font-semibold text-[#200C05] transition-transform duration-100 ease-out active:scale-[0.975] disabled:opacity-60"
                   >
                     Save
                   </button>
@@ -176,9 +202,22 @@ function Profile() {
         )}
       </div>
 
-      <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={onFileChange} />
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".jpg,.jpeg,.png,.heic,image/jpeg,image/png,image/heic"
+        className="hidden"
+        onChange={onFileChange}
+      />
 
-      <ConsentSheet open={consentOpen} onCancel={() => setConsentOpen(false)} onAccept={acceptConsent} />
+      <SelfieOptionsSheet
+        open={optionsOpen}
+        onCancel={() => setOptionsOpen(false)}
+        onTakeSelfie={onTakeSelfie}
+        onChooseFile={onChooseFile}
+      />
+
+      <CameraCapture open={cameraOpen} onCancel={() => setCameraOpen(false)} onCapture={onCameraCapture} />
 
       <ConfirmDialog
         open={deleteOpen}

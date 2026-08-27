@@ -11,6 +11,7 @@ import ForgotPassword from './pages/auth/ForgotPassword'
 import ResetPassword from './pages/auth/ResetPassword'
 import RequireAuth from './components/auth/RequireAuth'
 import Profile from './pages/app/Profile'
+import SelfieInfo from './pages/app/SelfieInfo'
 import Privacy from './pages/app/Privacy'
 import Home from './pages/app/Home'
 import CreateEvent from './pages/app/CreateEvent'
@@ -87,6 +88,14 @@ function App() {
           element={
             <RequireAuth>
               <Profile />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/app/profile/selfie-info"
+          element={
+            <RequireAuth>
+              <SelfieInfo />
             </RequireAuth>
           }
         />
