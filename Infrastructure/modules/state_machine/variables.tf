@@ -5,7 +5,7 @@ variable "name_prefix" {
 }
 
 variable "ingestion_function_arn" {
-  description = "ARN of the ingestion Lambda every Task state invokes (Extract/IndexOnePhoto/Finalize/ListAttendees/MatchAttendees)"
+  description = "ARN of the ingestion Lambda every Task state invokes (Stage/ProcessOnePhoto/BuildPhotosManifest/IndexOnePhoto/Finalize/ListAttendees/MatchAttendees)"
   type        = string
 }
 
@@ -34,4 +34,10 @@ variable "rekognition_search_max_concurrency" {
   description = "MatchAttendees Distributed Map's MaxConcurrency, for SearchFacesByImage. Measured 2026-08-17 via `aws service-quotas list-service-quotas --service-code rekognition` — this account's real TPS quota is 5, same value IndexFaces measured at (SETUP_STEPS.md #5), confirmed independently rather than assumed."
   type        = number
   default     = 5
+}
+
+variable "photo_processing_max_concurrency" {
+  description = "ProcessPhotos Distributed Map's MaxConcurrency, for the per-photo format/HEIC/thumbnail/DynamoDB work split out of Extract. Not Rekognition-bound, so not tied to the 5 TPS quota IndexPhotos/MatchAttendees are capped at - bounded instead by S3/DynamoDB throughput and (for HEIC photos only) synchronous heic_converter invokes."
+  type        = number
+  default     = 20
 }

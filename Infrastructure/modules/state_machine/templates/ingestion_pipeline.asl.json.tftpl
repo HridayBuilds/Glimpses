@@ -1,5 +1,5 @@
 {
-  "Comment": "Ingestion pipeline (T-02): InitializeJob -> mark_extracting -> Extract -> mark_indexing -> per-photo IndexFaces fan-out -> Finalize -> CheckIndexingOutcome. If zero photos succeeded, routes straight to JobFailed (mark_failed) - skipped ListAttendees/MatchAttendees entirely, since there are no new photos for them to match against. Otherwise: mark_matching -> ListAttendees -> per-attendee SearchFaces fan-out (MatchAttendees) -> UpdateJobStatus (mark_success, unconditional) -> IngestionSucceeded. db_api is called via named actions only (mark_extracting/mark_indexing/mark_matching/mark_success/mark_failed) - the literal Jobs.status string never appears here, db_api owns the action->status mapping and enum enforcement itself (LOCKED_TECH_DECISIONS.md T-02 follow-up).",
+  "Comment": "Ingestion pipeline (T-02): InitializeJob -> mark_extracting -> Stage (raw zip bytes to S3 + manifest) -> per-photo processing fan-out (ProcessPhotos) -> BuildPhotosManifest -> mark_indexing -> per-photo IndexFaces fan-out (IndexPhotos) -> Finalize -> CheckIndexingOutcome. If zero photos succeeded, routes straight to JobFailed (mark_failed) - skipped ListAttendees/MatchAttendees entirely, since there are no new photos for them to match against. Otherwise: mark_matching -> ListAttendees -> per-attendee SearchFaces fan-out (MatchAttendees) -> UpdateJobStatus (mark_success, unconditional) -> IngestionSucceeded. All three Distributed Maps (ProcessPhotos, IndexPhotos, MatchAttendees) read their item lists from an S3 manifest via ItemReader, never inline through state data. db_api is called via named actions only (mark_extracting/mark_indexing/mark_matching/mark_success/mark_failed) - the literal Jobs.status string never appears here, db_api owns the action->status mapping and enum enforcement itself (LOCKED_TECH_DECISIONS.md T-02 follow-up).",
   "QueryLanguage": "JSONata",
   "StartAt": "InitializeJob",
   "States": {
@@ -64,15 +64,110 @@
       "Next": "Extract"
     },
 
-    "Extract": {
+    "Stage": {
+      "Comment": "Only touches the zip: copies each entry's raw bytes to S3 and writes a manifest pointer. All per-photo processing (format sniff/hash/HEIC/thumbnail/DynamoDB write) happens per-item in ProcessPhotos below, not here - a single invocation of that work does not scale to 800 photos within one Lambda timeout.",
       "Type": "Task",
       "Resource": "arn:aws:states:::lambda:invoke",
       "Arguments": {
         "FunctionName": "${ingestion_function_arn}",
         "Payload": {
-          "step": "extract",
+          "step": "stage",
           "bucket": "{% $states.input.bucket %}",
           "key": "{% $states.input.key %}"
+        }
+      },
+      "Output": "{% $states.result.Payload %}",
+      "Retry": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Output": "{% $states.input %}",
+          "Next": "JobFailed"
+        }
+      ],
+      "Next": "ProcessPhotos"
+    },
+
+    "ProcessPhotos": {
+      "Type": "Map",
+      "Label": "ProcessPhotos",
+      "ItemProcessor": {
+        "ProcessorConfig": {
+          "Mode": "DISTRIBUTED",
+          "ExecutionType": "STANDARD"
+        },
+        "StartAt": "ProcessOnePhoto",
+        "States": {
+          "ProcessOnePhoto": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "Arguments": {
+              "FunctionName": "${ingestion_function_arn}",
+              "Payload": {
+                "step": "process_one_photo",
+                "eventID": "{% $states.input.eventID %}",
+                "userID": "{% $states.input.userID %}",
+                "filename": "{% $states.input.filename %}",
+                "rawKey": "{% $states.input.rawKey %}",
+                "uploadedAt": "{% $states.input.uploadedAt %}",
+                "uploaderDisplayName": "{% $states.input.uploaderDisplayName %}",
+                "uploaderEmail": "{% $states.input.uploaderEmail %}"
+              }
+            },
+            "Output": "{% $states.result.Payload %}",
+            "Retry": [
+              {
+                "ErrorEquals": ["States.ALL"],
+                "IntervalSeconds": 2,
+                "MaxAttempts": 3,
+                "BackoffRate": 2
+              }
+            ],
+            "End": true
+          }
+        }
+      },
+      "ItemReader": {
+        "Resource": "arn:aws:states:::s3:getObject",
+        "ReaderConfig": {
+          "InputType": "JSON"
+        },
+        "Arguments": {
+          "Bucket": "{% $states.input.stagedManifestBucket %}",
+          "Key": "{% $states.input.stagedManifestKey %}"
+        }
+      },
+      "MaxConcurrency": ${photo_processing_max_concurrency},
+      "ToleratedFailurePercentage": 100,
+      "Output": "{% $merge([$states.input, {'processResults': $states.result}]) %}",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Output": "{% $states.input %}",
+          "Next": "JobFailed"
+        }
+      ],
+      "Next": "BuildPhotosManifest"
+    },
+
+    "BuildPhotosManifest": {
+      "Comment": "Filters ProcessPhotos' results down to the succeeded photos and writes them as a manifest file in S3 - the same ItemReader-fed pattern IndexPhotos below already expects, so IndexPhotos needs no change to consume it.",
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Arguments": {
+        "FunctionName": "${ingestion_function_arn}",
+        "Payload": {
+          "step": "build_photos_manifest",
+          "jobId": "{% $states.input.jobId %}",
+          "eventID": "{% $states.input.eventID %}",
+          "processResults": "{% $states.input.processResults %}"
         }
       },
       "Output": "{% $states.result.Payload %}",
@@ -190,7 +285,7 @@
           "step": "finalize",
           "jobId": "{% $states.input.jobId %}",
           "eventID": "{% $states.input.eventID %}",
-          "extractFailedCount": "{% $states.input.extractFailedCount %}",
+          "processFailedCount": "{% $states.input.processFailedCount %}",
           "indexResults": "{% $states.input.indexResults %}"
         }
       },
@@ -263,7 +358,8 @@
         "FunctionName": "${ingestion_function_arn}",
         "Payload": {
           "step": "list_attendees",
-          "eventID": "{% $states.input.eventID %}"
+          "eventID": "{% $states.input.eventID %}",
+          "jobId": "{% $states.input.jobId %}"
         }
       },
       "Output": "{% $merge([$states.input, $states.result.Payload]) %}",
@@ -286,9 +382,19 @@
     },
 
     "MatchAttendees": {
+      "Comment": "Reads its attendee list from an S3 manifest via ItemReader, same pattern as IndexPhotos/ProcessPhotos above - kept consistent across all three Distributed Maps rather than passing attendee IDs inline through state data.",
       "Type": "Map",
       "Label": "MatchAttendees",
-      "Items": "{% $states.input.attendeeIDs %}",
+      "ItemReader": {
+        "Resource": "arn:aws:states:::s3:getObject",
+        "ReaderConfig": {
+          "InputType": "JSON"
+        },
+        "Arguments": {
+          "Bucket": "{% $states.input.attendeesManifestBucket %}",
+          "Key": "{% $states.input.attendeesManifestKey %}"
+        }
+      },
       "ItemSelector": {
         "eventID": "{% $states.input.eventID %}",
         "userID": "{% $states.context.Map.Item.Value %}"

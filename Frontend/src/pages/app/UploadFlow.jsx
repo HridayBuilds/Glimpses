@@ -11,6 +11,21 @@ const MAX_PHOTOS = 500
 const STAGE_PCT = { CREATED: 10, EXTRACTING: 35, INDEXING: 65, MATCHING: 85, SUCCESS: 100 }
 const STAGE_LABEL = { CREATED: 'Starting', EXTRACTING: 'Extracting', INDEXING: 'Indexing faces', MATCHING: 'Matching attendees' }
 
+// Fibonacci-spaced polling: quick checks early (a small batch may finish in
+// seconds) backing off as the job runs longer (big batches take minutes), so
+// we're not hammering the API with a fixed-interval poll for the whole job.
+const POLL_BASE_MS = 1500
+const POLL_MAX_MS = 20000
+
+function fibonacciPollDelay(pollCount) {
+  let a = 1
+  let b = 1
+  for (let i = 0; i < pollCount; i++) {
+    ;[a, b] = [b, a + b]
+  }
+  return Math.min(a * POLL_BASE_MS, POLL_MAX_MS)
+}
+
 function UploadFlow() {
   const { eventId } = useParams()
   const navigate = useNavigate()
@@ -28,7 +43,8 @@ function UploadFlow() {
     enabled: phase === 'processing' && !!jobId,
     refetchInterval: (query) => {
       const status = query.state.data?.status
-      return status === 'SUCCESS' || status === 'FAILED' ? false : 2500
+      if (status === 'SUCCESS' || status === 'FAILED') return false
+      return fibonacciPollDelay(query.state.dataUpdateCount)
     },
   })
 

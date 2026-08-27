@@ -94,7 +94,7 @@ def _zip_bytes(entries):
 
 
 @mock_aws
-def test_extract_then_index_then_finalize_full_round_trip(monkeypatch):
+def test_stage_then_process_then_index_then_finalize_full_round_trip(monkeypatch):
     dynamodb = boto3.resource("dynamodb", region_name="ap-south-1")
     _create_tables(dynamodb)
     events_table = dynamodb.Table(os.environ["EVENTS_TABLE_NAME"])
@@ -111,9 +111,28 @@ def test_extract_then_index_then_finalize_full_round_trip(monkeypatch):
     upload_key = "uploads/event/evt_1/user/user_1/job/job_1/original.zip"
     s3.put_object(Bucket=bucket, Key=upload_key, Body=_zip_bytes({"a.jpg": _JPEG_BYTES}))
 
-    extract_result = lambda_handler({"step": "extract", "bucket": bucket, "key": upload_key}, _FakeLambdaContext())
-    assert extract_result["extractFailedCount"] == 0
-    manifest = json.loads(s3.get_object(Bucket=bucket, Key=extract_result["manifestKey"])["Body"].read())
+    stage_result = lambda_handler({"step": "stage", "bucket": bucket, "key": upload_key}, _FakeLambdaContext())
+    staged_manifest = json.loads(s3.get_object(Bucket=bucket, Key=stage_result["stagedManifestKey"])["Body"].read())
+    assert len(staged_manifest) == 1
+    staged_entry = staged_manifest[0]
+
+    process_result = lambda_handler(
+        {"step": "process_one_photo", **staged_entry},
+        _FakeLambdaContext(),
+    )
+    assert process_result["status"] == "SUCCEEDED"
+
+    manifest_result = lambda_handler(
+        {
+            "step": "build_photos_manifest",
+            "jobId": stage_result["jobId"],
+            "eventID": stage_result["eventID"],
+            "processResults": [process_result],
+        },
+        _FakeLambdaContext(),
+    )
+    assert manifest_result["processFailedCount"] == 0
+    manifest = json.loads(s3.get_object(Bucket=bucket, Key=manifest_result["manifestKey"])["Body"].read())
     assert len(manifest) == 1
     photo = manifest[0]
 
@@ -144,7 +163,7 @@ def test_extract_then_index_then_finalize_full_round_trip(monkeypatch):
             "step": "finalize",
             "jobId": "job_1",
             "eventID": "evt_1",
-            "extractFailedCount": extract_result["extractFailedCount"],
+            "processFailedCount": manifest_result["processFailedCount"],
             "indexResults": [{"status": "OK"}],
         },
         _FakeLambdaContext(),

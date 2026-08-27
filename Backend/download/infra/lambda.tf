@@ -6,8 +6,8 @@ resource "aws_lambda_function" "this" {
   runtime       = "python3.13"
   architectures = ["x86_64"]
   role          = aws_iam_role.this.arn
-  timeout       = 900
-  memory_size   = 512
+  timeout       = 300
+  memory_size   = 1024
 
   environment {
     variables = {

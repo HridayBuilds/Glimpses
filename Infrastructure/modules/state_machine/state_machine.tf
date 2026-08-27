@@ -6,6 +6,7 @@ locals {
     db_api_function_arn                = var.db_api_function_arn
     rekognition_index_max_concurrency  = var.rekognition_index_max_concurrency
     rekognition_search_max_concurrency = var.rekognition_search_max_concurrency
+    photo_processing_max_concurrency   = var.photo_processing_max_concurrency
   })
 }
 
