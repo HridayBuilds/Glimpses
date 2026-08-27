@@ -120,7 +120,9 @@ function UploadFlow() {
       ? "Nothing you've already added was lost. You can try again."
       : phase === 'processing' && status === 'SUCCESS'
         ? "Matching runs on the new photos automatically. There's nothing else you need to do."
-        : "Your photos are uploading together. Faces are matched as each one lands, so you'll start seeing results before the upload finishes."
+        : phase === 'idle'
+          ? 'Pick photos or a ZIP archive to add to this event.'
+          : "Your photos are uploading together. Faces are matched as each one lands, so you'll start seeing results before the upload finishes."
 
   const statusLabel =
     phase === 'zipping' ? 'Packing' : phase === 'uploading' ? 'Uploading' : phase === 'processing' ? (STAGE_LABEL[status] ?? 'Starting') : ''

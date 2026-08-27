@@ -11,6 +11,7 @@ variable "alarm_email" {
 }
 
 variable "frontend_domain_name" {
-  description = "Frontend app's CloudFront distribution's default domain, fetched by Jenkins from Frontend/frontend's own Terraform state and passed in at apply time"
+  description = "Frontend app's CloudFront distribution's default domain, fetched by Jenkins from Frontend/frontend's own Terraform state and passed in at apply time. Only module.events consumes it, but Terraform resolves every root variable before honoring -target, so every other per-module Jenkins job needs a default here to keep applying."
   type        = string
+  default     = ""
 }

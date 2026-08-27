@@ -1,7 +1,6 @@
-import { useRef, useState } from 'react'
+import { memo, useCallback, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import toast from 'react-hot-toast'
 import { joinEvent } from '../../lib/membershipApi'
 import { extractAccessCode, decodeQRFromFile } from '../../lib/qr'
 import QRScanner from '../../components/join/QRScanner'
@@ -12,6 +11,29 @@ const CODE_ALPHABET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ'.split('')
 const CODE_LENGTH = 6
 const CODE_INPUT_RE = /[^23456789ABCDEFGHJKLMNPQRSTUVWXYZ]/gi
 
+const Keypad = memo(function Keypad({ onKey, onBackspace }) {
+  return (
+    <div className="mb-5 flex flex-wrap gap-2">
+      {CODE_ALPHABET.map((c) => (
+        <button
+          key={c}
+          data-char={c}
+          onClick={onKey}
+          className="min-w-0 flex-[1_1_15%] rounded-[11px] border border-white/[0.08] bg-white/[0.06] py-3.5 font-mono text-[17px] font-medium text-[#F5F5F7] transition-transform duration-100 ease-out active:scale-95"
+        >
+          {c}
+        </button>
+      ))}
+      <button
+        onClick={onBackspace}
+        className="min-w-0 flex-[1_1_15%] rounded-[11px] border border-white/[0.08] bg-white/[0.06] py-3.5 font-mono text-[17px] font-medium text-[#F5F5F7] transition-transform duration-100 ease-out active:scale-95"
+      >
+        ⌫
+      </button>
+    </div>
+  )
+})
+
 function JoinEvent() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -21,7 +43,7 @@ function JoinEvent() {
   const [code, setCode] = useState('')
   const [error, setError] = useState(false)
   const [scannerOpen, setScannerOpen] = useState(false)
-  const [qrError, setQrError] = useState(false)
+  const [qrError, setQrError] = useState(null)
 
   const joinMutation = useMutation({
     mutationFn: (accessCode) => joinEvent(accessCode),
@@ -29,24 +51,28 @@ function JoinEvent() {
       queryClient.invalidateQueries({ queryKey: ['events'] })
       navigate(`/app/events/${result.eventID}`)
     },
-    onError: () => setError(true),
+    onError: () => {
+      if (tab === 'qr') setQrError("That QR code doesn't match any event. Try a different one.")
+      else setError(true)
+    },
   })
 
   const selectTab = (next) => {
     setTab(next)
     setError(false)
-    setQrError(false)
+    setQrError(null)
   }
 
-  const tapKey = (v) => () => {
+  const onKey = useCallback((e) => {
+    const v = e.currentTarget.dataset.char
     setError(false)
     setCode((c) => (c.length >= CODE_LENGTH ? c : c + v))
-  }
+  }, [])
 
-  const backspace = () => {
+  const backspace = useCallback(() => {
     setError(false)
     setCode((c) => c.slice(0, -1))
-  }
+  }, [])
 
   const onTypeCode = (e) => {
     setError(false)
@@ -62,10 +88,10 @@ function JoinEvent() {
     setScannerOpen(false)
     const accessCode = extractAccessCode(text)
     if (!accessCode) {
-      setQrError(true)
+      setQrError("Couldn't find an event code in that QR code. Try again.")
       return
     }
-    setQrError(false)
+    setQrError(null)
     setCode(accessCode)
     joinMutation.mutate(accessCode)
   }
@@ -77,10 +103,10 @@ function JoinEvent() {
     const text = await decodeQRFromFile(file)
     const accessCode = extractAccessCode(text)
     if (!accessCode) {
-      toast.error("Couldn't find an event code in that image.")
+      setQrError("Couldn't find an event code in that image.")
       return
     }
-    setQrError(false)
+    setQrError(null)
     setCode(accessCode)
     joinMutation.mutate(accessCode)
   }
@@ -142,7 +168,7 @@ function JoinEvent() {
                 {Array.from({ length: CODE_LENGTH }, (_, i) => (
                   <div
                     key={i}
-                    className="flex aspect-[0.8] flex-1 items-center justify-center rounded-xl font-mono text-[24px] font-semibold transition-colors duration-150"
+                    className="flex aspect-[0.8] flex-1 items-center justify-center rounded-xl font-mono text-[24px] font-semibold transition-colors duration-75"
                     style={{
                       background: code[i] ? 'rgba(255,255,255,0.09)' : 'rgba(255,255,255,0.04)',
                       border: `1px solid ${error ? 'rgba(255,89,89,0.45)' : i === code.length ? 'rgba(255,122,89,0.7)' : 'rgba(255,255,255,0.09)'}`,
@@ -154,6 +180,8 @@ function JoinEvent() {
               </div>
             </div>
 
+            <p className="mb-4 -mt-2.5 text-[12.5px] text-white/35">Codes skip 0, 1, I and O to avoid mix-ups.</p>
+
             {error && (
               <div className="mb-4 flex items-start gap-2.5 rounded-xl border border-[#FF5959]/25 bg-[#FF5959]/[0.09] px-3.5 py-3">
                 <span className="text-[14px] leading-[1.5] text-[#FFBEBE]/90">
@@ -162,23 +190,7 @@ function JoinEvent() {
               </div>
             )}
 
-            <div className="mb-5 flex flex-wrap gap-2">
-              {CODE_ALPHABET.map((c) => (
-                <button
-                  key={c}
-                  onClick={tapKey(c)}
-                  className="min-w-0 flex-[1_1_15%] rounded-[11px] border border-white/[0.08] bg-white/[0.06] py-3.5 font-mono text-[17px] font-medium text-[#F5F5F7] transition-transform duration-100 ease-out active:scale-95"
-                >
-                  {c}
-                </button>
-              ))}
-              <button
-                onClick={backspace}
-                className="min-w-0 flex-[1_1_15%] rounded-[11px] border border-white/[0.08] bg-white/[0.06] py-3.5 font-mono text-[17px] font-medium text-[#F5F5F7] transition-transform duration-100 ease-out active:scale-95"
-              >
-                ⌫
-              </button>
-            </div>
+            <Keypad onKey={onKey} onBackspace={backspace} />
 
             <button
               onClick={submitJoin}
@@ -193,9 +205,7 @@ function JoinEvent() {
           <>
             {qrError && (
               <div className="mb-4 flex items-start gap-2.5 rounded-xl border border-[#FF5959]/25 bg-[#FF5959]/[0.09] px-3.5 py-3">
-                <span className="text-[14px] leading-[1.5] text-[#FFBEBE]/90">
-                  Couldn't find an event code in that QR code. Try again.
-                </span>
+                <span className="text-[14px] leading-[1.5] text-[#FFBEBE]/90">{qrError}</span>
               </div>
             )}
             <div className="flex flex-col gap-2.5">
