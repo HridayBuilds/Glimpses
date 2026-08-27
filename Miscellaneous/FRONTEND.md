@@ -13,13 +13,13 @@ Basic scaffold done at `Frontend/` (Vite + React, confirmed against npm/context7
 - Default Vite template content (demo assets, counter, docs links) removed. `npm run build` verified working.
 - Not yet done: auth screens, axios interceptor, route guards, event/gallery screens, the "Frontend app" Jenkins job (build + sync + invalidate).
 
-`Frontend/Infra/` Terraform written (2026-08-26), matching `Infrastructure/`'s shape: own root (`providers.tf`/`variables.tf`/`imports.tf`), one module (`modules/site/`), `cicd/Jenkinsfile`.
+`Frontend/infra/` Terraform written (2026-08-26), matching `Infrastructure/`'s shape: own root (`providers.tf`/`variables.tf`/`imports.tf`), one module (`modules/hosting/`), `cicd/Jenkinsfile`.
 
 - **Own state, shared state bucket:** `backend "s3"` points at the same `glimpses-terraform-state` bucket as `Infrastructure/`, but a different key (`glimpses/frontend/terraform.tfstate`) — a real separate state, no new bucket needed.
-- **`modules/site/`** = one S3 bucket (`glimpses-frontend`, private, `block_public_*` all true — no S3 "static website hosting" toggle) + one CloudFront distribution reading it via **OAC**, the same private-bucket-behind-OAC pattern as the existing `photos` bucket/distribution, not the public S3-website-endpoint pattern FRONTEND.md's wording could also be read as — chosen for consistency with what's already built and because it's strictly more secure (no public bucket at all).
+- **`modules/hosting/`** = one S3 bucket (`glimpses-frontend`, private, `block_public_*` all true — no S3 "static website hosting" toggle) + one CloudFront distribution reading it via **OAC**, the same private-bucket-behind-OAC pattern as the existing `photos` bucket/distribution, not the public S3-website-endpoint pattern FRONTEND.md's wording could also be read as — chosen for consistency with what's already built and because it's strictly more secure (no public bucket at all).
 - **Cache split**, done via `ordered_cache_behavior { path_pattern = "assets/*" }` (Vite's hashed JS/CSS output dir) with a 1-year TTL, vs. `default_cache_behavior` (everything else, including `index.html`) with TTLs forced to 0 — un-cached, so a deploy is visible immediately.
 - **SPA routing fix:** `custom_error_response` maps both 403 and 404 → `/index.html` with response code 200, so client-side routes work on refresh/deep link.
-- **Jenkins job ("Frontend infra"):** `Frontend/Infra/cicd/Jenkinsfile` — plain `init`/`validate`/`apply` in `Frontend/Infra` (no `-target`, since this is its own root, not a module inside the shared `Infrastructure` state).
+- **Jenkins job ("Frontend infra"):** `Frontend/infra/cicd/Jenkinsfile` — plain `init`/`validate`/`apply` in `Frontend/infra` (no `-target`, since this is its own root, not a module inside the shared `Infrastructure` state).
 - Verified: `terraform fmt` clean, `terraform validate` passes.
 
 ## Stack
@@ -43,9 +43,9 @@ Basic scaffold done at `Frontend/` (Vite + React, confirmed against npm/context7
 - Private S3 bucket (no public S3-website-hosting toggle — locked down via `block_public_*`, readable only by CloudFront through an Origin Access Control, same pattern as the existing `photos` bucket) as origin, fronted by a **second, independent CloudFront distribution** — not the existing photos distribution (`Infrastructure/modules/cloudfront`), which is scoped to `photos/`/`thumbnails/`/`qrcodes/` via OAC and has a different cache lifecycle (cache-forever images vs. `index.html`, which must never be stale after a deploy).
 - New distribution needs: custom error response (403/404 → `/index.html`, HTTP 200) for SPA client-side routing to work on refresh/deep link, and split cache behavior (hashed JS/CSS bundles cached long/immutable, `index.html` never cached).
 - Combining into one multi-origin distribution was considered and rejected — CORS to API Gateway is unavoidable either way (different domain regardless), so the only thing a single distribution would save is one domain, not worth mixing two different cache lifecycles into one resource.
-- Terraform for all frontend infra (S3 bucket, this CloudFront distribution, and any future frontend-only modules) lives under **`Frontend/Infra/`**, as its **own independent Terraform root and state** — deliberately separate from `Infrastructure/`'s single shared state (which every backend module currently applies into via `terraform apply -target=module.X`), so a frontend deploy can never touch backend state.
+- Terraform for all frontend infra (S3 bucket, this CloudFront distribution, and any future frontend-only modules) lives under **`Frontend/infra/`**, as its **own independent Terraform root and state** — deliberately separate from `Infrastructure/`'s single shared state (which every backend module currently applies into via `terraform apply -target=module.X`), so a frontend deploy can never touch backend state.
 - Two new Jenkins jobs:
-  - **Frontend infra** — `dir('Frontend/Infra')`, own `init`/`plan`/`apply` (not `-target` against the `Infrastructure` root, since it's a separate state).
+  - **Frontend infra** — `dir('Frontend/infra')`, own `init`/`plan`/`apply` (not `-target` against the `Infrastructure` root, since it's a separate state).
   - **Frontend app** — pulls `terraform output` from the `cognito`, `api_gateway`, and frontend-infra states, writes `.env.production`, runs `npm run build`, syncs the build output to the S3 bucket, invalidates the CloudFront distribution.
 
 ## Config delivery
@@ -106,6 +106,6 @@ Ordered so each phase only depends on what's already built. Live progress/checkb
 
 **Phase 10 — Polish pass.** Generic error/toast states for the flat-502 backend constraint, loading/empty states, responsive layout (`state.wide`) across all screens built so far.
 
-**Phase 11 — Deploy wiring.** The "Frontend app" Jenkins job (pull `terraform output` from `cognito`/`api_gateway`/`Frontend/Infra` states → `.env.production` → `npm run build` → S3 sync → CloudFront invalidate), then a real end-to-end pass against the deployed backend.
+**Phase 11 — Deploy wiring.** The "Frontend app" Jenkins job (pull `terraform output` from `cognito`/`api_gateway`/`Frontend/infra` states → `.env.production` → `npm run build` → S3 sync → CloudFront invalidate), then a real end-to-end pass against the deployed backend.
 
 **Phase 12 — Docs.** Update `README.md`/setup docs once the app is live end-to-end.

@@ -147,7 +147,7 @@ Phase 10 complete. Next up: **Phase 11 — Deploy wiring** (the "Frontend app" J
 - Deps installed, not yet wired into screens: `react-router-dom`, `react-hook-form`, `@tanstack/react-query`, `react-hot-toast`, `axios`, `amazon-cognito-identity-js`, `jszip`, `motion`.
 - `src/main.jsx`: `QueryClientProvider` + `Toaster`. `src/App.jsx`: `BrowserRouter`, one placeholder route. Empty `src/pages/`, `src/components/`, `src/context/`, `src/lib/`.
 - `npm run build` verified.
-- `Frontend/Infra/` Terraform written and validated: own state (same `glimpses-terraform-state` bucket, key `glimpses/frontend/terraform.tfstate`), `modules/site/` (private S3 bucket + OAC + CloudFront, split cache for `assets/*` vs. everything else, 403/404 → `/index.html` for SPA routing), `cicd/Jenkinsfile` ("Frontend infra" job, plain init/validate/apply, no `-target`).
+- `Frontend/infra/` Terraform written and validated: own state (same `glimpses-terraform-state` bucket, key `glimpses/frontend/terraform.tfstate`), `modules/hosting/` (private S3 bucket + OAC + CloudFront, split cache for `assets/*` vs. everything else, 403/404 → `/index.html` for SPA routing), `cicd/Jenkinsfile` ("Frontend infra" job, plain init/validate/apply, no `-target`).
 - Not built: "Frontend app" Jenkins job (Phase 11), anything past the placeholder route.
 
 ## Notes for future sessions

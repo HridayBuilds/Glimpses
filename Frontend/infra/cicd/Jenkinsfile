@@ -8,21 +8,21 @@ pipeline {
     stages {
         stage('Terraform Init') {
             steps {
-                dir('Frontend/Infra') {
+                dir('Frontend/infra') {
                     sh 'terraform init'
                 }
             }
         }
         stage('Terraform Validate') {
             steps {
-                dir('Frontend/Infra') {
+                dir('Frontend/infra') {
                     sh 'terraform validate'
                 }
             }
         }
         stage('Terraform Apply') {
             steps {
-                dir('Frontend/Infra') {
+                dir('Frontend/infra') {
                     sh 'terraform apply -auto-approve'
                 }
             }
