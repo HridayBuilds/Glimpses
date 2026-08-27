@@ -16,12 +16,8 @@ function Login() {
     setSubmitting(true)
     try {
       await login(email, password)
-      if (location.state?.justVerified) {
-        navigate('/app', { replace: true, state: { promptSelfie: true } })
-        return
-      }
       const dest = location.state?.from?.pathname || '/app'
-      navigate(dest, { replace: true })
+      navigate(dest, { replace: true, state: { promptSelfie: true } })
     } catch (err) {
       if (err.code === 'UserNotConfirmedException') {
         toast.error('Verify your email before logging in.')

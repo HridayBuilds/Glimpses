@@ -3,6 +3,7 @@ import { useNavigate, useLocation, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { getOrganizedEvents, getMyEvents } from '../../lib/eventsApi'
+import { getProfile } from '../../lib/profileApi'
 import SelfieToast from '../../components/profile/SelfieToast'
 import LoadingSpinner from '../../components/common/LoadingSpinner'
 
@@ -41,26 +42,35 @@ function EventCard({ event, onOpen }) {
 function Home() {
   const navigate = useNavigate()
   const location = useLocation()
+  const promptSelfie = !!location.state?.promptSelfie
+
+  const { data: profile } = useQuery({
+    queryKey: ['profile'],
+    queryFn: getProfile,
+    enabled: promptSelfie,
+  })
 
   useEffect(() => {
-    if (location.state?.promptSelfie) {
-      navigate(location.pathname, { replace: true })
-      toast.custom(
-        (t) => (
-          <SelfieToast
-            visible={t.visible}
-            onAddSelfie={() => {
-              toast.dismiss(t.id)
-              navigate('/app/profile')
-            }}
-            onDismiss={() => toast.dismiss(t.id)}
-          />
-        ),
-        { duration: 12000 },
-      )
-    }
+    if (!promptSelfie || !profile) return
+    navigate(location.pathname, { replace: true })
+    // Once a selfie exists, the whole point of the prompt is already satisfied —
+    // don't nag a user who's already done this.
+    if (profile.selfieUrl) return
+    toast.custom(
+      (t) => (
+        <SelfieToast
+          visible={t.visible}
+          onAddSelfie={() => {
+            toast.dismiss(t.id)
+            navigate('/app/profile')
+          }}
+          onDismiss={() => toast.dismiss(t.id)}
+        />
+      ),
+      { duration: 12000 },
+    )
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [promptSelfie, profile])
 
   const {
     data: organized,
