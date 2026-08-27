@@ -1,8 +1,8 @@
-from aws_lambda_powertools.event_handler import APIGatewayRestResolver
+from aws_lambda_powertools.event_handler import APIGatewayRestResolver, CORSConfig
 
 from Manager import manager
 
-app = APIGatewayRestResolver()
+app = APIGatewayRestResolver(cors=CORSConfig(allow_origin="*"))
 
 
 def _user_id():
