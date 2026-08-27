@@ -17,12 +17,23 @@ Live tracker for the phased build in `Miscellaneous/FRONTEND.md` ("Build plan" s
 - [x] Phase 8 — Download flow
 - [x] Phase 9 — Deletion
 - [x] Phase 10 — Polish pass
-- [ ] Phase 11 — Deploy wiring
+- [ ] Phase 11 — Deploy wiring (in progress)
 - [ ] Phase 12 — Docs
 
 ## Resume point
 
-Phase 10 complete. Next up: **Phase 11 — Deploy wiring** (the "Frontend app" Jenkins job, `.env.production` from `terraform output`, S3 sync, CloudFront invalidate, then a real end-to-end pass against the deployed backend).
+**Phase 11 in progress, 2026-08-27. Deploy wiring itself is done and working — now fixing real bugs found via the live end-to-end pass.**
+
+Live app: `https://ddezmqoqitz89.cloudfront.net`. Deployed via the `frontend-app` Jenkins job (5 stages: fetch Cognito/API Gateway outputs from `Infrastructure`, fetch hosting outputs from `Frontend/frontend`, write `.env.production`, `npm run build`, `aws s3 sync`, CloudFront invalidate — confirmed working end-to-end, ~1min run).
+
+**What got built this session (all committed):**
+- `Infrastructure/outputs.tf` — new, root-level outputs forwarding `cognito_user_pool_id`/`cognito_user_pool_client_id`/`api_gateway_invoke_url` up from their modules (these didn't exist before; `terraform output` can't read module-internal values directly, only root-level `output` blocks — this tripped up debugging more than once this session).
+- `Frontend/Infra` renamed to `Frontend/frontend` (job name = 2nd path segment, was coming out as `Infra`/`infra` otherwise); its `modules/site` renamed to `modules/hosting` (all resource names updated to match); new `Frontend/frontend/outputs.tf` forwarding `bucket_name`/`distribution_id`/`distribution_domain_name`.
+- `Frontend/app` (later renamed `Frontend/frontend-app`) — new Jenkinsfile for the deploy job itself, no Terraform of its own.
+- `jenkinsfiles.txt` (lives outside the repo, at `~/.jenkins/workspace/glimpses-seed/jenkinsfiles.txt`, maintained by hand, not git-tracked) updated with both new frontend job entries.
+- Jenkins jobs now: `frontend` (infra apply) and `frontend-app` (build+deploy), both run clean at least once.
+
+**Now doing:** a real end-to-end pass against live AWS (signup/login/profile/events/upload/gallery/download/delete) — this is the first time the app has ever talked to the real Cognito pool and API Gateway instead of a Playwright mock. Found real bugs; fixing them one at a time, starting fresh next session/context.
 
 ## Phase 10 — Polish pass (done, 2026-08-27)
 
