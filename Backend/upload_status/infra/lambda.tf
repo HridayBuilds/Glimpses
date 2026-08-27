@@ -11,8 +11,9 @@ resource "aws_lambda_function" "this" {
 
   environment {
     variables = {
-      JOBS_TABLE_NAME = var.jobs_table_name
-      PHOTOS_BUCKET   = var.photos_bucket_name
+      JOBS_TABLE_NAME   = var.jobs_table_name
+      PHOTOS_BUCKET     = var.photos_bucket_name
+      EVENTS_TABLE_NAME = var.events_table_name
     }
   }
 

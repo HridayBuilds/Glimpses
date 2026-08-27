@@ -30,7 +30,14 @@ function EventEntry() {
   const isPending = info && !info.accessCode
 
   if (info && !isPending) {
-    return <Gallery eventId={eventId} eventName={info.name} isOrganizer={isOrganizer} />
+    return (
+      <Gallery
+        eventId={eventId}
+        eventName={info.name}
+        isOrganizer={isOrganizer}
+        canUpload={isOrganizer || info.contributionPolicy !== 'ORGANIZER_ONLY'}
+      />
+    )
   }
 
   return (

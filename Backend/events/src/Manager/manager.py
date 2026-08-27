@@ -9,6 +9,7 @@ import qrcode
 from DAO.dao import (
     access_code_exists,
     batch_get_events,
+    count_attendees,
     create_collection,
     delete_collection,
     get_event,
@@ -175,6 +176,7 @@ def get_stats(payload):
     return {
         "photoCount": int(event.get("photoCount", 0)),
         "storageBytes": int(event.get("storageBytes", 0)),
+        "attendeeCount": count_attendees(event["eventID"], "ATTENDEE"),
     }
 
 

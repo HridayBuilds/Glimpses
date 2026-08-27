@@ -170,12 +170,13 @@ def test_archive_event_is_a_no_op_when_already_archived(monkeypatch):
     assert deleted_collections == []
 
 
-def test_get_stats_returns_only_photo_count_and_storage(monkeypatch):
+def test_get_stats_returns_photo_count_storage_and_attendee_count(monkeypatch):
     monkeypatch.setattr(manager, "get_event", lambda event_id: _event(photoCount=12, storageBytes=4096))
+    monkeypatch.setattr(manager, "count_attendees", lambda event_id, status: 7)
 
     result = manager.get_stats({"eventID": "evt_1", "organizerID": "user_1"})
 
-    assert result == {"photoCount": 12, "storageBytes": 4096}
+    assert result == {"photoCount": 12, "storageBytes": 4096, "attendeeCount": 7}
 
 
 def test_run_archive_sweep_archives_every_stale_event(monkeypatch):

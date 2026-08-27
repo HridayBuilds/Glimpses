@@ -89,6 +89,8 @@ module "upload_status" {
   deploy_artifacts_bucket = module.buckets.deploy_artifacts_bucket_name
   jobs_table_name         = module.dynamodb.table_names["jobs"]
   jobs_table_arn          = module.dynamodb.table_arns["jobs"]
+  events_table_name       = module.dynamodb.table_names["events"]
+  events_table_arn        = module.dynamodb.table_arns["events"]
   photos_bucket_name      = module.buckets.photos_bucket_name
   photos_bucket_arn       = module.buckets.photos_bucket_arn
   alarm_sns_topic_arn     = module.alarms.alarm_sns_topic_arn

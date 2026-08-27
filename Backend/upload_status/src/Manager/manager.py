@@ -1,11 +1,18 @@
 import uuid
 
-from DAO.dao import generate_presigned_put_url, get_job, query_latest_job
+from DAO.dao import generate_presigned_put_url, get_event, get_job, query_latest_job
 
 UPLOAD_KEY_TEMPLATE = "uploads/event/{eventID}/user/{userID}/job/{jobId}/original.zip"
 
 
 def mint_upload_url(payload):
+    event = get_event(payload["eventID"])
+    if event is None:
+        raise ValueError(f"Unknown eventID: {payload['eventID']}")
+    is_organizer = event["organizerID"] == payload["userID"]
+    if event["contributionPolicy"] == "ORGANIZER_ONLY" and not is_organizer:
+        raise ValueError("Only the organizer can add photos to this event")
+
     job_id = str(uuid.uuid4())
     key = UPLOAD_KEY_TEMPLATE.format(eventID=payload["eventID"], userID=payload["userID"], jobId=job_id)
     return {"jobId": job_id, "uploadUrl": generate_presigned_put_url(key)}

@@ -85,6 +85,7 @@ def _create_events_table(dynamodb):
 def test_create_list_get_update_and_archive_round_trip(monkeypatch):
     dynamodb = boto3.resource("dynamodb", region_name="ap-south-1")
     _create_events_table(dynamodb)
+    _create_event_attendees_table(dynamodb)
 
     s3 = boto3.client("s3", region_name="ap-south-1")
     s3.create_bucket(
@@ -134,7 +135,7 @@ def test_create_list_get_update_and_archive_round_trip(monkeypatch):
         _api_event("GET", f"/events/{event_id}/stats", claims={"sub": "user_1"}, path_parameters={"event_id": event_id}),
         _FakeLambdaContext(),
     )
-    assert json.loads(stats_response["body"]) == {"photoCount": 0, "storageBytes": 0}
+    assert json.loads(stats_response["body"]) == {"photoCount": 0, "storageBytes": 0, "attendeeCount": 0}
 
     archive_response = lambda_handler(
         _api_event(
@@ -156,6 +157,17 @@ def _create_event_attendees_table(dynamodb):
         AttributeDefinitions=[
             {"AttributeName": "userID", "AttributeType": "S"},
             {"AttributeName": "eventID", "AttributeType": "S"},
+            {"AttributeName": "status", "AttributeType": "S"},
+        ],
+        GlobalSecondaryIndexes=[
+            {
+                "IndexName": "eventID-status-index",
+                "KeySchema": [
+                    {"AttributeName": "eventID", "KeyType": "HASH"},
+                    {"AttributeName": "status", "KeyType": "RANGE"},
+                ],
+                "Projection": {"ProjectionType": "ALL"},
+            }
         ],
         BillingMode="PAY_PER_REQUEST",
     )

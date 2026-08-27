@@ -26,3 +26,17 @@ resource "aws_iam_role_policy" "photos_bucket_access" {
   role   = aws_iam_role.this.id
   policy = data.aws_iam_policy_document.photos_bucket_access.json
 }
+
+data "aws_iam_policy_document" "events_access" {
+  statement {
+    effect    = "Allow"
+    actions   = ["dynamodb:GetItem"]
+    resources = [var.events_table_arn]
+  }
+}
+
+resource "aws_iam_role_policy" "events_access" {
+  name   = "${var.name_prefix}-upload-status-events-access"
+  role   = aws_iam_role.this.id
+  policy = data.aws_iam_policy_document.events_access.json
+}

@@ -69,6 +69,17 @@ def list_attendee_rows_for_user(user_id):
     return response["Items"]
 
 
+def count_attendees(event_id, status):
+    response = _event_attendees_table().query(
+        IndexName="eventID-status-index",
+        KeyConditionExpression="eventID = :e AND #s = :s",
+        ExpressionAttributeNames={"#s": "status"},
+        ExpressionAttributeValues={":e": event_id, ":s": status},
+        Select="COUNT",
+    )
+    return response["Count"]
+
+
 def batch_get_events(event_ids):
     if not event_ids:
         return []

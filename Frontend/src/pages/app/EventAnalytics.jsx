@@ -3,7 +3,6 @@ import { useQuery } from '@tanstack/react-query'
 import AppHeader from '../../components/app/AppHeader'
 import LoadingSpinner from '../../components/common/LoadingSpinner'
 import { getEventStats } from '../../lib/eventsApi'
-import { getAttendees } from '../../lib/membershipApi'
 import { formatBytes } from '../../lib/format'
 
 function StatCard({ label, value }) {
@@ -18,17 +17,10 @@ function StatCard({ label, value }) {
 function EventAnalytics() {
   const { eventId } = useParams()
 
-  const { data: stats, isLoading: loadingStats, isError: errorStats } = useQuery({
+  const { data: stats, isLoading, isError } = useQuery({
     queryKey: ['events', eventId, 'stats'],
     queryFn: () => getEventStats(eventId),
   })
-  const { data: attendees, isLoading: loadingAttendees, isError: errorAttendees } = useQuery({
-    queryKey: ['events', eventId, 'attendees', 'ATTENDEE'],
-    queryFn: () => getAttendees(eventId, 'ATTENDEE'),
-  })
-
-  const isLoading = loadingStats || loadingAttendees
-  const isError = errorStats || errorAttendees
 
   return (
     <div className="min-h-svh bg-[radial-gradient(120%_60%_at_50%_0%,#131317_0%,#08080A_60%)] text-[#F5F5F7]">
@@ -39,7 +31,7 @@ function EventAnalytics() {
 
       {!isLoading && !isError && (
         <div className="mx-auto grid max-w-[560px] grid-cols-2 gap-2.5 px-5 pb-20 pt-4">
-          <StatCard label="Attendees" value={attendees.length} />
+          <StatCard label="Attendees" value={stats.attendeeCount} />
           <StatCard label="Photos" value={stats.photoCount} />
           <div className="col-span-2">
             <StatCard label="Storage used" value={formatBytes(stats.storageBytes)} />

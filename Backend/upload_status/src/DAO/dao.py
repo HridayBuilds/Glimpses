@@ -10,6 +10,10 @@ def _jobs_table():
     return boto3.resource("dynamodb").Table(os.environ["JOBS_TABLE_NAME"])
 
 
+def _events_table():
+    return boto3.resource("dynamodb").Table(os.environ["EVENTS_TABLE_NAME"])
+
+
 def _s3():
     return boto3.client("s3")
 
@@ -20,6 +24,11 @@ def generate_presigned_put_url(key):
         Params={"Bucket": os.environ["PHOTOS_BUCKET"], "Key": key, "ContentType": "application/zip"},
         ExpiresIn=PUT_EXPIRES_IN,
     )
+
+
+def get_event(event_id):
+    response = _events_table().get_item(Key={"eventID": event_id})
+    return response.get("Item")
 
 
 def get_job(job_id):

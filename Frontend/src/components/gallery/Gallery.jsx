@@ -9,7 +9,7 @@ import ConfirmDialog from '../common/ConfirmDialog'
 import EventMenu from './EventMenu'
 import LoadingSpinner from '../common/LoadingSpinner'
 
-function Gallery({ eventId, eventName, isOrganizer }) {
+function Gallery({ eventId, eventName, isOrganizer, canUpload }) {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [mode, setMode] = useState('mine')
@@ -164,14 +164,12 @@ function Gallery({ eventId, eventName, isOrganizer }) {
             >
               {selecting ? 'Done' : 'Select'}
             </button>
-            {isOrganizer && (
-              <button
-                onClick={() => setMenuOpen(true)}
-                className="cursor-pointer rounded-[9px] border border-white/10 bg-white/[0.09] px-2.5 py-1.5 text-[14px] text-[#F5F5F7] transition-transform duration-[90ms] ease-out active:scale-95"
-              >
-                •••
-              </button>
-            )}
+            <button
+              onClick={() => setMenuOpen(true)}
+              className="cursor-pointer rounded-[9px] border border-white/10 bg-white/[0.09] px-2.5 py-1.5 text-[14px] text-[#F5F5F7] transition-transform duration-[90ms] ease-out active:scale-95"
+            >
+              •••
+            </button>
           </div>
         </div>
         <div className="mx-auto flex max-w-[1080px] items-center gap-2">
@@ -197,16 +195,17 @@ function Gallery({ eventId, eventName, isOrganizer }) {
               Everything
             </button>
           </div>
-          <button
-            onClick={() => navigate(`/app/events/${eventId}/upload`)}
-            className="flex-none cursor-pointer rounded-[11px] border-none bg-[#FF7A59] px-[15px] py-2.5 text-[14.5px] font-semibold text-[#200C05] transition-transform duration-[90ms] ease-out active:scale-95"
-          >
-            Add
-          </button>
+          {canUpload && (
+            <button
+              onClick={() => navigate(`/app/events/${eventId}/upload`)}
+              className="flex-none cursor-pointer rounded-[11px] border-none bg-[#FF7A59] px-[15px] py-2.5 text-[14.5px] font-semibold text-[#200C05] transition-transform duration-[90ms] ease-out active:scale-95"
+            >
+              Add
+            </button>
+          )}
         </div>
       </div>
 
-      {isLoading && <p className="px-5 pt-6 text-[15px] text-white/45">Loading…</p>}
       {isLoading && <LoadingSpinner messages={['Loading photos…', 'Fetching the gallery…', 'Almost there…']} />}
       {isError && <p className="px-5 pt-6 text-[15px] text-white/45">Couldn't load photos. Try again shortly.</p>}
 
@@ -214,14 +213,18 @@ function Gallery({ eventId, eventName, isOrganizer }) {
         <div className="mx-auto max-w-[420px] px-[30px] py-[70px] text-center">
           <div className="mb-2 text-[20px] font-semibold tracking-[-0.016em]">No photos yet</div>
           <p className="mb-[22px] text-pretty text-[15.5px] leading-[1.6] text-white/50">
-            The gallery's empty until someone uploads the first photo. That could be you.
+            {canUpload
+              ? "The gallery's empty until someone uploads the first photo. That could be you."
+              : 'The gallery is empty. Only the organizer can add photos to this event.'}
           </p>
-          <button
-            onClick={() => navigate(`/app/events/${eventId}/upload`)}
-            className="cursor-pointer rounded-xl border-none bg-[#FF7A59] px-[22px] py-[14px] text-[15px] font-semibold text-[#200C05] transition-transform duration-100 ease-out active:scale-95"
-          >
-            Add photos
-          </button>
+          {canUpload && (
+            <button
+              onClick={() => navigate(`/app/events/${eventId}/upload`)}
+              className="cursor-pointer rounded-xl border-none bg-[#FF7A59] px-[22px] py-[14px] text-[15px] font-semibold text-[#200C05] transition-transform duration-100 ease-out active:scale-95"
+            >
+              Add photos
+            </button>
+          )}
         </div>
       )}
 
@@ -371,6 +374,7 @@ function Gallery({ eventId, eventName, isOrganizer }) {
 
       <EventMenu
         open={menuOpen}
+        isOrganizer={isOrganizer}
         onClose={() => setMenuOpen(false)}
         onSettings={() => navigate(`/app/events/${eventId}/settings`)}
         onShare={() => navigate(`/app/events/${eventId}/share`)}

@@ -64,10 +64,23 @@ def _create_jobs_table(dynamodb):
     )
 
 
+def _create_events_table(dynamodb):
+    dynamodb.create_table(
+        TableName=os.environ["EVENTS_TABLE_NAME"],
+        KeySchema=[{"AttributeName": "eventID", "KeyType": "HASH"}],
+        AttributeDefinitions=[{"AttributeName": "eventID", "AttributeType": "S"}],
+        BillingMode="PAY_PER_REQUEST",
+    )
+
+
 @mock_aws
 def test_mint_upload_url_returns_job_id_and_signed_url():
     dynamodb = boto3.resource("dynamodb", region_name="ap-south-1")
     _create_jobs_table(dynamodb)
+    _create_events_table(dynamodb)
+    dynamodb.Table(os.environ["EVENTS_TABLE_NAME"]).put_item(
+        Item={"eventID": "evt_1", "organizerID": "organizer_1", "contributionPolicy": "ATTENDEES_CAN_ADD"}
+    )
 
     s3 = boto3.client("s3", region_name="ap-south-1")
     s3.create_bucket(
@@ -82,6 +95,22 @@ def test_mint_upload_url_returns_job_id_and_signed_url():
     body = json.loads(response["body"])
     assert "jobId" in body
     assert f"uploads/event/evt_1/user/user_1/job/{body['jobId']}/original.zip" in body["uploadUrl"]
+
+
+@mock_aws
+def test_mint_upload_url_rejects_attendee_when_organizer_only():
+    dynamodb = boto3.resource("dynamodb", region_name="ap-south-1")
+    _create_jobs_table(dynamodb)
+    _create_events_table(dynamodb)
+    dynamodb.Table(os.environ["EVENTS_TABLE_NAME"]).put_item(
+        Item={"eventID": "evt_1", "organizerID": "organizer_1", "contributionPolicy": "ORGANIZER_ONLY"}
+    )
+
+    try:
+        lambda_handler(_api_event("POST", "/events/evt_1/upload-url", claims={"sub": "user_1"}), _FakeLambdaContext())
+        assert False, "expected ValueError"
+    except ValueError:
+        pass
 
 
 @mock_aws

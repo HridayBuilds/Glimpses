@@ -1,12 +1,14 @@
-function EventMenu({ open, onClose, onSettings, onShare, onLobby, onAnalytics }) {
+function EventMenu({ open, isOrganizer, onClose, onSettings, onShare, onLobby, onAnalytics }) {
   if (!open) return null
 
-  const items = [
-    { label: 'Event Settings', onClick: onSettings },
-    { label: 'Share Event', onClick: onShare },
-    { label: 'Event Lobby', onClick: onLobby },
-    { label: 'Event Analytics', onClick: onAnalytics },
-  ]
+  const items = isOrganizer
+    ? [
+        { label: 'Event Settings', onClick: onSettings },
+        { label: 'Share Event', onClick: onShare },
+        { label: 'Event Lobby', onClick: onLobby },
+        { label: 'Event Analytics', onClick: onAnalytics },
+      ]
+    : [{ label: 'Share Event', onClick: onShare }]
 
   return (
     <div onClick={onClose} className="fixed inset-0 z-[95] flex items-end justify-center bg-black/60">

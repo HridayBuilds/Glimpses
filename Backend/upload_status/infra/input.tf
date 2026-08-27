@@ -19,6 +19,16 @@ variable "jobs_table_arn" {
   type        = string
 }
 
+variable "events_table_name" {
+  description = "Name of the Events DynamoDB table (T-04), read to check the event's contributionPolicy and organizerID"
+  type        = string
+}
+
+variable "events_table_arn" {
+  description = "ARN of the Events DynamoDB table, for IAM"
+  type        = string
+}
+
 variable "photos_bucket_name" {
   description = "Name of the shared glimpses-photos S3 bucket (T-09) — one bucket, six prefixes"
   type        = string
