@@ -1,0 +1,68 @@
+pipeline {
+    agent any
+
+    environment {
+        AWS_PROFILE = 'glimpses'
+    }
+
+    stages {
+        stage('Fetch Cognito & API Gateway outputs') {
+            steps {
+                dir('Infrastructure') {
+                    sh 'terraform init'
+                    script {
+                        env.COGNITO_USER_POOL_ID = sh(script: 'terraform output -raw cognito_user_pool_id', returnStdout: true).trim()
+                        env.COGNITO_CLIENT_ID    = sh(script: 'terraform output -raw cognito_user_pool_client_id', returnStdout: true).trim()
+                        env.API_BASE_URL         = sh(script: 'terraform output -raw api_gateway_invoke_url', returnStdout: true).trim()
+                    }
+                }
+            }
+        }
+        stage('Fetch frontend hosting outputs') {
+            steps {
+                dir('Frontend/frontend') {
+                    sh 'terraform init'
+                    script {
+                        env.BUCKET_NAME     = sh(script: 'terraform output -raw bucket_name', returnStdout: true).trim()
+                        env.DISTRIBUTION_ID = sh(script: 'terraform output -raw distribution_id', returnStdout: true).trim()
+                    }
+                }
+            }
+        }
+        stage('Write .env.production') {
+            steps {
+                dir('Frontend') {
+                    sh """
+                        cat > .env.production <<EOF
+VITE_COGNITO_USER_POOL_ID=${env.COGNITO_USER_POOL_ID}
+VITE_COGNITO_CLIENT_ID=${env.COGNITO_CLIENT_ID}
+VITE_API_BASE_URL=${env.API_BASE_URL}
+EOF
+                    """
+                }
+            }
+        }
+        stage('Install & build') {
+            steps {
+                dir('Frontend') {
+                    sh '''
+                        npm ci
+                        npm run build
+                    '''
+                }
+            }
+        }
+        stage('Sync to S3') {
+            steps {
+                dir('Frontend') {
+                    sh 'aws s3 sync dist/ s3://${BUCKET_NAME} --delete'
+                }
+            }
+        }
+        stage('Invalidate CloudFront') {
+            steps {
+                sh 'aws cloudfront create-invalidation --distribution-id ${DISTRIBUTION_ID} --paths "/*"'
+            }
+        }
+    }
+}
