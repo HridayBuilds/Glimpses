@@ -49,6 +49,13 @@ const steps = [
   },
 ]
 
+const heroPhotos = [
+  { src: 'images/marketing/site-hero-1.jpg', label: 'Candid group shot at an event', objectPosition: '50% 32%' },
+  { src: 'images/marketing/site-hero-3.jpg', label: 'Two friends laughing', objectPosition: '50% 28%' },
+  { src: 'images/marketing/site-hero-2.jpg', label: 'Guest holding up a phone', objectPosition: '50% 42%' },
+  { src: 'images/marketing/site-hero-4.jpg', label: 'Table toast, candid', objectPosition: '50% 22%' },
+]
+
 function Landing() {
   const navigate = useNavigate()
 
@@ -73,34 +80,31 @@ function Landing() {
             <p className="mb-9 max-w-[490px] text-[17.5px] leading-[1.5] tracking-[-0.01em] text-white/60 text-pretty md:text-[21px]">
               This is the one place they all land, sorted down to just the ones you're actually in.
             </p>
-            <div className="flex flex-wrap items-center gap-3.5">
+            <div className="flex flex-col items-stretch gap-3.5 sm:flex-row sm:items-center">
               <button
                 onClick={() => navigate('/signup')}
-                className="whitespace-nowrap rounded-full bg-[#FF7A59] px-[30px] py-4 text-[16.5px] font-semibold tracking-[-0.008em] text-[#200C05] transition-transform duration-100 ease-out active:scale-[0.97]"
+                className="whitespace-nowrap rounded-full bg-[#FF7A59] px-[30px] py-4 text-center text-[16.5px] font-semibold tracking-[-0.008em] text-[#200C05] transition-transform duration-100 ease-out active:scale-[0.97]"
               >
                 Get started
               </button>
               <button
                 onClick={() => navigate('/join')}
-                className="whitespace-nowrap rounded-full border border-white/[0.14] px-6 py-[15px] text-[16px] font-medium text-white/70 transition-[transform,background] duration-100 ease-out hover:bg-white/[0.06] active:scale-[0.97]"
+                className="whitespace-nowrap rounded-full border border-white/[0.14] px-[30px] py-4 text-center text-[16px] font-medium text-white/70 transition-[transform,background] duration-100 ease-out hover:bg-white/[0.06] active:scale-[0.97]"
               >
                 Have an event code?
               </button>
             </div>
           </div>
-          <div className="relative h-[300px] md:h-[440px]">
-            <div className="absolute left-[22%] top-[6%] h-[250px] w-[44%] overflow-hidden rounded-[18px] border border-[#FF7A59]/30 shadow-[0_30px_76px_rgba(0,0,0,0.6)]" style={{ transform: 'rotate(-3deg)' }}>
-              <ImageSlot src="images/marketing/site-hero-1.jpg" label="Candid group shot at an event" />
-            </div>
-            <div className="absolute left-[3%] top-[36%] h-[150px] w-[33%] overflow-hidden rounded-2xl border border-white/10 shadow-[0_20px_52px_rgba(0,0,0,0.5)]" style={{ transform: 'rotate(-8deg)' }}>
-              <ImageSlot src="images/marketing/site-hero-2.jpg" label="Guest holding up a phone" />
-            </div>
-            <div className="absolute left-[60%] right-[2%] top-[26%] h-[210px] overflow-hidden rounded-[18px] border border-white/[0.12] shadow-[0_26px_62px_rgba(0,0,0,0.55)]" style={{ transform: 'rotate(7deg)' }}>
-              <ImageSlot src="images/marketing/site-hero-3.jpg" label="Two friends laughing" />
-            </div>
-            <div className="absolute left-[40%] top-[68%] h-[138px] w-[31%] overflow-hidden rounded-2xl border border-white/[0.09] opacity-90 shadow-[0_18px_46px_rgba(0,0,0,0.5)]" style={{ transform: 'rotate(4deg)' }}>
-              <ImageSlot src="images/marketing/site-hero-4.jpg" label="Table toast, candid" />
-            </div>
+          <div className="relative grid grid-cols-2 gap-3 md:gap-3.5">
+            <div className="pointer-events-none absolute -left-[10%] -top-[14%] h-[55%] w-[55%] rounded-full bg-[#FF7A59]/20 blur-[70px]" />
+            {heroPhotos.map((p) => (
+              <div
+                key={p.src}
+                className="relative aspect-[4/5] overflow-hidden rounded-lg border border-white/[0.14] shadow-[0_24px_56px_rgba(0,0,0,0.55)]"
+              >
+                <ImageSlot src={p.src} label={p.label} objectPosition={p.objectPosition} />
+              </div>
+            ))}
           </div>
         </div>
       </div>

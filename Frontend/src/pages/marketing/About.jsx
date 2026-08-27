@@ -54,7 +54,7 @@ function About() {
             </div>
           ))}
         </div>
-        <p className="mt-[22px] max-w-[680px] text-base leading-[1.6] text-white/45 text-pretty">
+        <p className="mx-auto mt-[22px] max-w-[680px] text-center text-base leading-[1.6] text-white/45 text-pretty">
           Anywhere several people are taking photos at once, and nobody wants to chase everyone's camera roll afterwards.
         </p>
       </div>

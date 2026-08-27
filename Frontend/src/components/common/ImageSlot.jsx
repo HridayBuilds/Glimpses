@@ -1,6 +1,6 @@
 import { useState } from 'react'
 
-function ImageSlot({ src, label, className = '' }) {
+function ImageSlot({ src, label, className = '', objectPosition = '50% 50%' }) {
   const [errored, setErrored] = useState(false)
 
   if (src && !errored) {
@@ -10,6 +10,7 @@ function ImageSlot({ src, label, className = '' }) {
         alt={label}
         onError={() => setErrored(true)}
         className={`h-full w-full object-cover ${className}`}
+        style={{ objectPosition }}
       />
     )
   }
