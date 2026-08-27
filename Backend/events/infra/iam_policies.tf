@@ -2,7 +2,7 @@
 data "aws_iam_policy_document" "events_access" {
   statement {
     effect    = "Allow"
-    actions   = ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:Query"]
+    actions   = ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:Query", "dynamodb:BatchGetItem"]
     resources = [var.events_table_arn, "${var.events_table_arn}/index/*"]
   }
 }

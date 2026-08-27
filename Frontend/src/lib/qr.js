@@ -2,17 +2,22 @@ import jsQR from 'jsqr'
 
 // Matches the alphabet the backend actually generates access codes from
 // (Backend/events/src/Manager/manager.py: ACCESS_CODE_ALPHABET) — excludes 0/1/I/O.
-const ACCESS_CODE_RE = /[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{6}/i
+const CODE_CHARS = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ'
+const JOIN_PATH_RE = new RegExp(`/j/([${CODE_CHARS}]{6})`, 'i')
+const BARE_CODE_RE = new RegExp(`^[${CODE_CHARS}]{6}$`, 'i')
 
-// The backend's QR image encodes a join URL (".../j/{code}"), but that
-// domain isn't wired to anything the browser can navigate to yet — so
-// instead of following the URL, pull the access code straight out of
-// whatever text the QR decodes to and feed it into the same join call
-// the manual-entry tab uses.
+// The backend's QR image encodes a join URL (".../j/{code}"). The domain
+// itself (e.g. a CloudFront default domain) can easily contain another run
+// of 6 code-alphabet characters, so the code must be pulled from the /j/
+// path specifically — a bare "first 6 matching chars anywhere" scan matches
+// the domain before it ever reaches the real code. Fall back to treating
+// the whole scanned string as a bare code only when it isn't a URL at all.
 export function extractAccessCode(text) {
   if (!text) return null
-  const match = text.trim().match(ACCESS_CODE_RE)
-  return match ? match[0].toUpperCase() : null
+  const trimmed = text.trim()
+  const pathMatch = trimmed.match(JOIN_PATH_RE)
+  if (pathMatch) return pathMatch[1].toUpperCase()
+  return BARE_CODE_RE.test(trimmed) ? trimmed.toUpperCase() : null
 }
 
 export function decodeQRFromImageData(imageData) {

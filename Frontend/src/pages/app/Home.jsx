@@ -69,6 +69,12 @@ function Home() {
   } = useQuery({
     queryKey: ['events', 'organized'],
     queryFn: getOrganizedEvents,
+    // Mutations (create/archive/delete) explicitly invalidate this key when
+    // the list actually needs refreshing. Without a staleTime, the default
+    // refetch-on-mount races that with a background fetch of the backend's
+    // still-eventually-consistent state (e.g. an async cascade delete) and
+    // can silently undo an optimistic update made just before navigating here.
+    staleTime: 30_000,
   })
   const {
     data: joined,
@@ -77,6 +83,7 @@ function Home() {
   } = useQuery({
     queryKey: ['events', 'my-events'],
     queryFn: getMyEvents,
+    staleTime: 30_000,
   })
 
   const openEvent = (eventId) => () => navigate(`/app/events/${eventId}`)
