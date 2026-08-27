@@ -180,8 +180,6 @@ function JoinEvent() {
               </div>
             </div>
 
-            <p className="mb-4 -mt-2.5 text-[12.5px] text-white/35">Codes skip 0, 1, I and O to avoid mix-ups.</p>
-
             {error && (
               <div className="mb-4 flex items-start gap-2.5 rounded-xl border border-[#FF5959]/25 bg-[#FF5959]/[0.09] px-3.5 py-3">
                 <span className="text-[14px] leading-[1.5] text-[#FFBEBE]/90">

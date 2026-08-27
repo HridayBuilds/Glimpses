@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState, useCallback } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import * as cognito from '../lib/cognito'
 
 const AuthContext = createContext(null)
@@ -9,6 +10,7 @@ function userFromSession(session) {
 }
 
 export function AuthProvider({ children }) {
+  const queryClient = useQueryClient()
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
 
@@ -19,11 +21,15 @@ export function AuthProvider({ children }) {
     })
   }, [])
 
-  const login = useCallback(async (email, password) => {
-    const session = await cognito.login(email, password)
-    setUser(userFromSession(session))
-    return session
-  }, [])
+  const login = useCallback(
+    async (email, password) => {
+      const session = await cognito.login(email, password)
+      queryClient.clear()
+      setUser(userFromSession(session))
+      return session
+    },
+    [queryClient],
+  )
 
   const signUp = useCallback((name, email, password) => cognito.signUp(name, email, password), [])
 
@@ -40,8 +46,9 @@ export function AuthProvider({ children }) {
 
   const logout = useCallback(() => {
     cognito.signOut()
+    queryClient.clear()
     setUser(null)
-  }, [])
+  }, [queryClient])
 
   const value = {
     user,

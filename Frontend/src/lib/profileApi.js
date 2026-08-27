@@ -18,7 +18,9 @@ export async function uploadSelfie(file) {
   const {
     data: { uploadUrl },
   } = await api.put('/profile/selfie')
-  await axios.put(uploadUrl, file, { headers: { 'Content-Type': file.type } })
+  await axios.put(uploadUrl, file, {
+    headers: { 'Content-Type': file.type, 'Cache-Control': 'private, max-age=86400' },
+  })
   const { data } = await api.post('/profile/selfie/confirm')
   return data
 }

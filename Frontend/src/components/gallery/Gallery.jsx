@@ -270,7 +270,7 @@ function Gallery({ eventId, eventName, isOrganizer }) {
                   onClick={downloadZip}
                   className="flex-1 cursor-pointer rounded-[10px] border-none bg-[#FF7A59] py-2.5 text-[14.5px] font-semibold text-[#200C05] transition-transform duration-[90ms] ease-out active:scale-[0.97]"
                 >
-                  Download ZIP
+                  Download
                 </button>
               </div>
             )}
@@ -325,12 +325,20 @@ function Gallery({ eventId, eventName, isOrganizer }) {
       {selecting && (
         <div className="fixed inset-x-0 bottom-0 z-[60] border-t border-white/[0.12] bg-[rgba(20,20,24,0.74)] px-4 pb-[18px] pt-3.5 shadow-[0_-16px_44px_rgba(0,0,0,0.45)] backdrop-blur-[28px] backdrop-saturate-[1.8]">
             <div className="mx-auto flex max-w-[1080px] items-center gap-2.5">
-              <div className="min-w-0 flex-1 text-[15px] font-semibold tracking-[-0.005em] tabular-nums">
-                {selected.length === 0 ? 'Select photos' : `${selected.length} ${selected.length === 1 ? 'photo' : 'photos'}`}
-              </div>
+              <button
+                onClick={toggleSelecting}
+                className="flex-none cursor-pointer rounded-[10px] border border-white/[0.12] bg-white/[0.06] px-3 py-2.5 text-[13.5px] text-[#F5F5F7] transition-transform duration-[90ms] ease-out active:scale-95"
+              >
+                Cancel
+              </button>
+              {selected.length > 0 && (
+                <div className="min-w-0 flex-1 text-[15px] font-semibold tracking-[-0.005em] tabular-nums">
+                  {selected.length} {selected.length === 1 ? 'photo' : 'photos'}
+                </div>
+              )}
               <button
                 onClick={selectAll}
-                className="cursor-pointer rounded-[10px] border border-white/[0.12] bg-white/10 px-[13px] py-2.5 text-[14px] transition-transform duration-[90ms] ease-out active:scale-95"
+                className="ml-auto cursor-pointer rounded-[10px] border border-white/[0.12] bg-white/10 px-[13px] py-2.5 text-[14px] transition-transform duration-[90ms] ease-out active:scale-95"
               >
                 Select all
               </button>
@@ -353,7 +361,7 @@ function Gallery({ eventId, eventName, isOrganizer }) {
                 {zip === 'building' && (
                   <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-[rgba(245,245,247,0.25)] border-t-[rgba(245,245,247,0.85)]" />
                 )}
-                {zip === 'building' ? 'Preparing download…' : zip === 'ready' ? 'Save ZIP' : 'Download ZIP'}
+                {zip === 'building' ? 'Preparing download…' : zip === 'ready' ? 'Save ZIP' : 'Download'}
               </button>
             </div>
         </div>

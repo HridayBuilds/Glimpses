@@ -70,7 +70,12 @@ function EventSettings() {
   const deleteMutation = useMutation({
     mutationFn: () => deleteEvent(eventId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['events'] })
+      // Cascade teardown (photos, faces, the event row itself) runs async in the
+      // backend, so an invalidate+refetch here would still see the event for a
+      // few seconds. Strip it from the cached lists immediately instead.
+      queryClient.setQueryData(['events', 'organized'], (old) => old?.filter((e) => e.eventID !== eventId))
+      queryClient.setQueryData(['events', 'my-events'], (old) => old?.filter((e) => e.eventID !== eventId))
+      queryClient.removeQueries({ queryKey: ['events', eventId] })
       toast.success('Event deleted')
       navigate('/app')
     },
