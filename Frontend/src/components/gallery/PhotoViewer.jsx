@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { motion, useMotionValue, useTransform, useDragControls, animate } from 'motion/react'
 import { useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
@@ -9,7 +9,7 @@ function formatDate(iso) {
   return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
-function PhotoViewer({ eventId, photo, onClose }) {
+function PhotoViewer({ eventId, photo, onClose, onPrev, onNext, hasPrev, hasNext }) {
   const dragControls = useDragControls()
   const queryClient = useQueryClient()
   const [downloading, setDownloading] = useState(false)
@@ -33,20 +33,36 @@ function PhotoViewer({ eventId, photo, onClose }) {
 
   const handleDownload = async () => {
     setDownloading(true)
-    // Opened synchronously, before the await, so the browser still ties it to the click gesture.
-    const tab = window.open('', '_blank')
     try {
       const { downloadUrls } = await getDownloadUrls(eventId, [photo.photoID])
       const url = downloadUrls[0]?.downloadUrl
-      if (url && tab) tab.location.href = url
-      else tab?.close()
+      if (!url) throw new Error('missing download url')
+      const response = await fetch(url)
+      const blob = await response.blob()
+      const blobUrl = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = blobUrl
+      link.download = photo.filename || 'photo.jpg'
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      URL.revokeObjectURL(blobUrl)
     } catch {
-      tab?.close()
       toast.error('Something went wrong. Try again.')
     } finally {
       setDownloading(false)
     }
   }
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      if (e.key === 'ArrowLeft' && hasPrev) onPrev()
+      else if (e.key === 'ArrowRight' && hasNext) onNext()
+      else if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [hasPrev, hasNext, onPrev, onNext, onClose])
+
   const y = useMotionValue(0)
   const scale = useTransform(y, (v) => Math.max(0.86, 1 - Math.abs(v) / 2600))
   const radius = useTransform(y, (v) => Math.min(28, Math.abs(v) / 6))
@@ -109,27 +125,47 @@ function PhotoViewer({ eventId, photo, onClose }) {
 
         <div
           onPointerDown={(e) => dragControls.start(e)}
-          className="flex min-h-0 flex-1 items-center justify-center overflow-hidden px-2 pt-2"
+          className="relative flex min-h-0 flex-1 flex-col items-center justify-center gap-1 overflow-y-auto px-2 pb-[26px] pt-2"
         >
           <img
             src={photo.photoUrl}
             alt={photo.filename}
-            className="h-full w-auto max-w-full rounded-[6px] object-contain"
+            className="max-h-[62vh] w-auto max-w-full flex-none rounded-[6px] object-contain"
             draggable={false}
           />
-        </div>
 
-        <div
-          onPointerDown={(e) => dragControls.start(e)}
-          className="px-[18px] pb-[26px] pt-4 text-center"
-        >
-          <div className="mb-1.5 text-[12px] font-semibold uppercase tracking-[0.09em] text-white/34">
-            Uploaded by
+          <div className="w-full px-4 pt-4 text-center">
+            <div className="mb-1.5 text-[12px] font-semibold uppercase tracking-[0.09em] text-white/34">
+              Uploaded by
+            </div>
+            <div className="text-[16.5px] font-semibold leading-[1.5] tracking-[-0.012em]">
+              {photo.uploaderDisplayName}
+            </div>
+            <div className="text-[14px] leading-[1.6] text-white/45">{photo.uploaderEmail}</div>
           </div>
-          <div className="text-[16.5px] font-semibold leading-[1.5] tracking-[-0.012em]">
-            {photo.uploaderDisplayName}
-          </div>
-          <div className="text-[14px] leading-[1.6] text-white/45">{photo.uploaderEmail}</div>
+
+          {hasPrev && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                onPrev()
+              }}
+              className="absolute left-2 top-1/2 z-[3] flex h-9 w-9 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border border-white/[0.12] bg-black/40 text-[17px] text-[#F5F5F7] backdrop-blur-md transition-transform duration-[90ms] ease-out active:scale-90"
+            >
+              ‹
+            </button>
+          )}
+          {hasNext && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                onNext()
+              }}
+              className="absolute right-2 top-1/2 z-[3] flex h-9 w-9 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border border-white/[0.12] bg-black/40 text-[17px] text-[#F5F5F7] backdrop-blur-md transition-transform duration-[90ms] ease-out active:scale-90"
+            >
+              ›
+            </button>
+          )}
         </div>
       </motion.div>
 

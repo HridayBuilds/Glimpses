@@ -41,7 +41,7 @@ function ResetPassword() {
             <label className="text-[13.5px] font-semibold text-white/82">Six-digit code</label>
             <input
               {...register('code', { required: true })}
-              className="w-full rounded-xl border border-white/[0.09] bg-white/[0.06] px-4 py-[14px] text-[20px] tracking-[0.22em] tabular-nums text-[#F5F5F7] outline-none"
+              className="w-full rounded-xl border border-white/[0.16] bg-white/[0.09] px-4 py-[14px] text-[20px] tracking-[0.22em] tabular-nums text-[#F5F5F7] outline-none"
             />
           </div>
           <div className="flex flex-col gap-[7px]">
@@ -49,7 +49,7 @@ function ResetPassword() {
             <input
               type="password"
               {...register('password', { required: true })}
-              className="w-full rounded-xl border border-white/[0.09] bg-white/[0.06] px-4 py-[14px] text-[16px] text-[#F5F5F7] outline-none"
+              className="w-full rounded-xl border border-white/[0.16] bg-white/[0.09] px-4 py-[14px] text-[16px] text-[#F5F5F7] outline-none"
             />
           </div>
           <button

@@ -142,7 +142,10 @@ function Gallery({ eventId, eventName, isOrganizer, canUpload }) {
     }
   }
 
-  const openPhoto = photos.find((p) => p.photoID === openPhotoId) ?? null
+  const openIndex = photos.findIndex((p) => p.photoID === openPhotoId)
+  const openPhoto = openIndex === -1 ? null : photos[openIndex]
+  const goToPrev = () => setOpenPhotoId(photos[openIndex - 1]?.photoID)
+  const goToNext = () => setOpenPhotoId(photos[openIndex + 1]?.photoID)
 
   return (
     <div className="min-h-svh bg-[radial-gradient(120%_60%_at_50%_0%,#131317_0%,#08080A_60%)] text-[#F5F5F7]">
@@ -247,19 +250,22 @@ function Gallery({ eventId, eventName, isOrganizer, canUpload }) {
         <div className="mx-auto mt-3 max-w-[1080px] px-4">
           <div className="rounded-[14px] border border-white/10 bg-white/[0.05] p-[15px]">
             <div className="mb-2.5 flex items-center justify-between gap-2.5">
-              <div className="flex min-w-0 items-center gap-2.5">
-                {zip === 'building' && (
-                  <div className="h-3.5 w-3.5 flex-none animate-spin rounded-full border-2 border-white/20 border-t-[#FF7A59]" />
-                )}
-                <div className="text-[14.5px] font-semibold tracking-[-0.008em]">
-                  {zip === 'ready' ? 'Download ready' : 'Preparing download…'}
-                </div>
+              <div className="text-[14.5px] font-semibold tracking-[-0.008em]">
+                {zip === 'ready' ? 'ZIP ready' : 'Packing your photos…'}
               </div>
             </div>
             {zip === 'building' && (
-              <p className="text-pretty text-[13px] leading-[1.55] text-white/42">
-                Nothing is packed until you ask for it, so this takes a moment. You can keep browsing.
-              </p>
+              <>
+                <div className="mb-2.5 h-[5px] w-full overflow-hidden rounded-full bg-white/[0.08]">
+                  <div className="h-full w-1/3 animate-[download-progress_1.1s_ease-in-out_infinite] rounded-full bg-[#FF7A59]" />
+                </div>
+                <p className="text-pretty text-[13px] leading-[1.55] text-white/42">
+                  {selected.length
+                    ? `Zipping ${selected.length} ${selected.length === 1 ? 'photo' : 'photos'} — larger selections take a little longer.`
+                    : 'Zipping the whole gallery — larger events take a little longer.'}{' '}
+                  Feel free to keep browsing.
+                </p>
+              </>
             )}
             {zip === 'ready' && (
               <div className="flex gap-2.5">
@@ -283,7 +289,7 @@ function Gallery({ eventId, eventName, isOrganizer, canUpload }) {
 
       {photos.length > 0 && (
         <div className="mx-auto max-w-[1080px] px-4 pb-[140px] pt-3">
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(104px,1fr))] gap-1 sm:grid-cols-[repeat(auto-fill,minmax(150px,1fr))]">
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(104px,1fr))] gap-2.5 sm:grid-cols-[repeat(auto-fill,minmax(150px,1fr))]">
             {photos.map((p) => {
               const isSelected = selected.includes(p.photoID)
               return (
@@ -327,50 +333,62 @@ function Gallery({ eventId, eventName, isOrganizer, canUpload }) {
 
       {selecting && (
         <div className="fixed inset-x-0 bottom-0 z-[60] border-t border-white/[0.12] bg-[rgba(20,20,24,0.74)] px-4 pb-[18px] pt-3.5 shadow-[0_-16px_44px_rgba(0,0,0,0.45)] backdrop-blur-[28px] backdrop-saturate-[1.8]">
-            <div className="mx-auto flex max-w-[1080px] items-center gap-2.5">
-              <button
-                onClick={toggleSelecting}
-                className="flex-none cursor-pointer rounded-[10px] border border-white/[0.12] bg-white/[0.06] px-3 py-2.5 text-[13.5px] text-[#F5F5F7] transition-transform duration-[90ms] ease-out active:scale-95"
-              >
-                Cancel
-              </button>
-              {selected.length > 0 && (
-                <div className="min-w-0 flex-1 text-[15px] font-semibold tracking-[-0.005em] tabular-nums">
-                  {selected.length} {selected.length === 1 ? 'photo' : 'photos'}
+            <div className="mx-auto flex max-w-[1080px] flex-col gap-2.5">
+              <div className="flex items-center justify-between gap-2.5">
+                <button
+                  onClick={toggleSelecting}
+                  className="flex-none cursor-pointer rounded-[10px] border border-white/[0.12] bg-white/[0.06] px-3 py-2 text-[13.5px] text-[#F5F5F7] transition-transform duration-[90ms] ease-out active:scale-95"
+                >
+                  Cancel
+                </button>
+                <div className="min-w-0 flex-1 truncate text-center text-[13.5px] font-medium text-white/55 tabular-nums">
+                  {selected.length > 0 ? `${selected.length} ${selected.length === 1 ? 'photo' : 'photos'} selected` : 'Tap photos to select'}
                 </div>
-              )}
-              <button
-                onClick={selectAll}
-                className="ml-auto cursor-pointer rounded-[10px] border border-white/[0.12] bg-white/10 px-[13px] py-2.5 text-[14px] transition-transform duration-[90ms] ease-out active:scale-95"
-              >
-                Select all
-              </button>
-              <button
-                onClick={() => setConfirmingBulkDelete(true)}
-                disabled={selected.length === 0}
-                className="flex-none cursor-pointer rounded-[10px] border border-[rgba(255,89,89,0.3)] bg-[rgba(255,89,89,0.14)] px-3.5 py-2.5 text-[14px] text-[#FF8A8A] transition-transform duration-[90ms] ease-out active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Delete
-              </button>
-              <button
-                onClick={zipSelected}
-                disabled={zip === 'building'}
-                className="flex flex-none cursor-pointer items-center gap-2 whitespace-nowrap rounded-[10px] border-none px-3.5 py-2.5 text-[14px] font-semibold transition-transform duration-[90ms] ease-out active:scale-95 disabled:cursor-not-allowed"
-                style={{
-                  background: zip === 'building' ? 'rgba(255,255,255,0.1)' : '#FF7A59',
-                  color: zip === 'building' ? 'rgba(245,245,247,0.75)' : '#200C05',
-                }}
-              >
-                {zip === 'building' && (
-                  <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-[rgba(245,245,247,0.25)] border-t-[rgba(245,245,247,0.85)]" />
-                )}
-                {zip === 'building' ? 'Preparing download…' : zip === 'ready' ? 'Save ZIP' : 'Download'}
-              </button>
+                <button
+                  onClick={selectAll}
+                  className="flex-none cursor-pointer rounded-[10px] border border-white/[0.12] bg-white/10 px-3 py-2 text-[13.5px] transition-transform duration-[90ms] ease-out active:scale-95"
+                >
+                  Select all
+                </button>
+              </div>
+              <div className="flex items-center gap-2.5">
+                <button
+                  onClick={() => setConfirmingBulkDelete(true)}
+                  disabled={selected.length === 0}
+                  className="flex-1 cursor-pointer rounded-[10px] border border-[rgba(255,89,89,0.3)] bg-[rgba(255,89,89,0.14)] py-2.5 text-[14px] text-[#FF8A8A] transition-transform duration-[90ms] ease-out active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Delete
+                </button>
+                <button
+                  onClick={zipSelected}
+                  disabled={zip === 'building'}
+                  className="flex flex-1 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-[10px] border-none py-2.5 text-[14px] font-semibold transition-transform duration-[90ms] ease-out active:scale-95 disabled:cursor-not-allowed"
+                  style={{
+                    background: zip === 'building' ? 'rgba(255,255,255,0.1)' : '#FF7A59',
+                    color: zip === 'building' ? 'rgba(245,245,247,0.75)' : '#200C05',
+                  }}
+                >
+                  {zip === 'building' && (
+                    <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-[rgba(245,245,247,0.25)] border-t-[rgba(245,245,247,0.85)]" />
+                  )}
+                  {zip === 'building' ? 'Preparing…' : zip === 'ready' ? 'Save ZIP' : 'Download'}
+                </button>
+              </div>
             </div>
         </div>
       )}
 
-      {openPhoto && <PhotoViewer eventId={eventId} photo={openPhoto} onClose={() => setOpenPhotoId(null)} />}
+      {openPhoto && (
+        <PhotoViewer
+          eventId={eventId}
+          photo={openPhoto}
+          onClose={() => setOpenPhotoId(null)}
+          onPrev={goToPrev}
+          onNext={goToNext}
+          hasPrev={openIndex > 0}
+          hasNext={openIndex < photos.length - 1}
+        />
+      )}
 
       <EventMenu
         open={menuOpen}

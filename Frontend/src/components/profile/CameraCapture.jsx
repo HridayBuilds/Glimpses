@@ -19,16 +19,23 @@ function CameraCapture({ open, onCancel, onCapture }) {
         return
       }
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } })
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'user', width: { ideal: 720 }, height: { ideal: 960 } },
+        })
         if (cancelled) {
           stream.getTracks().forEach((track) => track.stop())
           return
         }
         streamRef.current = stream
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream
+        const video = videoRef.current
+        if (video) {
+          video.srcObject = stream
+          // ready only once a real frame is available, so the shutter never fires on a black frame
+          video.onloadedmetadata = () => {
+            video.play().catch(() => {})
+            if (!cancelled) setReady(true)
+          }
         }
-        setReady(true)
       } catch (err) {
         toast.error(cameraErrorMessage(err))
         onCancel()
@@ -39,6 +46,7 @@ function CameraCapture({ open, onCancel, onCapture }) {
 
     return () => {
       cancelled = true
+      if (videoRef.current) videoRef.current.onloadedmetadata = null
       streamRef.current?.getTracks().forEach((track) => track.stop())
       streamRef.current = null
       setReady(false)
@@ -64,20 +72,10 @@ function CameraCapture({ open, onCancel, onCapture }) {
     <div className="fixed inset-0 z-[95] flex flex-col bg-black">
       <div className="relative min-h-0 flex-1 overflow-hidden">
         <video ref={videoRef} autoPlay playsInline muted className="h-full w-full object-cover" />
-        <svg
-          className="pointer-events-none absolute inset-0 h-full w-full"
-          viewBox="0 0 100 100"
-          preserveAspectRatio="none"
-        >
-          <defs>
-            <mask id="face-guide-mask">
-              <rect x="0" y="0" width="100" height="100" fill="white" />
-              <ellipse cx="50" cy="46" rx="26" ry="34" fill="black" />
-            </mask>
-          </defs>
-          <rect x="0" y="0" width="100" height="100" fill="rgba(0,0,0,0.55)" mask="url(#face-guide-mask)" />
-          <ellipse cx="50" cy="46" rx="26" ry="34" fill="none" stroke="#FF7A59" strokeWidth="0.5" />
-        </svg>
+        <div
+          className="pointer-events-none absolute left-1/2 top-[42%] -translate-x-1/2 -translate-y-1/2 rounded-[50%] border-2 border-[#FF7A59]"
+          style={{ width: 'min(64vw, 300px)', aspectRatio: '3 / 4', boxShadow: '0 0 0 9999px rgba(0,0,0,0.55)' }}
+        />
         <div className="pointer-events-none absolute left-0 right-0 bottom-4 text-center text-[13.5px] font-medium text-white/80">
           Fit your face inside the outline
         </div>

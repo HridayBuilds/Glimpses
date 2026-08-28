@@ -131,7 +131,7 @@ function VerifyCode() {
                 <button
                   key={k}
                   onClick={tapKey(k)}
-                  className="min-w-0 flex-[1_1_28%] rounded-xl border border-white/[0.08] bg-white/[0.06] py-[15px] text-[19px] font-medium tabular-nums text-[#F5F5F7] transition-transform duration-100 ease-out active:scale-95"
+                  className="min-w-0 flex-[1_1_28%] rounded-xl border border-white/[0.16] bg-white/[0.09] py-[15px] text-[19px] font-medium tabular-nums text-[#F5F5F7] transition-transform duration-100 ease-out active:scale-95"
                 >
                   {k === 'del' ? '⌫' : k}
                 </button>

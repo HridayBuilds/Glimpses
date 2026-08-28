@@ -21,6 +21,7 @@ def _photo(**overrides):
 def test_delete_photos_cascade_skips_photo_ids_already_gone(monkeypatch):
     monkeypatch.setattr(delete_photos, "get_event", lambda event_id: {"rekognitionCollectionID": "col_1"})
     monkeypatch.setattr(delete_photos, "get_photo", lambda photo_id: None)
+    monkeypatch.setattr(delete_photos, "query_faces_by_event", lambda event_id: [])
     s3_calls = []
     monkeypatch.setattr(delete_photos, "delete_s3_objects", lambda bucket, keys: s3_calls.append(keys))
     decrement_calls = []
@@ -38,15 +39,19 @@ def test_delete_photos_cascade_skips_photo_ids_already_gone(monkeypatch):
 def test_delete_photos_cascade_deletes_faces_row_s3_and_decrements_counters(monkeypatch):
     monkeypatch.setattr(delete_photos, "get_event", lambda event_id: {"rekognitionCollectionID": "col_1"})
     monkeypatch.setattr(delete_photos, "get_photo", lambda photo_id: _photo(photoID=photo_id))
-    monkeypatch.setattr(delete_photos, "query_faces_by_event_and_photo", lambda event_id, photo_id: [{"rekognitionFaceID": "f1"}])
+    monkeypatch.setattr(
+        delete_photos,
+        "query_faces_by_event",
+        lambda event_id: [{"rekognitionFaceID": "f1", "photoID": "p1"}, {"rekognitionFaceID": "f2", "photoID": "other"}],
+    )
     rekognition_calls = []
     monkeypatch.setattr(
         delete_photos, "delete_faces_from_collection", lambda collection_id, face_ids: rekognition_calls.append((collection_id, face_ids))
     )
     faces_calls = []
     monkeypatch.setattr(delete_photos, "batch_delete_faces", lambda face_ids: faces_calls.append(face_ids))
-    row_calls = []
-    monkeypatch.setattr(delete_photos, "delete_photo_row", lambda photo_id: row_calls.append(photo_id))
+    photos_calls = []
+    monkeypatch.setattr(delete_photos, "batch_delete_photos", lambda photo_ids: photos_calls.append(photo_ids))
     s3_calls = []
     monkeypatch.setattr(delete_photos, "delete_s3_objects", lambda bucket, keys: s3_calls.append(keys))
     decrement_calls = []
@@ -59,7 +64,7 @@ def test_delete_photos_cascade_deletes_faces_row_s3_and_decrements_counters(monk
     assert result == {"eventID": "evt_1", "deletedPhotoIDs": ["p1"]}
     assert rekognition_calls == [("col_1", ["f1"])]
     assert faces_calls == [["f1"]]
-    assert row_calls == ["p1"]
+    assert photos_calls == [["p1"]]
     assert s3_calls == [["photos/event/evt_1/p1.jpg", "thumbnails/event/evt_1/p1.jpg"]]
     assert decrement_calls == [("evt_1", -1, -1234)]
 
@@ -67,14 +72,14 @@ def test_delete_photos_cascade_deletes_faces_row_s3_and_decrements_counters(monk
 def test_delete_photos_cascade_skips_rekognition_when_event_missing(monkeypatch):
     monkeypatch.setattr(delete_photos, "get_event", lambda event_id: None)
     monkeypatch.setattr(delete_photos, "get_photo", lambda photo_id: _photo())
-    monkeypatch.setattr(delete_photos, "query_faces_by_event_and_photo", lambda event_id, photo_id: [{"rekognitionFaceID": "f1"}])
+    monkeypatch.setattr(delete_photos, "query_faces_by_event", lambda event_id: [{"rekognitionFaceID": "f1", "photoID": "p1"}])
 
     def _fail(*args, **kwargs):
         assert False, "should not call Rekognition when the event row is gone"
 
     monkeypatch.setattr(delete_photos, "delete_faces_from_collection", _fail)
     monkeypatch.setattr(delete_photos, "batch_delete_faces", lambda face_ids: None)
-    monkeypatch.setattr(delete_photos, "delete_photo_row", lambda photo_id: None)
+    monkeypatch.setattr(delete_photos, "batch_delete_photos", lambda photo_ids: None)
     monkeypatch.setattr(delete_photos, "delete_s3_objects", lambda bucket, keys: None)
     monkeypatch.setattr(delete_photos, "decrement_event_counters", lambda event_id, p, s: None)
 

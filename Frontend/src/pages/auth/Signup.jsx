@@ -55,7 +55,7 @@ function Signup() {
           <label className="text-[13.5px] font-semibold text-white/82">Full Name</label>
           <input
             {...register('name', { required: true })}
-            className="w-full rounded-xl border border-white/[0.09] bg-white/[0.06] px-4 py-[14px] text-[16px] text-[#F5F5F7] outline-none"
+            className="w-full rounded-xl border border-white/[0.16] bg-white/[0.09] px-4 py-[14px] text-[16px] text-[#F5F5F7] outline-none"
           />
           <div className="text-[12.5px] text-white/35">Shown on photos you upload.</div>
         </div>
@@ -64,7 +64,7 @@ function Signup() {
           <input
             type="email"
             {...register('email', { required: true })}
-            className="w-full rounded-xl border border-white/[0.09] bg-white/[0.06] px-4 py-[14px] text-[16px] text-[#F5F5F7] outline-none"
+            className="w-full rounded-xl border border-white/[0.16] bg-white/[0.09] px-4 py-[14px] text-[16px] text-[#F5F5F7] outline-none"
           />
         </div>
         <div className="flex flex-col gap-[7px]">
@@ -72,7 +72,7 @@ function Signup() {
           <input
             type="password"
             {...register('password', { required: true })}
-            className="w-full rounded-xl border border-white/[0.09] bg-white/[0.06] px-4 py-[14px] text-[16px] text-[#F5F5F7] outline-none"
+            className="w-full rounded-xl border border-white/[0.16] bg-white/[0.09] px-4 py-[14px] text-[16px] text-[#F5F5F7] outline-none"
           />
           <div className="mt-[3px] flex gap-[5px]">
             {[0, 1, 2, 3].map((i) => (
@@ -100,7 +100,7 @@ function Signup() {
           <input
             type="password"
             {...register('confirmPassword', { required: true })}
-            className="w-full rounded-xl border bg-white/[0.06] px-4 py-[14px] text-[16px] text-[#F5F5F7] outline-none transition-colors duration-150"
+            className="w-full rounded-xl border bg-white/[0.09] px-4 py-[14px] text-[16px] text-[#F5F5F7] outline-none transition-colors duration-150"
             style={{
               borderColor: pw2.length === 0 ? 'rgba(255,255,255,0.09)' : pw2 === pw ? 'rgba(111,216,176,0.45)' : 'rgba(255,89,89,0.45)',
             }}
