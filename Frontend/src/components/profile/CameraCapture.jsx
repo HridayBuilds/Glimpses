@@ -71,9 +71,16 @@ function CameraCapture({ open, onCancel, onCapture }) {
   return (
     <div className="fixed inset-0 z-[95] flex flex-col bg-black">
       <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-black">
-        {/* Fixed 3:4 frame, letterboxed on any device that isn't already that shape — so the
-            oval below always sits over the same proportion of the frame, phone or desktop. */}
-        <div className="relative h-full max-h-full w-full max-w-full overflow-hidden" style={{ aspectRatio: '3 / 4' }}>
+        {/* Fixed 3:4 frame, capped to a normal size regardless of viewport - width drives
+            the size (up to max-w), height follows from the aspect-ratio, max-h is only a
+            safety cap for short viewports. Setting both h-full and w-full here previously
+            made width AND height simultaneously explicit, which overrides aspect-ratio
+            entirely (it only computes a dimension when one side is auto) - that's what let
+            the frame balloon to fill the whole screen on desktop. */}
+        <div
+          className="relative w-full max-w-[380px] max-h-[70dvh] overflow-hidden"
+          style={{ aspectRatio: '3 / 4' }}
+        >
           <video ref={videoRef} autoPlay playsInline muted className="h-full w-full object-cover" />
           <div
             className="pointer-events-none absolute left-1/2 top-[42%] w-[68%] -translate-x-1/2 -translate-y-1/2 rounded-[50%] border-2 border-[#FF7A59]"

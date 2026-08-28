@@ -51,12 +51,16 @@ function UploadFlow() {
 
   const status = jobQuery.data?.status
 
-  // A 502 mid-poll or a terminal FAILED status both surface as the same generic error state.
+  // Only a genuine terminal FAILED status ends the job. A transient fetch error
+  // (502, brief network blip) must NOT flip this to 'error' - the backend job is
+  // still running regardless of whether polling can currently reach it, and killing
+  // 'processing' here would disable the query (enabled: phase === 'processing') and
+  // stop polling for good, even though the job goes on to succeed on its own.
   useEffect(() => {
-    if (phase === 'processing' && (status === 'FAILED' || (jobQuery.isError && !jobQuery.isFetching))) {
+    if (phase === 'processing' && status === 'FAILED') {
       setPhase('error')
     }
-  }, [phase, status, jobQuery.isError, jobQuery.isFetching])
+  }, [phase, status])
 
   // Matching already finished server-side by the time a job reports SUCCESS — the
   // gallery just needs its cached photo lists invalidated so "Photos of me" reflects
@@ -197,8 +201,9 @@ function UploadFlow() {
                   />
                 </div>
                 <div className="mt-3 text-pretty text-[13.5px] leading-[1.6] text-white/42">
-                  You can close this tab. The upload will finish on its own, and your photos will be in the gallery
-                  when you return.
+                  {phase === 'processing'
+                    ? "You can close this tab. The upload will finish on its own, and your photos will be in the gallery when you return."
+                    : "Keep this tab open until the upload finishes - closing it now will cancel it before it reaches the server."}
                 </div>
               </>
             )}
