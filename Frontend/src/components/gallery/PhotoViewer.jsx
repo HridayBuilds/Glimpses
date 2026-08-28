@@ -3,6 +3,7 @@ import { motion, useMotionValue, useTransform, useDragControls, animate } from '
 import { useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { getDownloadUrls, deletePhoto } from '../../lib/galleryApi'
+import { removePhotosFromCache } from '../../lib/galleryCache'
 import { useAuth } from '../../context/AuthContext'
 import ConfirmDialog from '../common/ConfirmDialog'
 
@@ -40,7 +41,7 @@ function PhotoViewer({ eventId, photo, onClose, onPrev, onNext, hasPrev, hasNext
     setDeleting(true)
     try {
       await deletePhoto(eventId, photo.photoID)
-      queryClient.invalidateQueries({ queryKey: ['events', eventId, 'photos'] })
+      removePhotosFromCache(queryClient, eventId, [photo.photoID])
       toast.success('Photo deleted')
       onClose()
     } catch {

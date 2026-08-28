@@ -20,7 +20,7 @@ function CameraCapture({ open, onCancel, onCapture }) {
       }
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'user', width: { ideal: 720 }, height: { ideal: 960 } },
+          video: { facingMode: 'user', width: { ideal: 720 }, height: { ideal: 960 }, aspectRatio: { ideal: 3 / 4 } },
         })
         if (cancelled) {
           stream.getTracks().forEach((track) => track.stop())
@@ -70,12 +70,16 @@ function CameraCapture({ open, onCancel, onCapture }) {
 
   return (
     <div className="fixed inset-0 z-[95] flex flex-col bg-black">
-      <div className="relative min-h-0 flex-1 overflow-hidden">
-        <video ref={videoRef} autoPlay playsInline muted className="h-full w-full object-cover" />
-        <div
-          className="pointer-events-none absolute left-1/2 top-[42%] -translate-x-1/2 -translate-y-1/2 rounded-[50%] border-2 border-[#FF7A59]"
-          style={{ width: 'min(64vw, 300px)', aspectRatio: '3 / 4', boxShadow: '0 0 0 9999px rgba(0,0,0,0.55)' }}
-        />
+      <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-black">
+        {/* Fixed 3:4 frame, letterboxed on any device that isn't already that shape — so the
+            oval below always sits over the same proportion of the frame, phone or desktop. */}
+        <div className="relative h-full max-h-full w-full max-w-full overflow-hidden" style={{ aspectRatio: '3 / 4' }}>
+          <video ref={videoRef} autoPlay playsInline muted className="h-full w-full object-cover" />
+          <div
+            className="pointer-events-none absolute left-1/2 top-[42%] w-[68%] -translate-x-1/2 -translate-y-1/2 rounded-[50%] border-2 border-[#FF7A59]"
+            style={{ aspectRatio: '3 / 4', boxShadow: '0 0 0 9999px rgba(0,0,0,0.55)' }}
+          />
+        </div>
         <div className="pointer-events-none absolute left-0 right-0 bottom-4 text-center text-[13.5px] font-medium text-white/80">
           Fit your face inside the outline
         </div>

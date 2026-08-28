@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import axios from 'axios'
 import JSZip from 'jszip'
 import { useParams, useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { getUploadUrl, getJobStatus } from '../../lib/uploadApi'
 
@@ -29,6 +29,7 @@ function fibonacciPollDelay(pollCount) {
 function UploadFlow() {
   const { eventId } = useParams()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const fileInputRef = useRef(null)
 
   // idle | zipping | uploading | processing | error
@@ -56,6 +57,15 @@ function UploadFlow() {
       setPhase('error')
     }
   }, [phase, status, jobQuery.isError, jobQuery.isFetching])
+
+  // Matching already finished server-side by the time a job reports SUCCESS — the
+  // gallery just needs its cached photo lists invalidated so "Photos of me" reflects
+  // the new matches instead of the pre-upload snapshot it had cached.
+  useEffect(() => {
+    if (phase === 'processing' && status === 'SUCCESS') {
+      queryClient.invalidateQueries({ queryKey: ['events', eventId, 'photos'] })
+    }
+  }, [phase, status, queryClient, eventId])
 
   const busy = phase === 'zipping' || phase === 'uploading' || phase === 'processing'
 

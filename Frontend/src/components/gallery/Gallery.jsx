@@ -4,6 +4,7 @@ import { useQuery, useInfiniteQuery, useQueryClient } from '@tanstack/react-quer
 import toast from 'react-hot-toast'
 import { listPhotos, bulkDeletePhotos, getDownloadUrls } from '../../lib/galleryApi'
 import { requestDownload, getDownloadStatus } from '../../lib/downloadApi'
+import { removePhotosFromCache } from '../../lib/galleryCache'
 import PhotoViewer from './PhotoViewer'
 import ConfirmDialog from '../common/ConfirmDialog'
 import EventMenu from './EventMenu'
@@ -160,7 +161,7 @@ function Gallery({ eventId, eventName, isOrganizer, canUpload }) {
     setBulkDeleting(true)
     try {
       const { deletedPhotoIDs } = await bulkDeletePhotos(eventId, selected)
-      queryClient.invalidateQueries({ queryKey: ['events', eventId, 'photos'] })
+      removePhotosFromCache(queryClient, eventId, deletedPhotoIDs)
       if (deletedPhotoIDs.length === selected.length) {
         toast.success(`Deleted ${deletedPhotoIDs.length} ${deletedPhotoIDs.length === 1 ? 'photo' : 'photos'}`)
       } else {
