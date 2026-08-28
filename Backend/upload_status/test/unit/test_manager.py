@@ -27,6 +27,7 @@ def _event(**overrides):
     base = {
         "eventID": "evt_1",
         "organizerID": "organizer_1",
+        "status": "ACTIVE",
         "contributionPolicy": "ATTENDEES_CAN_ADD",
     }
     base.update(overrides)
@@ -66,6 +67,13 @@ def test_mint_upload_url_rejects_unknown_event(monkeypatch):
 
     with pytest.raises(ValueError):
         manager.mint_upload_url({"eventID": "evt_1", "userID": "user_1"})
+
+
+def test_mint_upload_url_rejects_archived_event(monkeypatch):
+    monkeypatch.setattr(manager, "get_event", lambda event_id: _event(status="ARCHIVED"))
+
+    with pytest.raises(ValueError):
+        manager.mint_upload_url({"eventID": "evt_1", "userID": "organizer_1"})
 
 
 def test_get_job_status_returns_job_owned_by_caller(monkeypatch):

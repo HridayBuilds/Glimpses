@@ -30,10 +30,12 @@ def test_create_event_creates_collection_generates_code_and_stores_qrcode(monkey
     created_collections = []
     stored_objects = {}
     put_items = []
+    put_attendees = []
 
     monkeypatch.setattr(manager, "create_collection", lambda collection_id: created_collections.append(collection_id))
     monkeypatch.setattr(manager, "access_code_exists", lambda code: False)
     monkeypatch.setattr(manager, "put_event", lambda item: put_items.append(item))
+    monkeypatch.setattr(manager, "put_attendee", lambda item: put_attendees.append(item))
     monkeypatch.setattr(
         manager,
         "put_object",
@@ -49,6 +51,7 @@ def test_create_event_creates_collection_generates_code_and_stores_qrcode(monkey
     assert len(created_collections) == 1
     assert len(put_items) == 1
     assert put_items[0]["lastUploadAt"] == put_items[0]["createdAt"]
+    assert put_attendees == [{"userID": "user_1", "eventID": put_items[0]["eventID"], "status": "ATTENDEE"}]
     assert any(key.endswith("qrcode.png") for key in stored_objects)
 
 
@@ -82,7 +85,10 @@ def test_list_my_events_returns_only_pending_and_attendee_rows(monkeypatch):
     monkeypatch.setattr(
         manager,
         "batch_get_events",
-        lambda event_ids: [_event(eventID="evt_1"), _event(eventID="evt_2")],
+        lambda event_ids: [
+            _event(eventID="evt_1", organizerID="other_organizer"),
+            _event(eventID="evt_2", organizerID="other_organizer"),
+        ],
     )
 
     result = manager.list_my_events({"userID": "user_1"})
@@ -91,6 +97,29 @@ def test_list_my_events_returns_only_pending_and_attendee_rows(monkeypatch):
         "evt_1": "ATTENDEE",
         "evt_2": "PENDING",
     }
+
+
+def test_list_my_events_excludes_self_organized_events(monkeypatch):
+    monkeypatch.setattr(
+        manager,
+        "list_attendee_rows_for_user",
+        lambda user_id: [
+            {"eventID": "evt_own", "status": "ATTENDEE"},
+            {"eventID": "evt_joined", "status": "ATTENDEE"},
+        ],
+    )
+    monkeypatch.setattr(
+        manager,
+        "batch_get_events",
+        lambda event_ids: [
+            _event(eventID="evt_own", organizerID="user_1"),
+            _event(eventID="evt_joined", organizerID="other_organizer"),
+        ],
+    )
+
+    result = manager.list_my_events({"userID": "user_1"})
+
+    assert [event["eventID"] for event in result] == ["evt_joined"]
 
 
 def test_get_event_detail_raises_for_non_owner(monkeypatch):
@@ -172,7 +201,11 @@ def test_archive_event_is_a_no_op_when_already_archived(monkeypatch):
 
 def test_get_stats_returns_photo_count_storage_and_attendee_count(monkeypatch):
     monkeypatch.setattr(manager, "get_event", lambda event_id: _event(photoCount=12, storageBytes=4096))
-    monkeypatch.setattr(manager, "count_attendees", lambda event_id, status: 7)
+    monkeypatch.setattr(
+        manager,
+        "count_attendees",
+        lambda event_id, status, exclude_user_id=None: 7 if exclude_user_id == "user_1" else 8,
+    )
 
     result = manager.get_stats({"eventID": "evt_1", "organizerID": "user_1"})
 

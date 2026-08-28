@@ -16,7 +16,7 @@ resource "aws_iam_role_policy" "events_access" {
 data "aws_iam_policy_document" "event_attendees_access" {
   statement {
     effect    = "Allow"
-    actions   = ["dynamodb:Query"]
+    actions   = ["dynamodb:Query", "dynamodb:PutItem"]
     resources = [var.event_attendees_table_arn, "${var.event_attendees_table_arn}/index/*"]
   }
 }

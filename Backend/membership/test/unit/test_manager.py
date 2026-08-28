@@ -80,6 +80,16 @@ def test_join_event_rejects_blocked_user(monkeypatch):
         pass
 
 
+def test_join_event_rejects_organizer_joining_own_event(monkeypatch):
+    monkeypatch.setattr(manager, "get_event_by_access_code", lambda access_code: _event(organizerID="user_1"))
+
+    try:
+        manager.join_event({"accessCode": "AB23CD", "userID": "user_1"})
+        assert False, "expected ValueError"
+    except ValueError:
+        pass
+
+
 def test_join_event_rejoin_after_leave_uses_join_policy(monkeypatch):
     monkeypatch.setattr(manager, "get_event_by_access_code", lambda access_code: _event(joinPolicy="OPEN"))
     monkeypatch.setattr(manager, "get_attendee", lambda user_id, event_id: _attendee(status="LEFT"))
@@ -93,6 +103,7 @@ def test_join_event_rejoin_after_leave_uses_join_policy(monkeypatch):
 
 
 def test_leave_event_marks_attendee_left(monkeypatch):
+    monkeypatch.setattr(manager, "get_event", lambda event_id: _event())
     monkeypatch.setattr(manager, "get_attendee", lambda user_id, event_id: _attendee(status="ATTENDEE"))
     updated = []
     monkeypatch.setattr(manager, "update_attendee_status", lambda user_id, event_id, status: updated.append(status))
@@ -103,7 +114,18 @@ def test_leave_event_marks_attendee_left(monkeypatch):
     assert updated == ["LEFT"]
 
 
+def test_leave_event_rejects_organizer_leaving_own_event(monkeypatch):
+    monkeypatch.setattr(manager, "get_event", lambda event_id: _event(organizerID="user_1"))
+
+    try:
+        manager.leave_event({"eventID": "evt_1", "userID": "user_1"})
+        assert False, "expected ValueError"
+    except ValueError:
+        pass
+
+
 def test_leave_event_rejects_non_attendee(monkeypatch):
+    monkeypatch.setattr(manager, "get_event", lambda event_id: _event())
     monkeypatch.setattr(manager, "get_attendee", lambda user_id, event_id: None)
 
     try:

@@ -137,6 +137,24 @@ def test_join_open_event_admits_directly():
 
 
 @mock_aws
+def test_join_rejects_organizer_joining_own_event():
+    dynamodb = boto3.resource("dynamodb", region_name="ap-south-1")
+    _create_event_attendees_table(dynamodb)
+    _create_events_table(dynamodb)
+    _create_users_table(dynamodb)
+    _put_event(dynamodb, joinPolicy="OPEN")
+
+    try:
+        lambda_handler(
+            _api_event("POST", "/events/join", body={"accessCode": "AB23CD"}, claims={"sub": "user_1"}),
+            _FakeLambdaContext(),
+        )
+        assert False, "expected ValueError"
+    except ValueError:
+        pass
+
+
+@mock_aws
 def test_join_approval_required_event_parks_in_lobby_then_organizer_admits():
     dynamodb = boto3.resource("dynamodb", region_name="ap-south-1")
     _create_event_attendees_table(dynamodb)
@@ -298,6 +316,26 @@ def test_leave_then_rejoin_round_trip():
         _FakeLambdaContext(),
     )
     assert json.loads(rejoin_response["body"]) == {"eventID": "evt_1", "status": "ATTENDEE"}
+
+
+@mock_aws
+def test_leave_rejects_organizer_leaving_own_event():
+    dynamodb = boto3.resource("dynamodb", region_name="ap-south-1")
+    _create_event_attendees_table(dynamodb)
+    _create_events_table(dynamodb)
+    _create_users_table(dynamodb)
+    _put_event(dynamodb)
+
+    try:
+        lambda_handler(
+            _api_event(
+                "POST", "/events/evt_1/leave", claims={"sub": "user_1"}, path_parameters={"event_id": "evt_1"}
+            ),
+            _FakeLambdaContext(),
+        )
+        assert False, "expected ValueError"
+    except ValueError:
+        pass
 
 
 @mock_aws

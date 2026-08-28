@@ -35,7 +35,8 @@ function EventEntry() {
         eventId={eventId}
         eventName={info.name}
         isOrganizer={isOrganizer}
-        canUpload={isOrganizer || info.contributionPolicy !== 'ORGANIZER_ONLY'}
+        isArchived={info.status !== 'ACTIVE'}
+        canUpload={info.status === 'ACTIVE' && (isOrganizer || info.contributionPolicy !== 'ORGANIZER_ONLY')}
       />
     )
   }

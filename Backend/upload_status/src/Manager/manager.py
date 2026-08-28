@@ -9,6 +9,8 @@ def mint_upload_url(payload):
     event = get_event(payload["eventID"])
     if event is None:
         raise ValueError(f"Unknown eventID: {payload['eventID']}")
+    if event["status"] != "ACTIVE":
+        raise ValueError("Only ACTIVE events can accept new photos")
     is_organizer = event["organizerID"] == payload["userID"]
     if event["contributionPolicy"] == "ORGANIZER_ONLY" and not is_organizer:
         raise ValueError("Only the organizer can add photos to this event")

@@ -4,13 +4,14 @@ import { useQuery, useInfiniteQuery, useQueryClient } from '@tanstack/react-quer
 import toast from 'react-hot-toast'
 import { listPhotos, bulkDeletePhotos, getDownloadUrls } from '../../lib/galleryApi'
 import { requestDownload, getDownloadStatus } from '../../lib/downloadApi'
+import { leaveEvent } from '../../lib/membershipApi'
 import { removePhotosFromCache } from '../../lib/galleryCache'
 import PhotoViewer from './PhotoViewer'
 import ConfirmDialog from '../common/ConfirmDialog'
 import EventMenu from './EventMenu'
 import LoadingSpinner from '../common/LoadingSpinner'
 
-function Gallery({ eventId, eventName, isOrganizer, canUpload }) {
+function Gallery({ eventId, eventName, isOrganizer, isArchived, canUpload }) {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [mode, setMode] = useState('mine')
@@ -20,6 +21,8 @@ function Gallery({ eventId, eventName, isOrganizer, canUpload }) {
   const [openPhotoId, setOpenPhotoId] = useState(null)
   const [confirmingBulkDelete, setConfirmingBulkDelete] = useState(false)
   const [bulkDeleting, setBulkDeleting] = useState(false)
+  const [confirmingLeave, setConfirmingLeave] = useState(false)
+  const [leaving, setLeaving] = useState(false)
 
   // null | 'building' | 'ready'
   const [zip, setZip] = useState(null)
@@ -177,6 +180,20 @@ function Gallery({ eventId, eventName, isOrganizer, canUpload }) {
     }
   }
 
+  const handleLeaveEvent = async () => {
+    setLeaving(true)
+    try {
+      await leaveEvent(eventId)
+      queryClient.invalidateQueries({ queryKey: ['events'] })
+      navigate('/app')
+    } catch {
+      toast.error('Something went wrong. Try again.')
+    } finally {
+      setLeaving(false)
+      setConfirmingLeave(false)
+    }
+  }
+
   const openIndex = photos.findIndex((p) => p.photoID === openPhotoId)
   const openPhoto = openIndex === -1 ? null : photos[openIndex]
   const goToPrev = () => setOpenPhotoId(photos[openIndex - 1]?.photoID)
@@ -261,7 +278,9 @@ function Gallery({ eventId, eventName, isOrganizer, canUpload }) {
           <p className="mb-[22px] text-pretty text-[15.5px] leading-[1.6] text-white/50">
             {canUpload
               ? "The gallery's empty until someone uploads the first photo. That could be you."
-              : 'The gallery is empty. Only the organizer can add photos to this event.'}
+              : isArchived
+                ? 'This event is archived and read-only. No new photos can be added.'
+                : 'The gallery is empty. Only the organizer can add photos to this event.'}
           </p>
           {canUpload && (
             <button
@@ -444,6 +463,10 @@ function Gallery({ eventId, eventName, isOrganizer, canUpload }) {
         onShare={() => navigate(`/app/events/${eventId}/share`)}
         onLobby={() => navigate(`/app/events/${eventId}/roster`)}
         onAnalytics={() => navigate(`/app/events/${eventId}/analytics`)}
+        onLeave={() => {
+          setMenuOpen(false)
+          setConfirmingLeave(true)
+        }}
       />
 
       <ConfirmDialog
@@ -454,6 +477,16 @@ function Gallery({ eventId, eventName, isOrganizer, canUpload }) {
         danger
         onCancel={() => setConfirmingBulkDelete(false)}
         onConfirm={bulkDeleting ? undefined : handleBulkDelete}
+      />
+
+      <ConfirmDialog
+        open={confirmingLeave}
+        title="Leave this event?"
+        body="You'll need to rejoin with the access code or QR to see its photos again."
+        cta="Leave"
+        danger
+        onCancel={() => setConfirmingLeave(false)}
+        onConfirm={leaving ? undefined : handleLeaveEvent}
       />
     </div>
   )

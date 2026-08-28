@@ -69,15 +69,23 @@ def list_attendee_rows_for_user(user_id):
     return response["Items"]
 
 
-def count_attendees(event_id, status):
-    response = _event_attendees_table().query(
-        IndexName="eventID-status-index",
-        KeyConditionExpression="eventID = :e AND #s = :s",
-        ExpressionAttributeNames={"#s": "status"},
-        ExpressionAttributeValues={":e": event_id, ":s": status},
-        Select="COUNT",
-    )
+def count_attendees(event_id, status, exclude_user_id=None):
+    kwargs = {
+        "IndexName": "eventID-status-index",
+        "KeyConditionExpression": "eventID = :e AND #s = :s",
+        "ExpressionAttributeNames": {"#s": "status"},
+        "ExpressionAttributeValues": {":e": event_id, ":s": status},
+        "Select": "COUNT",
+    }
+    if exclude_user_id is not None:
+        kwargs["FilterExpression"] = "userID <> :excluded"
+        kwargs["ExpressionAttributeValues"][":excluded"] = exclude_user_id
+    response = _event_attendees_table().query(**kwargs)
     return response["Count"]
+
+
+def put_attendee(item):
+    _event_attendees_table().put_item(Item=item)
 
 
 def batch_get_events(event_ids):

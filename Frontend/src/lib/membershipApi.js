@@ -10,6 +10,11 @@ export async function joinEvent(accessCode) {
   return data
 }
 
+export async function leaveEvent(eventId) {
+  const { data } = await api.post(`/events/${eventId}/leave`)
+  return data
+}
+
 export async function getAttendees(eventId, status) {
   const { data } = await api.get(`/events/${eventId}/attendees`, { params: { status } })
   return data.attendees

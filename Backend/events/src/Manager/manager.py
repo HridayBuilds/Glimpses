@@ -17,6 +17,7 @@ from DAO.dao import (
     list_attendee_rows_for_user,
     list_events_for_organizer,
     list_stale_active_events,
+    put_attendee,
     put_event,
     put_object,
     update_event,
@@ -113,6 +114,7 @@ def create_event(payload):
         "storageBytes": 0,
     }
     put_event(item)
+    put_attendee({"userID": payload["organizerID"], "eventID": event_id, "status": "ATTENDEE"})
     _generate_and_store_qrcode(event_id, access_code)
 
     return _public_event(item)
@@ -132,6 +134,10 @@ def list_my_events(payload):
     return [
         {**_public_event(event), "attendeeStatus": attendee_status_by_event_id[event["eventID"]]}
         for event in events
+        # Organizers get their own auto-created ATTENDEE row (see create_event) so
+        # matching works; that row shouldn't make self-organized events also show
+        # up in "events I joined" - "events I organize" already covers those.
+        if event["organizerID"] != payload["userID"]
     ]
 
 
@@ -176,7 +182,7 @@ def get_stats(payload):
     return {
         "photoCount": int(event.get("photoCount", 0)),
         "storageBytes": int(event.get("storageBytes", 0)),
-        "attendeeCount": count_attendees(event["eventID"], "ATTENDEE"),
+        "attendeeCount": count_attendees(event["eventID"], "ATTENDEE", exclude_user_id=event["organizerID"]),
     }
 
 

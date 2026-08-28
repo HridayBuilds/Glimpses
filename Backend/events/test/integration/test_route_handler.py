@@ -174,6 +174,47 @@ def _create_event_attendees_table(dynamodb):
 
 
 @mock_aws
+def test_create_event_enrolls_organizer_as_attendee_but_excludes_them_from_stats(monkeypatch):
+    dynamodb = boto3.resource("dynamodb", region_name="ap-south-1")
+    _create_events_table(dynamodb)
+    _create_event_attendees_table(dynamodb)
+
+    s3 = boto3.client("s3", region_name="ap-south-1")
+    s3.create_bucket(
+        Bucket=os.environ["PHOTOS_BUCKET"], CreateBucketConfiguration={"LocationConstraint": "ap-south-1"}
+    )
+    monkeypatch.setattr(manager, "create_collection", lambda collection_id: None)
+
+    create_response = lambda_handler(
+        _api_event("POST", "/events", body={"name": "Priya's Trip"}, claims={"sub": "organizer_1"}),
+        _FakeLambdaContext(),
+    )
+    event_id = json.loads(create_response["body"])["eventID"]
+
+    attendees_table = dynamodb.Table(os.environ["EVENT_ATTENDEES_TABLE_NAME"])
+    organizer_row = attendees_table.get_item(Key={"userID": "organizer_1", "eventID": event_id})["Item"]
+    assert organizer_row["status"] == "ATTENDEE"
+
+    stats_response = lambda_handler(
+        _api_event(
+            "GET", f"/events/{event_id}/stats", claims={"sub": "organizer_1"}, path_parameters={"event_id": event_id}
+        ),
+        _FakeLambdaContext(),
+    )
+    assert json.loads(stats_response["body"])["attendeeCount"] == 0
+
+    attendees_table.put_item(Item={"userID": "guest_1", "eventID": event_id, "status": "ATTENDEE"})
+
+    stats_response = lambda_handler(
+        _api_event(
+            "GET", f"/events/{event_id}/stats", claims={"sub": "organizer_1"}, path_parameters={"event_id": event_id}
+        ),
+        _FakeLambdaContext(),
+    )
+    assert json.loads(stats_response["body"])["attendeeCount"] == 1
+
+
+@mock_aws
 def test_list_my_events_returns_only_pending_and_attendee_rows():
     dynamodb = boto3.resource("dynamodb", region_name="ap-south-1")
     _create_events_table(dynamodb)

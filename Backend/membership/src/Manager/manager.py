@@ -41,6 +41,9 @@ def join_event(payload):
     if event["status"] != ACTIVE_EVENT_STATUS:
         raise ValueError("Event is not active")
 
+    if event["organizerID"] == payload["userID"]:
+        raise ValueError("Organizer is already part of this event")
+
     event_id = event["eventID"]
     target_status = STATUS_ATTENDEE if event["joinPolicy"] == OPEN_JOIN_POLICY else STATUS_PENDING
 
@@ -56,6 +59,10 @@ def join_event(payload):
 
 
 def leave_event(payload):
+    event = _get_event_or_raise(payload["eventID"])
+    if event["organizerID"] == payload["userID"]:
+        raise ValueError("Organizer cannot leave their own event")
+
     existing = get_attendee(payload["userID"], payload["eventID"])
     if existing is None or existing["status"] != STATUS_ATTENDEE:
         raise ValueError("Not an admitted attendee of this event")
