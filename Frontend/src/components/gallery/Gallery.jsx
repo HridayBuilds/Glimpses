@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useInfiniteQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { listPhotos, bulkDeletePhotos } from '../../lib/galleryApi'
+import { listPhotos, bulkDeletePhotos, getDownloadUrls } from '../../lib/galleryApi'
 import { requestDownload, getDownloadStatus } from '../../lib/downloadApi'
 import PhotoViewer from './PhotoViewer'
 import ConfirmDialog from '../common/ConfirmDialog'
@@ -24,6 +24,7 @@ function Gallery({ eventId, eventName, isOrganizer, canUpload }) {
   const [zip, setZip] = useState(null)
   const [downloadId, setDownloadId] = useState(null)
   const [zipUrl, setZipUrl] = useState(null)
+  const [singleDownloading, setSingleDownloading] = useState(false)
 
   const downloadQuery = useQuery({
     queryKey: ['events', eventId, 'downloads', downloadId, 'status'],
@@ -74,7 +75,40 @@ function Gallery({ eventId, eventName, isOrganizer, canUpload }) {
     setSelected([])
   }
 
-  const zipSelected = zip === 'building' ? undefined : zip === 'ready' ? downloadZip : startZip
+  const downloadSinglePhoto = async () => {
+    setSingleDownloading(true)
+    try {
+      const photoId = selected[0]
+      const { downloadUrls } = await getDownloadUrls(eventId, [photoId])
+      const url = downloadUrls[0]?.downloadUrl
+      if (!url) throw new Error('missing download url')
+      const response = await fetch(url)
+      const blob = await response.blob()
+      const blobUrl = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = blobUrl
+      link.download = photos.find((p) => p.photoID === photoId)?.filename || 'photo.jpg'
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      URL.revokeObjectURL(blobUrl)
+      setSelecting(false)
+      setSelected([])
+    } catch {
+      toast.error('Something went wrong. Try again.')
+    } finally {
+      setSingleDownloading(false)
+    }
+  }
+
+  const zipSelected =
+    zip === 'building'
+      ? undefined
+      : zip === 'ready'
+        ? downloadZip
+        : selected.length === 1
+          ? downloadSinglePhoto
+          : startZip
 
   const mineQuery = useQuery({
     queryKey: ['events', eventId, 'photos', 'mine'],
@@ -146,6 +180,14 @@ function Gallery({ eventId, eventName, isOrganizer, canUpload }) {
   const openPhoto = openIndex === -1 ? null : photos[openIndex]
   const goToPrev = () => setOpenPhotoId(photos[openIndex - 1]?.photoID)
   const goToNext = () => setOpenPhotoId(photos[openIndex + 1]?.photoID)
+
+  useEffect(() => {
+    if (openIndex === -1) return
+    // Warm the browser cache for the neighbours so arrow-key navigation feels instant.
+    for (const neighbor of [photos[openIndex - 1], photos[openIndex + 1]]) {
+      if (neighbor) new Image().src = neighbor.photoUrl
+    }
+  }, [openIndex, photos])
 
   return (
     <div className="min-h-svh bg-[radial-gradient(120%_60%_at_50%_0%,#131317_0%,#08080A_60%)] text-[#F5F5F7]">
@@ -261,9 +303,8 @@ function Gallery({ eventId, eventName, isOrganizer, canUpload }) {
                 </div>
                 <p className="text-pretty text-[13px] leading-[1.55] text-white/42">
                   {selected.length
-                    ? `Zipping ${selected.length} ${selected.length === 1 ? 'photo' : 'photos'} — larger selections take a little longer.`
-                    : 'Zipping the whole gallery — larger events take a little longer.'}{' '}
-                  Feel free to keep browsing.
+                    ? `Zipping ${selected.length} photos — larger selections take a little longer.`
+                    : 'Zipping the whole gallery — larger events take a little longer.'}
                 </p>
               </>
             )}
@@ -359,20 +400,23 @@ function Gallery({ eventId, eventName, isOrganizer, canUpload }) {
                 >
                   Delete
                 </button>
-                <button
-                  onClick={zipSelected}
-                  disabled={zip === 'building'}
-                  className="flex flex-1 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-[10px] border-none py-2.5 text-[14px] font-semibold transition-transform duration-[90ms] ease-out active:scale-95 disabled:cursor-not-allowed"
-                  style={{
-                    background: zip === 'building' ? 'rgba(255,255,255,0.1)' : '#FF7A59',
-                    color: zip === 'building' ? 'rgba(245,245,247,0.75)' : '#200C05',
-                  }}
-                >
-                  {zip === 'building' && (
-                    <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-[rgba(245,245,247,0.25)] border-t-[rgba(245,245,247,0.85)]" />
-                  )}
-                  {zip === 'building' ? 'Preparing…' : zip === 'ready' ? 'Save ZIP' : 'Download'}
-                </button>
+                {/* Once a ZIP is building or ready, the card above owns download/dismiss — no second control down here. */}
+                {!zip && (
+                  <button
+                    onClick={zipSelected}
+                    disabled={singleDownloading}
+                    className="flex flex-1 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-[10px] border-none py-2.5 text-[14px] font-semibold transition-transform duration-[90ms] ease-out active:scale-95 disabled:cursor-not-allowed"
+                    style={{
+                      background: singleDownloading ? 'rgba(255,255,255,0.1)' : '#FF7A59',
+                      color: singleDownloading ? 'rgba(245,245,247,0.75)' : '#200C05',
+                    }}
+                  >
+                    {singleDownloading && (
+                      <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-[rgba(245,245,247,0.25)] border-t-[rgba(245,245,247,0.85)]" />
+                    )}
+                    {singleDownloading ? 'Downloading…' : 'Download'}
+                  </button>
+                )}
               </div>
             </div>
         </div>
@@ -387,6 +431,7 @@ function Gallery({ eventId, eventName, isOrganizer, canUpload }) {
           onNext={goToNext}
           hasPrev={openIndex > 0}
           hasNext={openIndex < photos.length - 1}
+          isOrganizer={isOrganizer}
         />
       )}
 

@@ -112,7 +112,7 @@ def abort_multipart_upload(bucket: str, key: str, upload_id: str) -> None:
     _s3().abort_multipart_upload(Bucket=bucket, Key=key, UploadId=upload_id)
 
 
-def generate_presigned_url(bucket: str, key: str, expires_in: int = 3600) -> str:
+def generate_presigned_url(bucket: str, key: str, expires_in: int = 900) -> str:
     return _s3().generate_presigned_url("get_object", Params={"Bucket": bucket, "Key": key}, ExpiresIn=expires_in)
 
 

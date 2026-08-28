@@ -3,18 +3,38 @@ import { motion, useMotionValue, useTransform, useDragControls, animate } from '
 import { useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { getDownloadUrls, deletePhoto } from '../../lib/galleryApi'
+import { useAuth } from '../../context/AuthContext'
 import ConfirmDialog from '../common/ConfirmDialog'
 
 function formatDate(iso) {
   return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
-function PhotoViewer({ eventId, photo, onClose, onPrev, onNext, hasPrev, hasNext }) {
+function PhotoViewer({ eventId, photo, onClose, onPrev, onNext, hasPrev, hasNext, isOrganizer }) {
   const dragControls = useDragControls()
   const queryClient = useQueryClient()
+  const { user } = useAuth()
   const [downloading, setDownloading] = useState(false)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
+
+  const canDelete = isOrganizer || photo.uploaderID === user?.sub
+
+  const requestDelete = () => {
+    if (!canDelete) {
+      toast.error(
+        <div>
+          <div className="font-semibold">Not your photo to delete</div>
+          <div className="mt-0.5 text-[13px] text-black/60">
+            You didn't upload this one — ask {photo.uploaderDisplayName || 'the uploader'} or your event organizer to remove it.
+          </div>
+        </div>,
+        { duration: 5000 },
+      )
+      return
+    }
+    setConfirmingDelete(true)
+  }
 
   const handleDelete = async () => {
     setDeleting(true)
@@ -115,7 +135,7 @@ function PhotoViewer({ eventId, photo, onClose, onPrev, onNext, hasPrev, hasNext
               Download
             </button>
             <button
-              onClick={() => setConfirmingDelete(true)}
+              onClick={requestDelete}
               className="cursor-pointer rounded-[10px] border border-[rgba(255,89,89,0.28)] bg-[rgba(255,89,89,0.13)] px-3 py-2 text-[14px] text-[#FF8A8A] transition-transform duration-[90ms] ease-out active:scale-95"
             >
               Delete
