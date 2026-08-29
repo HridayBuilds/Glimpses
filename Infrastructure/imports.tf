@@ -143,6 +143,11 @@ module "gallery" {
   cloudfront_domain_name     = module.cloudfront.distribution_domain_name
   alarm_sns_topic_arn        = module.alarms.alarm_sns_topic_arn
 
+  cloudfront_signing_key_pair_id                = module.cloudfront.signing_key_pair_id
+  cloudfront_signing_private_key_parameter_name = module.cloudfront.signing_private_key_parameter_name
+  cloudfront_signing_private_key_parameter_arn  = module.cloudfront.signing_private_key_parameter_arn
+  ssm_default_kms_key_arn                       = module.cloudfront.ssm_default_kms_key_arn
+
   cascade_delete_function_name = module.cascade_delete.function_name
   cascade_delete_function_arn  = module.cascade_delete.function_arn
 }

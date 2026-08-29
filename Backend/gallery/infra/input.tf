@@ -50,7 +50,27 @@ variable "photos_bucket_arn" {
 }
 
 variable "cloudfront_domain_name" {
-  description = "CloudFront distribution's default domain, for plain photoUrl/thumbnailUrl construction (T-09)"
+  description = "CloudFront distribution's default domain, for signed photoUrl/thumbnailUrl construction (T-09)"
+  type        = string
+}
+
+variable "cloudfront_signing_key_pair_id" {
+  description = "CloudFront's ID for the public signing key, required to build a valid signed URL"
+  type        = string
+}
+
+variable "cloudfront_signing_private_key_parameter_name" {
+  description = "SSM parameter name holding the private signing key, fetched at runtime to sign URLs"
+  type        = string
+}
+
+variable "cloudfront_signing_private_key_parameter_arn" {
+  description = "SSM parameter ARN, for IAM scoping (read-only, this one parameter only)"
+  type        = string
+}
+
+variable "ssm_default_kms_key_arn" {
+  description = "Account-default SSM KMS key ARN, needed to decrypt the SecureString parameter"
   type        = string
 }
 

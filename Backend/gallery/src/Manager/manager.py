@@ -1,6 +1,7 @@
 import base64
 import json
 import os
+from datetime import datetime, timedelta, timezone
 
 from DAO.dao import (
     batch_get_photos,
@@ -8,15 +9,19 @@ from DAO.dao import (
     get_attendee,
     get_event,
     get_photo_by_id,
+    get_signing_private_key,
     invoke_cascade_delete,
     query_photos_page,
+    sign_cloudfront_url,
 )
 
 PAGE_SIZE = 50
+SIGNED_URL_EXPIRY_MINUTES = 45
 
 
-def _public_photo(photo):
+def _public_photo(photo, private_key_pem):
     cloudfront_domain = os.environ["CLOUDFRONT_DOMAIN"]
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=SIGNED_URL_EXPIRY_MINUTES)
     return {
         "photoID": photo["photoID"],
         "eventID": photo["eventID"],
@@ -26,8 +31,12 @@ def _public_photo(photo):
         "filename": photo["filename"],
         "uploadedAt": photo["uploadedAt"],
         "sizeBytes": int(photo.get("sizeBytes", 0)),
-        "photoUrl": f"https://{cloudfront_domain}/{photo['s3Key']}",
-        "thumbnailUrl": f"https://{cloudfront_domain}/{photo['thumbnailKey']}",
+        "photoUrl": sign_cloudfront_url(
+            f"https://{cloudfront_domain}/{photo['s3Key']}", private_key_pem, expires_at
+        ),
+        "thumbnailUrl": sign_cloudfront_url(
+            f"https://{cloudfront_domain}/{photo['thumbnailKey']}", private_key_pem, expires_at
+        ),
     }
 
 
@@ -49,8 +58,9 @@ def _decode_cursor(cursor):
 def _list_event_photos(event_id, cursor):
     exclusive_start_key = _decode_cursor(cursor) if cursor else None
     items, last_evaluated_key = query_photos_page(event_id, exclusive_start_key, PAGE_SIZE)
+    private_key_pem = get_signing_private_key()
     return {
-        "photos": [_public_photo(item) for item in items],
+        "photos": [_public_photo(item, private_key_pem) for item in items],
         "cursor": _encode_cursor(last_evaluated_key) if last_evaluated_key else None,
     }
 
@@ -60,7 +70,8 @@ def _list_mine_photos(event_id, caller_id):
     matched_ids = list(attendee["matchedPhotoIDs"]) if attendee and attendee.get("matchedPhotoIDs") else []
     photos = batch_get_photos(matched_ids)
     photos.sort(key=lambda photo: photo["uploadedAt"], reverse=True)
-    return {"photos": [_public_photo(photo) for photo in photos], "cursor": None}
+    private_key_pem = get_signing_private_key()
+    return {"photos": [_public_photo(photo, private_key_pem) for photo in photos], "cursor": None}
 
 
 def list_photos(payload):
@@ -71,7 +82,7 @@ def list_photos(payload):
 
 def get_photo(payload):
     photo = _get_owned_photo(payload["eventID"], payload["photoID"])
-    return _public_photo(photo)
+    return _public_photo(photo, get_signing_private_key())
 
 
 def get_download_urls(payload):

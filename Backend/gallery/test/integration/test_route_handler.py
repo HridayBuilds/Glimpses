@@ -6,9 +6,22 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 import boto3
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
 from moto import mock_aws
 
 from routeHandler import lambda_handler
+
+
+def _put_signing_key():
+    private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    private_key_pem = private_key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.TraditionalOpenSSL,
+        encryption_algorithm=serialization.NoEncryption(),
+    ).decode()
+    ssm = boto3.client("ssm", region_name="ap-south-1")
+    ssm.put_parameter(Name=os.environ["CLOUDFRONT_PRIVATE_KEY_PARAM"], Value=private_key_pem, Type="SecureString")
 
 
 class _FakeLambdaContext:
@@ -121,6 +134,7 @@ def test_list_photos_returns_newest_first_and_cursor_paginates():
     _create_event_attendees_table(dynamodb)
     _put_photo(dynamodb, photoID="p1", uploadedAt="2026-08-15T10:00:00Z", uploadedAtFilename="2026-08-15T10:00:00Z#a.jpg")
     _put_photo(dynamodb, photoID="p2", uploadedAt="2026-08-16T10:00:00Z", uploadedAtFilename="2026-08-16T10:00:00Z#b.jpg")
+    _put_signing_key()
 
     response = lambda_handler(
         _api_event("GET", "/events/evt_1/photos", claims={"sub": "user_1"}, path_parameters={"event_id": "evt_1"}),
@@ -143,6 +157,7 @@ def test_list_photos_mine_true_resolves_via_matched_photo_ids():
     dynamodb.Table(os.environ["EVENT_ATTENDEES_TABLE_NAME"]).put_item(
         Item={"userID": "user_2", "eventID": "evt_1", "status": "ATTENDEE", "matchedPhotoIDs": {"p1"}}
     )
+    _put_signing_key()
 
     response = lambda_handler(
         _api_event(
@@ -166,6 +181,7 @@ def test_get_photo_returns_photo_url_and_thumbnail_url():
     _create_events_table(dynamodb)
     _create_event_attendees_table(dynamodb)
     _put_photo(dynamodb)
+    _put_signing_key()
 
     response = lambda_handler(
         _api_event(
@@ -175,8 +191,10 @@ def test_get_photo_returns_photo_url_and_thumbnail_url():
     )
 
     body = json.loads(response["body"])
-    assert body["photoUrl"] == f"https://{os.environ['CLOUDFRONT_DOMAIN']}/photos/event/evt_1/p1.jpg"
-    assert body["thumbnailUrl"] == f"https://{os.environ['CLOUDFRONT_DOMAIN']}/thumbnails/event/evt_1/p1.jpg"
+    assert body["photoUrl"].startswith(f"https://{os.environ['CLOUDFRONT_DOMAIN']}/photos/event/evt_1/p1.jpg?")
+    assert body["thumbnailUrl"].startswith(f"https://{os.environ['CLOUDFRONT_DOMAIN']}/thumbnails/event/evt_1/p1.jpg?")
+    assert "Signature=" in body["photoUrl"]
+    assert "Key-Pair-Id=" in body["photoUrl"]
 
 
 @mock_aws

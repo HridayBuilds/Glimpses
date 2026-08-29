@@ -16,6 +16,8 @@ resource "aws_lambda_function" "this" {
       EVENT_ATTENDEES_TABLE_NAME   = var.event_attendees_table_name
       PHOTOS_BUCKET                = var.photos_bucket_name
       CLOUDFRONT_DOMAIN            = var.cloudfront_domain_name
+      CLOUDFRONT_KEY_PAIR_ID       = var.cloudfront_signing_key_pair_id
+      CLOUDFRONT_PRIVATE_KEY_PARAM = var.cloudfront_signing_private_key_parameter_name
       CASCADE_DELETE_FUNCTION_NAME = var.cascade_delete_function_name
     }
   }

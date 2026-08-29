@@ -26,6 +26,11 @@ def _photo(**overrides):
     return base
 
 
+def _stub_signing(monkeypatch):
+    monkeypatch.setattr(manager, "get_signing_private_key", lambda: "fake-private-key-pem")
+    monkeypatch.setattr(manager, "sign_cloudfront_url", lambda url, private_key_pem, expires_at: f"{url}?signed=1")
+
+
 def test_list_event_photos_paginates_via_cursor(monkeypatch):
     captured = {}
 
@@ -34,6 +39,7 @@ def test_list_event_photos_paginates_via_cursor(monkeypatch):
         return [_photo()], {"eventID": "evt_1", "uploadedAtFilename": "2026-08-15T10:00:00Z#img.jpg"}
 
     monkeypatch.setattr(manager, "query_photos_page", _query_photos_page)
+    _stub_signing(monkeypatch)
 
     result = manager.list_photos({"eventID": "evt_1", "callerID": "user_1", "mine": False, "cursor": None})
 
@@ -48,8 +54,8 @@ def test_list_event_photos_paginates_via_cursor(monkeypatch):
             "filename": "img.jpg",
             "uploadedAt": "2026-08-15T10:00:00Z",
             "sizeBytes": 1234,
-            "photoUrl": f"https://{os.environ['CLOUDFRONT_DOMAIN']}/photos/event/evt_1/p1.jpg",
-            "thumbnailUrl": f"https://{os.environ['CLOUDFRONT_DOMAIN']}/thumbnails/event/evt_1/p1.jpg",
+            "photoUrl": f"https://{os.environ['CLOUDFRONT_DOMAIN']}/photos/event/evt_1/p1.jpg?signed=1",
+            "thumbnailUrl": f"https://{os.environ['CLOUDFRONT_DOMAIN']}/thumbnails/event/evt_1/p1.jpg?signed=1",
         }
     ]
     decoded_cursor = json.loads(base64.b64decode(result["cursor"]).decode())
@@ -63,6 +69,7 @@ def test_list_event_photos_decodes_cursor_into_exclusive_start_key(monkeypatch):
         "query_photos_page",
         lambda event_id, exclusive_start_key, limit: captured.update(exclusive_start_key=exclusive_start_key) or ([], None),
     )
+    _stub_signing(monkeypatch)
     cursor = base64.b64encode(json.dumps({"eventID": "evt_1", "uploadedAtFilename": "x"}).encode()).decode()
 
     result = manager.list_photos({"eventID": "evt_1", "callerID": "user_1", "mine": False, "cursor": cursor})
@@ -83,6 +90,7 @@ def test_list_mine_photos_resolves_via_matched_photo_ids(monkeypatch):
             _photo(photoID="p2", uploadedAt="2026-08-16T10:00:00Z"),
         ],
     )
+    _stub_signing(monkeypatch)
 
     result = manager.list_photos({"eventID": "evt_1", "callerID": "user_2", "mine": True})
 
@@ -92,6 +100,7 @@ def test_list_mine_photos_resolves_via_matched_photo_ids(monkeypatch):
 
 def test_list_mine_photos_with_no_attendee_row_returns_empty(monkeypatch):
     monkeypatch.setattr(manager, "get_attendee", lambda user_id, event_id: None)
+    _stub_signing(monkeypatch)
 
     result = manager.list_photos({"eventID": "evt_1", "callerID": "user_2", "mine": True})
 
@@ -100,6 +109,7 @@ def test_list_mine_photos_with_no_attendee_row_returns_empty(monkeypatch):
 
 def test_get_photo_returns_public_shape(monkeypatch):
     monkeypatch.setattr(manager, "get_photo_by_id", lambda photo_id: _photo())
+    _stub_signing(monkeypatch)
 
     result = manager.get_photo({"eventID": "evt_1", "photoID": "p1"})
 

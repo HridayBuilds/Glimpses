@@ -55,6 +55,25 @@ resource "aws_iam_role_policy" "photos_bucket_access" {
   policy = data.aws_iam_policy_document.photos_bucket_access.json
 }
 
+data "aws_iam_policy_document" "cloudfront_signing_key_access" {
+  statement {
+    effect    = "Allow"
+    actions   = ["ssm:GetParameter"]
+    resources = [var.cloudfront_signing_private_key_parameter_arn]
+  }
+  statement {
+    effect    = "Allow"
+    actions   = ["kms:Decrypt"]
+    resources = [var.ssm_default_kms_key_arn]
+  }
+}
+
+resource "aws_iam_role_policy" "cloudfront_signing_key_access" {
+  name   = "${var.name_prefix}-gallery-cloudfront-signing-key-access"
+  role   = aws_iam_role.this.id
+  policy = data.aws_iam_policy_document.cloudfront_signing_key_access.json
+}
+
 data "aws_iam_policy_document" "invoke_cascade_delete" {
   statement {
     effect    = "Allow"
