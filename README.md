@@ -16,32 +16,19 @@
 
 ---
 
-<table>
-<tr><td>
+### Table of contents
 
-### Contents
-
-- [What it does](#what-it-does)
-- [Demo](#demo)
-- [Product walkthrough](#product-walkthrough)
-- [Core features](#core-features)
-- [Who it's for](#whos-it-for)
-- [Tech stack](#tech-stack)
-- [Architecture](#architecture)
-- [Project structure](#project-structure)
-- [The Lambdas](#the-lambdas)
-- [The database (DynamoDB)](#the-database-dynamodb)
-- [The ingestion pipeline (Step Functions)](#the-ingestion-pipeline-step-functions)
-- [Triggers and edge cases](#triggers-and-edge-cases)
-- [The knowledge graph (`graphify`)](#the-knowledge-graph-graphify)
-- [Cost: built entirely on the AWS Free Tier](#cost-built-entirely-on-the-aws-free-tier)
-- [Scaling past the defaults](#scaling-past-the-defaults)
-- [Running it yourself](#running-it-yourself)
-- [CI/CD (Jenkins)](#cicd-jenkins)
-- [License](#license)
-
-</td></tr>
-</table>
+| | |
+|---|---|
+| [What it does](#what-it-does) | [The ingestion pipeline (Step Functions)](#the-ingestion-pipeline-step-functions) |
+| [Demo](#demo) | [Triggers and edge cases](#triggers-and-edge-cases) |
+| [Product walkthrough](#product-walkthrough) | [The knowledge graph (`graphify`)](#the-knowledge-graph-graphify) |
+| [Core features](#core-features) | [Cost: built entirely on the AWS Free Tier](#cost-built-entirely-on-the-aws-free-tier) |
+| [Who it's for](#whos-it-for) | [Scaling past the defaults](#scaling-past-the-defaults) |
+| [Tech stack](#tech-stack) | [Running it yourself](#running-it-yourself) |
+| [Architecture](#architecture) | [CI/CD (Jenkins)](#cicd-jenkins) |
+| [Project structure](#project-structure) | [License](#license) |
+| [The Lambdas](#the-lambdas) | [The database (DynamoDB)](#the-database-dynamodb) |
 
 ---
 
