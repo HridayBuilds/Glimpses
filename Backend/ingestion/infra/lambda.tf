@@ -11,13 +11,14 @@ resource "aws_lambda_function" "this" {
 
   environment {
     variables = {
-      PHOTOS_TABLE_NAME            = var.photos_table_name
-      EVENTS_TABLE_NAME            = var.events_table_name
-      FACES_TABLE_NAME             = var.faces_table_name
-      EVENT_ATTENDEES_TABLE_NAME   = var.event_attendees_table_name
-      USERS_TABLE_NAME             = var.users_table_name
-      PHOTOS_BUCKET                = var.photos_bucket_name
-      HEIC_CONVERTER_FUNCTION_NAME = var.heic_converter_function_name
+      PHOTOS_TABLE_NAME               = var.photos_table_name
+      EVENTS_TABLE_NAME               = var.events_table_name
+      FACES_TABLE_NAME                = var.faces_table_name
+      EVENT_ATTENDEES_TABLE_NAME      = var.event_attendees_table_name
+      USERS_TABLE_NAME                = var.users_table_name
+      PHOTOS_BUCKET                   = var.photos_bucket_name
+      HEIC_CONVERTER_FUNCTION_NAME    = var.heic_converter_function_name
+      FACE_MATCH_SIMILARITY_THRESHOLD = tostring(var.face_match_similarity_threshold)
     }
   }
 

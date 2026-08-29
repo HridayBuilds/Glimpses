@@ -88,3 +88,9 @@ variable "alarm_sns_topic_arn" {
   description = "ARN of the shared operator-alerts SNS topic (T-07), subscribed alarms publish here"
   type        = string
 }
+
+variable "face_match_similarity_threshold" {
+  description = "Minimum Rekognition SearchFacesByImage similarity score (0-100) for a face to count as a match in MatchAttendees/MatchOneAttendee"
+  type        = number
+  default     = 90
+}
