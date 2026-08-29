@@ -5,12 +5,12 @@ variable "name_prefix" {
 }
 
 variable "ingestion_function_arn" {
-  description = "ARN of the ingestion Lambda every Task state invokes (Stage/ProcessOnePhoto/BuildPhotosManifest/IndexOnePhoto/Finalize/ListAttendees/MatchAttendees)"
+  description = "ARN of the ingestion Lambda every Task state invokes (StageUpload/ProcessOnePhoto/BuildPhotosManifest/IndexOnePhoto/SummarizeResults/BuildAttendeesManifest/MatchAttendees)"
   type        = string
 }
 
 variable "db_api_function_arn" {
-  description = "ARN of the db_api Lambda, invoked by UpdateJobStatus after Finalize to flip the Jobs row out of PENDING (jobId/status/succeededCount/failedCount, matching Finalize's own output)"
+  description = "ARN of the db_api Lambda, invoked by UpdateStatusSuccess after SummarizeResults to flip the Jobs row out of PENDING (jobId/status/succeededCount/failedCount, matching SummarizeResults' own output)"
   type        = string
 }
 

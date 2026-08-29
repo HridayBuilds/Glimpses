@@ -50,18 +50,18 @@ resource "aws_iam_role_policy" "invoke_db_api" {
   policy = data.aws_iam_policy_document.invoke_db_api.json
 }
 
-data "aws_iam_policy_document" "read_manifest" {
+data "aws_iam_policy_document" "manifest_access" {
   statement {
     effect    = "Allow"
-    actions   = ["s3:GetObject"]
+    actions   = ["s3:GetObject", "s3:PutObject"]
     resources = ["${var.photos_bucket_arn}/uploads/*"]
   }
 }
 
-resource "aws_iam_role_policy" "read_manifest" {
-  name   = "${var.name_prefix}-state-machines-read-manifest"
+resource "aws_iam_role_policy" "manifest_access" {
+  name   = "${var.name_prefix}-state-machines-manifest-access"
   role   = aws_iam_role.this.id
-  policy = data.aws_iam_policy_document.read_manifest.json
+  policy = data.aws_iam_policy_document.manifest_access.json
 }
 
 data "aws_iam_policy_document" "distributed_map_self_execution" {

@@ -1,20 +1,29 @@
 import json
 import os
 
-from DAO.dao import put_object
+from Converter.map_results import count_result_items, parse_result_file, parse_result_manifest
+from DAO.dao import get_object, put_object
 
 
 def handle_build_photos_manifest(payload):
     event_id = payload["eventID"]
     job_id = payload["jobId"]
-    process_results = payload.get("processResults", [])
+
+    results_bucket = payload["processResultsBucket"]
+    manifest_bytes = get_object(results_bucket, payload["processResultsManifestKey"])
+    succeeded_files, failed_files = parse_result_manifest(manifest_bytes)
+
+    outputs = []
+    for file_ref in succeeded_files:
+        outputs.extend(parse_result_file(get_object(results_bucket, file_ref["Key"])))
+    failed_count = sum(count_result_items(get_object(results_bucket, file_ref["Key"])) for file_ref in failed_files)
 
     succeeded = [
-        {"photoID": result["photoID"], "eventID": result["eventID"], "s3Key": result["s3Key"]}
-        for result in process_results
-        if result.get("status") == "SUCCEEDED"
+        {"photoID": output["photoID"], "eventID": output["eventID"], "s3Key": output["s3Key"]}
+        for output in outputs
+        if output.get("status") == "SUCCEEDED"
     ]
-    failed_count = sum(1 for result in process_results if result.get("status") == "FAILED")
+    failed_count += sum(1 for output in outputs if output.get("status") == "FAILED")
 
     bucket = os.environ["PHOTOS_BUCKET"]
     manifest_key = f"uploads/event/{event_id}/job/{job_id}/photos-manifest.json"

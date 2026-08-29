@@ -1,5 +1,5 @@
 {
-  "Comment": "Ingestion pipeline (T-02): InitializeJob -> mark_extracting -> Stage (raw zip bytes to S3 + manifest) -> per-photo processing fan-out (ProcessPhotos) -> BuildPhotosManifest -> mark_indexing -> per-photo IndexFaces fan-out (IndexPhotos) -> Finalize -> CheckIndexingOutcome. If zero photos succeeded, routes straight to JobFailed (mark_failed) - skipped ListAttendees/MatchAttendees entirely, since there are no new photos for them to match against. Otherwise: mark_matching -> ListAttendees -> per-attendee SearchFaces fan-out (MatchAttendees) -> UpdateJobStatus (mark_success, unconditional) -> IngestionSucceeded. All three Distributed Maps (ProcessPhotos, IndexPhotos, MatchAttendees) read their item lists from an S3 manifest via ItemReader, never inline through state data. db_api is called via named actions only (mark_extracting/mark_indexing/mark_matching/mark_success/mark_failed) - the literal Jobs.status string never appears here, db_api owns the action->status mapping and enum enforcement itself (LOCKED_TECH_DECISIONS.md T-02 follow-up).",
+  "Comment": "Ingestion pipeline (T-02): InitializeJob -> mark_extracting -> StageUpload (raw zip bytes to S3 + manifest) -> per-photo processing fan-out (ProcessPhotos) -> BuildPhotosManifest -> mark_indexing -> per-photo IndexFaces fan-out (IndexPhotos) -> SummarizeResults -> CheckAnyPhotosSucceeded. If zero photos succeeded, routes straight to JobFailed (mark_failed) - skipped BuildAttendeesManifest/MatchAttendees entirely, since there are no new photos for them to match against. Otherwise: mark_matching -> BuildAttendeesManifest -> per-attendee SearchFaces fan-out (MatchAttendees) -> UpdateStatusSuccess (mark_success, unconditional) -> IngestionSucceeded. ProcessPhotos and IndexPhotos write their per-item results to S3 via ResultWriter instead of returning them inline, so BuildPhotosManifest/SummarizeResults read them back from S3 rather than carrying potentially hundreds of item results through the execution’s own state data. MatchAttendees still reads its item list from an S3 manifest via ItemReader, same as ProcessPhotos/IndexPhotos. db_api is called via named actions only (mark_extracting/mark_indexing/mark_matching/mark_success/mark_failed) - the literal Jobs.status string never appears here, db_api owns the action->status mapping and enum enforcement itself (LOCKED_TECH_DECISIONS.md T-02 follow-up).",
   "QueryLanguage": "JSONata",
   "StartAt": "InitializeJob",
   "States": {
@@ -61,10 +61,10 @@
           "Next": "JobFailed"
         }
       ],
-      "Next": "Stage"
+      "Next": "StageUpload"
     },
 
-    "Stage": {
+    "StageUpload": {
       "Comment": "Only touches the zip: copies each entry's raw bytes to S3 and writes a manifest pointer. All per-photo processing (format sniff/hash/HEIC/thumbnail/DynamoDB write) happens per-item in ProcessPhotos below, not here - a single invocation of that work does not scale to 800 photos within one Lambda timeout.",
       "Type": "Task",
       "Resource": "arn:aws:states:::lambda:invoke",
@@ -146,7 +146,14 @@
       },
       "MaxConcurrency": ${photo_processing_max_concurrency},
       "ToleratedFailurePercentage": 100,
-      "Output": "{% $merge([$states.input, {'processResults': $states.result}]) %}",
+      "ResultWriter": {
+        "Resource": "arn:aws:states:::s3:putObject",
+        "Arguments": {
+          "Bucket": "${photos_bucket_name}",
+          "Prefix": "{% 'uploads/event/' & $states.input.eventID & '/job/' & $states.input.jobId & '/process-photos-results' %}"
+        }
+      },
+      "Output": "{% $merge([$states.input, {'processResultsBucket': $states.result.ResultWriterDetails.Bucket, 'processResultsManifestKey': $states.result.ResultWriterDetails.Key}]) %}",
       "Catch": [
         {
           "ErrorEquals": ["States.ALL"],
@@ -167,7 +174,8 @@
           "step": "build_photos_manifest",
           "jobId": "{% $states.input.jobId %}",
           "eventID": "{% $states.input.eventID %}",
-          "processResults": "{% $states.input.processResults %}"
+          "processResultsBucket": "{% $states.input.processResultsBucket %}",
+          "processResultsManifestKey": "{% $states.input.processResultsManifestKey %}"
         }
       },
       "Output": "{% $states.result.Payload %}",
@@ -265,7 +273,14 @@
       },
       "MaxConcurrency": ${rekognition_index_max_concurrency},
       "ToleratedFailurePercentage": 100,
-      "Output": "{% $merge([$states.input, {'indexResults': $states.result}]) %}",
+      "ResultWriter": {
+        "Resource": "arn:aws:states:::s3:putObject",
+        "Arguments": {
+          "Bucket": "${photos_bucket_name}",
+          "Prefix": "{% 'uploads/event/' & $states.input.eventID & '/job/' & $states.input.jobId & '/index-photos-results' %}"
+        }
+      },
+      "Output": "{% $merge([$states.input, {'indexResultsBucket': $states.result.ResultWriterDetails.Bucket, 'indexResultsManifestKey': $states.result.ResultWriterDetails.Key}]) %}",
       "Catch": [
         {
           "ErrorEquals": ["States.ALL"],
@@ -273,10 +288,10 @@
           "Next": "JobFailed"
         }
       ],
-      "Next": "Finalize"
+      "Next": "SummarizeResults"
     },
 
-    "Finalize": {
+    "SummarizeResults": {
       "Type": "Task",
       "Resource": "arn:aws:states:::lambda:invoke",
       "Arguments": {
@@ -286,7 +301,8 @@
           "jobId": "{% $states.input.jobId %}",
           "eventID": "{% $states.input.eventID %}",
           "processFailedCount": "{% $states.input.processFailedCount %}",
-          "indexResults": "{% $states.input.indexResults %}"
+          "indexResultsBucket": "{% $states.input.indexResultsBucket %}",
+          "indexResultsManifestKey": "{% $states.input.indexResultsManifestKey %}"
         }
       },
       "Output": "{% $states.result.Payload %}",
@@ -305,11 +321,11 @@
           "Next": "JobFailed"
         }
       ],
-      "Next": "CheckIndexingOutcome"
+      "Next": "CheckAnyPhotosSucceeded"
     },
 
-    "CheckIndexingOutcome": {
-      "Comment": "Reads Finalize's own succeededCount - if zero photos succeeded, there is nothing new for ListAttendees/MatchAttendees to match against, so this routes straight to JobFailed and skips them entirely rather than running that work and discarding it.",
+    "CheckAnyPhotosSucceeded": {
+      "Comment": "Reads SummarizeResults' own succeededCount - if zero photos succeeded, there is nothing new for BuildAttendeesManifest/MatchAttendees to match against, so this routes straight to JobFailed and skips them entirely rather than running that work and discarding it.",
       "Type": "Choice",
       "Choices": [
         {
@@ -321,7 +337,7 @@
     },
 
     "UpdateStatusMatching": {
-      "Comment": "An in-progress status, not the terminal outcome - only reached once CheckIndexingOutcome has confirmed at least one photo succeeded. succeededCount/failedCount are carried through unwritten in $states.input for UpdateJobStatus (right before IngestionSucceeded) to write once ListAttendees/MatchAttendees have actually finished.",
+      "Comment": "An in-progress status, not the terminal outcome - only reached once CheckAnyPhotosSucceeded has confirmed at least one photo succeeded. succeededCount/failedCount are carried through unwritten in $states.input for UpdateStatusSuccess (right before IngestionSucceeded) to write once BuildAttendeesManifest/MatchAttendees have actually finished.",
       "Type": "Task",
       "Resource": "arn:aws:states:::lambda:invoke",
       "Arguments": {
@@ -347,10 +363,10 @@
           "Next": "JobFailed"
         }
       ],
-      "Next": "ListAttendees"
+      "Next": "BuildAttendeesManifest"
     },
 
-    "ListAttendees": {
+    "BuildAttendeesManifest": {
       "Comment": "Runs before Jobs' terminal outcome is written — UpdateStatusTerminal still hasn't run. A failure here or in MatchAttendees now routes through JobFailed (flips Jobs to FAILED) rather than straight to IngestionFailed, since without that the row would otherwise be stuck at MATCHING forever with no terminal status ever written.",
       "Type": "Task",
       "Resource": "arn:aws:states:::lambda:invoke",
@@ -404,9 +420,9 @@
           "Mode": "DISTRIBUTED",
           "ExecutionType": "STANDARD"
         },
-        "StartAt": "MatchOneAttendeeBatch",
+        "StartAt": "MatchOneAttendee",
         "States": {
-          "MatchOneAttendeeBatch": {
+          "MatchOneAttendee": {
             "Type": "Task",
             "Resource": "arn:aws:states:::lambda:invoke",
             "Arguments": {
@@ -440,11 +456,11 @@
           "Next": "JobFailed"
         }
       ],
-      "Next": "UpdateJobStatus"
+      "Next": "UpdateStatusSuccess"
     },
 
-    "UpdateJobStatus": {
-      "Comment": "Unconditional - only reached once matching has actually finished, and CheckIndexingOutcome already confirmed at least one photo succeeded earlier, so there is nothing left to branch on here.",
+    "UpdateStatusSuccess": {
+      "Comment": "Unconditional - only reached once matching has actually finished, and CheckAnyPhotosSucceeded already confirmed at least one photo succeeded earlier, so there is nothing left to branch on here.",
       "Type": "Task",
       "Resource": "arn:aws:states:::lambda:invoke",
       "Arguments": {
@@ -481,7 +497,7 @@
     },
 
     "JobFailed": {
-      "Comment": "Reached either by an execution-level failure (Extract crashing, IndexPhotos' Map itself erroring, ListAttendees/MatchAttendees failing, etc.) or by CheckIndexingOutcome finding zero photos succeeded. Every prior state's Catch preserves jobId in $states.input for this to read.",
+      "Comment": "Reached either by an execution-level failure (StageUpload crashing, IndexPhotos' Map itself erroring, BuildAttendeesManifest/MatchAttendees failing, etc.) or by CheckAnyPhotosSucceeded finding zero photos succeeded. Every prior state's Catch preserves jobId in $states.input for this to read.",
       "Type": "Task",
       "Resource": "arn:aws:states:::lambda:invoke",
       "Arguments": {

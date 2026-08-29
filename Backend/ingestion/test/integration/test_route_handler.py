@@ -122,12 +122,26 @@ def test_stage_then_process_then_index_then_finalize_full_round_trip(monkeypatch
     )
     assert process_result["status"] == "SUCCEEDED"
 
+    process_results_manifest_key = "results/process-photos/manifest.json"
+    process_results_file_key = "results/process-photos/succeeded-0.json"
+    s3.put_object(
+        Bucket=bucket,
+        Key=process_results_file_key,
+        Body=json.dumps([{"Output": json.dumps(process_result)}]).encode("utf-8"),
+    )
+    s3.put_object(
+        Bucket=bucket,
+        Key=process_results_manifest_key,
+        Body=json.dumps({"ResultFiles": {"SUCCEEDED": [{"Key": process_results_file_key}], "FAILED": []}}).encode("utf-8"),
+    )
+
     manifest_result = lambda_handler(
         {
             "step": "build_photos_manifest",
             "jobId": stage_result["jobId"],
             "eventID": stage_result["eventID"],
-            "processResults": [process_result],
+            "processResultsBucket": bucket,
+            "processResultsManifestKey": process_results_manifest_key,
         },
         _FakeLambdaContext(),
     )
@@ -158,13 +172,27 @@ def test_stage_then_process_then_index_then_finalize_full_round_trip(monkeypatch
     assert index_result == {"photoID": photo["photoID"], "status": "SUCCEEDED", "faceCount": 1}
     assert faces_table.get_item(Key={"rekognitionFaceID": "face-1"})["Item"]["photoID"] == photo["photoID"]
 
+    index_results_manifest_key = "results/index-photos/manifest.json"
+    index_results_file_key = "results/index-photos/succeeded-0.json"
+    s3.put_object(
+        Bucket=bucket,
+        Key=index_results_file_key,
+        Body=json.dumps([{"Output": json.dumps(index_result)}]).encode("utf-8"),
+    )
+    s3.put_object(
+        Bucket=bucket,
+        Key=index_results_manifest_key,
+        Body=json.dumps({"ResultFiles": {"SUCCEEDED": [{"Key": index_results_file_key}], "FAILED": []}}).encode("utf-8"),
+    )
+
     finalize_result = lambda_handler(
         {
             "step": "finalize",
             "jobId": "job_1",
             "eventID": "evt_1",
             "processFailedCount": manifest_result["processFailedCount"],
-            "indexResults": [{"status": "OK"}],
+            "indexResultsBucket": bucket,
+            "indexResultsManifestKey": index_results_manifest_key,
         },
         _FakeLambdaContext(),
     )
