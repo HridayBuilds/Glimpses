@@ -9,9 +9,8 @@ from DAO.dao import (
     get_object,
     increment_event_counters,
     invoke_heic_converter,
-    is_duplicate,
     put_object,
-    put_photo,
+    put_photo_if_absent,
 )
 
 
@@ -33,10 +32,7 @@ def handle_process_one_photo(payload):
             raise ValueError(f"Unrecognized image format: {filename}")
 
         content_hash = compute_content_hash(entry_bytes)
-        if is_duplicate(event_id, content_hash):
-            return {"filename": filename, "status": "DUPLICATE"}
-
-        photo_id = str(uuid.uuid4())
+        photo_id = str(uuid.uuid5(uuid.NAMESPACE_OID, f"{event_id}:{content_hash}"))
         photo_key = f"photos/event/{event_id}/{photo_id}.jpg"
 
         if fmt == "heic":
@@ -52,7 +48,7 @@ def handle_process_one_photo(payload):
         thumbnail_key = f"thumbnails/event/{event_id}/{photo_id}.jpg"
         put_object(bucket, thumbnail_key, make_thumbnail(jpeg_bytes), content_type="image/jpeg")
 
-        put_photo({
+        saved = put_photo_if_absent({
             "photoID": photo_id,
             "eventID": event_id,
             "uploaderID": user_id,
@@ -66,6 +62,9 @@ def handle_process_one_photo(payload):
             "s3Key": photo_key,
             "thumbnailKey": thumbnail_key,
         })
+        if not saved:
+            return {"filename": filename, "status": "DUPLICATE"}
+
         increment_event_counters(event_id, photo_count_delta=1, size_bytes_delta=len(jpeg_bytes))
         return {"filename": filename, "status": "SUCCEEDED", "photoID": photo_id, "eventID": event_id, "s3Key": photo_key}
     except Exception:

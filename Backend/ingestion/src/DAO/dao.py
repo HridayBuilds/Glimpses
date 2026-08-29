@@ -109,17 +109,14 @@ def get_user(user_id):
     return response.get("Item")
 
 
-def is_duplicate(event_id, content_hash):
-    response = _photos_table().query(
-        IndexName="eventID-contentHash-index",
-        KeyConditionExpression="eventID = :e AND contentHash = :h",
-        ExpressionAttributeValues={":e": event_id, ":h": content_hash},
-    )
-    return response["Count"] > 0
-
-
-def put_photo(item):
-    _photos_table().put_item(Item=item)
+def put_photo_if_absent(item):
+    try:
+        _photos_table().put_item(Item=item, ConditionExpression="attribute_not_exists(photoID)")
+        return True
+    except ClientError as error:
+        if error.response["Error"]["Code"] == "ConditionalCheckFailedException":
+            return False
+        raise
 
 
 def put_face(item):

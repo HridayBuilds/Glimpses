@@ -22,10 +22,9 @@ def test_process_one_photo_succeeds(monkeypatch):
     photos = []
 
     monkeypatch.setattr(process_one_photo, "get_object", lambda bucket, key: _JPEG_BYTES)
-    monkeypatch.setattr(process_one_photo, "is_duplicate", lambda event_id, content_hash: False)
     monkeypatch.setattr(process_one_photo, "put_object", lambda bucket, key, body, content_type=None: stored_objects.update({key: body}))
     monkeypatch.setattr(process_one_photo, "make_thumbnail", lambda jpeg_bytes, max_dimension=400: b"thumb-bytes")
-    monkeypatch.setattr(process_one_photo, "put_photo", lambda item: photos.append(item))
+    monkeypatch.setattr(process_one_photo, "put_photo_if_absent", lambda item: photos.append(item) or True)
     monkeypatch.setattr(process_one_photo, "increment_event_counters", lambda event_id, photo_count_delta=0, size_bytes_delta=0: None)
 
     result = process_one_photo.handle_process_one_photo(_PAYLOAD)
@@ -39,7 +38,9 @@ def test_process_one_photo_succeeds(monkeypatch):
 
 def test_process_one_photo_skips_duplicate_without_failing(monkeypatch):
     monkeypatch.setattr(process_one_photo, "get_object", lambda bucket, key: _JPEG_BYTES)
-    monkeypatch.setattr(process_one_photo, "is_duplicate", lambda event_id, content_hash: True)
+    monkeypatch.setattr(process_one_photo, "put_object", lambda bucket, key, body, content_type=None: None)
+    monkeypatch.setattr(process_one_photo, "make_thumbnail", lambda jpeg_bytes, max_dimension=400: b"thumb-bytes")
+    monkeypatch.setattr(process_one_photo, "put_photo_if_absent", lambda item: False)
 
     result = process_one_photo.handle_process_one_photo(_PAYLOAD)
 
@@ -62,7 +63,6 @@ def test_process_one_photo_converts_heic_via_invoke(monkeypatch):
     monkeypatch.setattr(process_one_photo, "get_object", lambda bucket, key: (
         heic_bytes if key == _PAYLOAD["rawKey"] else _JPEG_BYTES
     ))
-    monkeypatch.setattr(process_one_photo, "is_duplicate", lambda event_id, content_hash: False)
     monkeypatch.setattr(process_one_photo, "put_object", lambda bucket, key, body, content_type=None: None)
 
     def _fake_invoke(bucket, key):
@@ -72,7 +72,7 @@ def test_process_one_photo_converts_heic_via_invoke(monkeypatch):
     monkeypatch.setattr(process_one_photo, "invoke_heic_converter", _fake_invoke)
     monkeypatch.setattr(process_one_photo, "delete_object", lambda bucket, key: deleted.update({"key": key}))
     monkeypatch.setattr(process_one_photo, "make_thumbnail", lambda jpeg_bytes, max_dimension=400: b"thumb-bytes")
-    monkeypatch.setattr(process_one_photo, "put_photo", lambda item: None)
+    monkeypatch.setattr(process_one_photo, "put_photo_if_absent", lambda item: True)
     monkeypatch.setattr(process_one_photo, "increment_event_counters", lambda event_id, photo_count_delta=0, size_bytes_delta=0: None)
 
     result = process_one_photo.handle_process_one_photo(dict(_PAYLOAD, filename="a.heic"))
