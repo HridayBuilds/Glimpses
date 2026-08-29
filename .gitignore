@@ -18,7 +18,5 @@ terraform.tfvars
 
 **/.terraform/
 
-graphify-out/
-
 __pycache__/
 *.pyc
