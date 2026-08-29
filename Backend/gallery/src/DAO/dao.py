@@ -30,10 +30,21 @@ def _lambda_client():
     return boto3.client("lambda")
 
 
+_private_key_cache = None
+
+
+def _get_private_key():
+    global _private_key_cache
+    if _private_key_cache is None:
+        _private_key_cache = serialization.load_pem_private_key(
+            os.environ["CLOUDFRONT_PRIVATE_KEY"].encode(), password=None
+        )
+    return _private_key_cache
+
+
 def sign_cloudfront_url(url, expires_at):
     def _rsa_signer(message):
-        private_key = serialization.load_pem_private_key(os.environ["CLOUDFRONT_PRIVATE_KEY"].encode(), password=None)
-        return private_key.sign(message, padding.PKCS1v15(), hashes.SHA1())
+        return _get_private_key().sign(message, padding.PKCS1v15(), hashes.SHA1())
 
     signer = CloudFrontSigner(os.environ["CLOUDFRONT_KEY_PAIR_ID"], _rsa_signer)
     return signer.generate_presigned_url(url, date_less_than=expires_at)
