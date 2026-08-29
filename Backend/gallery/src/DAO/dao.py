@@ -30,18 +30,9 @@ def _lambda_client():
     return boto3.client("lambda")
 
 
-def _ssm():
-    return boto3.client("ssm")
-
-
-def get_signing_private_key():
-    response = _ssm().get_parameter(Name=os.environ["CLOUDFRONT_PRIVATE_KEY_PARAM"], WithDecryption=True)
-    return response["Parameter"]["Value"]
-
-
-def sign_cloudfront_url(url, private_key_pem, expires_at):
+def sign_cloudfront_url(url, expires_at):
     def _rsa_signer(message):
-        private_key = serialization.load_pem_private_key(private_key_pem.encode(), password=None)
+        private_key = serialization.load_pem_private_key(os.environ["CLOUDFRONT_PRIVATE_KEY"].encode(), password=None)
         return private_key.sign(message, padding.PKCS1v15(), hashes.SHA1())
 
     signer = CloudFrontSigner(os.environ["CLOUDFRONT_KEY_PAIR_ID"], _rsa_signer)

@@ -27,8 +27,7 @@ def _photo(**overrides):
 
 
 def _stub_signing(monkeypatch):
-    monkeypatch.setattr(manager, "get_signing_private_key", lambda: "fake-private-key-pem")
-    monkeypatch.setattr(manager, "sign_cloudfront_url", lambda url, private_key_pem, expires_at: f"{url}?signed=1")
+    monkeypatch.setattr(manager, "sign_cloudfront_url", lambda url, expires_at: f"{url}?signed=1")
 
 
 def test_list_event_photos_paginates_via_cursor(monkeypatch):

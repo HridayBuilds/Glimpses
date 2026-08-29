@@ -59,19 +59,10 @@ variable "cloudfront_signing_key_pair_id" {
   type        = string
 }
 
-variable "cloudfront_signing_private_key_parameter_name" {
-  description = "SSM parameter name holding the private signing key, fetched at runtime to sign URLs"
+variable "cloudfront_signing_private_key_pem" {
+  description = "Private half of the CloudFront signing key pair, set directly as this Lambda's env var"
   type        = string
-}
-
-variable "cloudfront_signing_private_key_parameter_arn" {
-  description = "SSM parameter ARN, for IAM scoping (read-only, this one parameter only)"
-  type        = string
-}
-
-variable "ssm_default_kms_key_arn" {
-  description = "Account-default SSM KMS key ARN, needed to decrypt the SecureString parameter"
-  type        = string
+  sensitive   = true
 }
 
 variable "cascade_delete_function_name" {

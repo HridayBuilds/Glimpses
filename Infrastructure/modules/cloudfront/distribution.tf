@@ -30,11 +30,11 @@ resource "aws_cloudfront_distribution" "photos" {
   }
 
   ordered_cache_behavior {
-    path_pattern            = "qrcodes/*"
-    allowed_methods         = ["GET", "HEAD"]
-    cached_methods          = ["GET", "HEAD"]
-    target_origin_id        = "photos-bucket"
-    viewer_protocol_policy  = "redirect-to-https"
+    path_pattern           = "qrcodes/*"
+    allowed_methods        = ["GET", "HEAD"]
+    cached_methods         = ["GET", "HEAD"]
+    target_origin_id       = "photos-bucket"
+    viewer_protocol_policy = "redirect-to-https"
 
     forwarded_values {
       query_string = false
