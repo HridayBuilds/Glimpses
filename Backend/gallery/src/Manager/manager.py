@@ -63,7 +63,7 @@ def _list_mine_photos(event_id, caller_id):
     attendee = get_attendee(caller_id, event_id)
     matched_ids = list(attendee["matchedPhotoIDs"]) if attendee and attendee.get("matchedPhotoIDs") else []
     photos = batch_get_photos(matched_ids)
-    photos.sort(key=lambda photo: photo["uploadedAt"], reverse=True)
+    photos.sort(key=lambda photo: photo["uploadedAtFilename"], reverse=True)
     return {"photos": [_public_photo(photo) for photo in photos], "cursor": None}
 
 

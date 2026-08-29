@@ -73,7 +73,9 @@ def leave_event(payload):
 def list_attendees(payload):
     _require_organizer(payload["eventID"], payload["organizerID"])
 
-    attendees = list_attendees_by_status(payload["eventID"], payload["status"])
+    attendees = [
+        a for a in list_attendees_by_status(payload["eventID"], payload["status"]) if a["userID"] != payload["organizerID"]
+    ]
     users_by_id = {user["userID"]: user for user in get_users([a["userID"] for a in attendees])}
 
     return {

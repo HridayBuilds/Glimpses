@@ -18,6 +18,7 @@ def _photo(**overrides):
         "uploaderEmail": "arjun@example.com",
         "filename": "img.jpg",
         "uploadedAt": "2026-08-15T10:00:00Z",
+        "uploadedAtFilename": "2026-08-15T10:00:00Z#img.jpg",
         "sizeBytes": 1234,
         "s3Key": "photos/event/evt_1/p1.jpg",
         "thumbnailKey": "thumbnails/event/evt_1/p1.jpg",
@@ -85,8 +86,8 @@ def test_list_mine_photos_resolves_via_matched_photo_ids(monkeypatch):
         manager,
         "batch_get_photos",
         lambda photo_ids: [
-            _photo(photoID="p1", uploadedAt="2026-08-15T10:00:00Z"),
-            _photo(photoID="p2", uploadedAt="2026-08-16T10:00:00Z"),
+            _photo(photoID="p1", uploadedAt="2026-08-15T10:00:00Z", uploadedAtFilename="2026-08-15T10:00:00Z#img.jpg"),
+            _photo(photoID="p2", uploadedAt="2026-08-16T10:00:00Z", uploadedAtFilename="2026-08-16T10:00:00Z#img.jpg"),
         ],
     )
     _stub_signing(monkeypatch)

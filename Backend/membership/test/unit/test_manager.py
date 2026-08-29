@@ -226,6 +226,22 @@ def test_list_attendees_joins_display_name_and_email(monkeypatch):
     }
 
 
+def test_list_attendees_excludes_organizers_own_row(monkeypatch):
+    monkeypatch.setattr(manager, "get_event", lambda event_id: _event(organizerID="user_1"))
+    monkeypatch.setattr(
+        manager,
+        "list_attendees_by_status",
+        lambda event_id, status: [_attendee(userID="user_1"), _attendee(userID="user_2")],
+    )
+    monkeypatch.setattr(
+        manager, "get_users", lambda user_ids: [{"userID": "user_2", "displayName": "Meera", "email": "meera@x.com"}]
+    )
+
+    result = manager.list_attendees({"eventID": "evt_1", "organizerID": "user_1", "status": "ATTENDEE"})
+
+    assert [a["userID"] for a in result["attendees"]] == ["user_2"]
+
+
 def test_admit_attendee_transitions_pending_to_attendee(monkeypatch):
     monkeypatch.setattr(manager, "get_event", lambda event_id: _event())
     monkeypatch.setattr(manager, "get_attendee", lambda user_id, event_id: _attendee(status="PENDING"))
