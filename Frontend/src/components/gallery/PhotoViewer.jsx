@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { motion, useMotionValue, useTransform, useDragControls, animate } from 'motion/react'
 import { useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
@@ -93,6 +93,7 @@ function PhotoViewer({ eventId, photo, onClose, onPrev, onNext, hasPrev, hasNext
   const imgX = useMotionValue(0)
   const imgY = useMotionValue(0)
   const gestureRef = useRef({})
+  const imgRef = useRef(null)
 
   useEffect(() => {
     imgScale.set(1)
@@ -105,7 +106,7 @@ function PhotoViewer({ eventId, photo, onClose, onPrev, onNext, hasPrev, hasNext
     return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY)
   }
 
-  const handleImageTouchStart = (e) => {
+  const handleImageTouchStart = useCallback((e) => {
     if (e.touches.length === 2) {
       gestureRef.current = {
         mode: 'pinch',
@@ -141,9 +142,9 @@ function PhotoViewer({ eventId, photo, onClose, onPrev, onNext, hasPrev, hasNext
       startOffsetY: imgY.get(),
       lastTap: { time: now, x: touch.clientX, y: touch.clientY },
     }
-  }
+  }, [imgScale, imgX, imgY])
 
-  const handleImageTouchMove = (e) => {
+  const handleImageTouchMove = useCallback((e) => {
     const state = gestureRef.current
     if (state.mode === 'pinch' && e.touches.length === 2) {
       e.preventDefault()
@@ -160,9 +161,9 @@ function PhotoViewer({ eventId, photo, onClose, onPrev, onNext, hasPrev, hasNext
       const deltaY = touch.clientY - state.startY
       if (Math.abs(deltaX) > Math.abs(deltaY)) e.stopPropagation()
     }
-  }
+  }, [imgScale, imgX, imgY])
 
-  const handleImageTouchEnd = (e) => {
+  const handleImageTouchEnd = useCallback((e) => {
     const state = gestureRef.current
     if (state.mode === 'swipe') {
       const touch = e.changedTouches[0]
@@ -178,7 +179,20 @@ function PhotoViewer({ eventId, photo, onClose, onPrev, onNext, hasPrev, hasNext
       imgY.set(0)
     }
     gestureRef.current = { lastTap: state.lastTap }
-  }
+  }, [hasPrev, hasNext, onPrev, onNext, imgScale, imgX, imgY])
+
+  useEffect(() => {
+    const el = imgRef.current
+    if (!el) return
+    el.addEventListener('touchstart', handleImageTouchStart, { passive: true })
+    el.addEventListener('touchmove', handleImageTouchMove, { passive: false })
+    el.addEventListener('touchend', handleImageTouchEnd, { passive: true })
+    return () => {
+      el.removeEventListener('touchstart', handleImageTouchStart)
+      el.removeEventListener('touchmove', handleImageTouchMove)
+      el.removeEventListener('touchend', handleImageTouchEnd)
+    }
+  }, [handleImageTouchStart, handleImageTouchMove, handleImageTouchEnd])
 
   const y = useMotionValue(0)
   const scale = useTransform(y, (v) => Math.max(0.86, 1 - Math.abs(v) / 2600))
@@ -245,12 +259,10 @@ function PhotoViewer({ eventId, photo, onClose, onPrev, onNext, hasPrev, hasNext
           className="relative flex min-h-0 flex-1 flex-col items-center justify-center gap-1 overflow-y-auto px-2 pb-[26px] pt-2"
         >
           <motion.img
+            ref={imgRef}
             src={photo.photoUrl}
             alt={photo.filename}
             onPointerDown={(e) => e.stopPropagation()}
-            onTouchStart={handleImageTouchStart}
-            onTouchMove={handleImageTouchMove}
-            onTouchEnd={handleImageTouchEnd}
             style={{ x: imgX, y: imgY, scale: imgScale, touchAction: 'none' }}
             className="max-h-[62vh] w-auto max-w-full flex-none rounded-[6px] object-contain"
             draggable={false}
