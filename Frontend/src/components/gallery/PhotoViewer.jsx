@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { motion, useMotionValue, useTransform, useDragControls, animate } from 'motion/react'
 import { useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
@@ -84,6 +84,102 @@ function PhotoViewer({ eventId, photo, onClose, onPrev, onNext, hasPrev, hasNext
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [hasPrev, hasNext, onPrev, onNext, onClose])
 
+  const MIN_ZOOM = 1
+  const MAX_ZOOM = 4
+  const DOUBLE_TAP_ZOOM = 2.5
+  const SWIPE_THRESHOLD = 60
+
+  const imgScale = useMotionValue(1)
+  const imgX = useMotionValue(0)
+  const imgY = useMotionValue(0)
+  const gestureRef = useRef({})
+
+  useEffect(() => {
+    imgScale.set(1)
+    imgX.set(0)
+    imgY.set(0)
+  }, [photo.photoID, imgScale, imgX, imgY])
+
+  const touchDistance = (touches) => {
+    const [a, b] = touches
+    return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY)
+  }
+
+  const handleImageTouchStart = (e) => {
+    if (e.touches.length === 2) {
+      gestureRef.current = {
+        mode: 'pinch',
+        startDistance: touchDistance(e.touches),
+        startScale: imgScale.get(),
+      }
+      return
+    }
+    if (e.touches.length !== 1) return
+
+    const touch = e.touches[0]
+    const now = Date.now()
+    const lastTap = gestureRef.current.lastTap
+    const isDoubleTap =
+      lastTap && now - lastTap.time < 300 && Math.abs(touch.clientX - lastTap.x) < 30 && Math.abs(touch.clientY - lastTap.y) < 30
+
+    if (isDoubleTap) {
+      const next = imgScale.get() > 1 ? 1 : DOUBLE_TAP_ZOOM
+      animate(imgScale, next, { type: 'spring', stiffness: 300, damping: 30 })
+      if (next === 1) {
+        animate(imgX, 0, { type: 'spring', stiffness: 300, damping: 30 })
+        animate(imgY, 0, { type: 'spring', stiffness: 300, damping: 30 })
+      }
+      gestureRef.current = { mode: null }
+      return
+    }
+
+    gestureRef.current = {
+      mode: imgScale.get() > 1 ? 'pan' : 'swipe',
+      startX: touch.clientX,
+      startY: touch.clientY,
+      startOffsetX: imgX.get(),
+      startOffsetY: imgY.get(),
+      lastTap: { time: now, x: touch.clientX, y: touch.clientY },
+    }
+  }
+
+  const handleImageTouchMove = (e) => {
+    const state = gestureRef.current
+    if (state.mode === 'pinch' && e.touches.length === 2) {
+      e.preventDefault()
+      const newDistance = touchDistance(e.touches)
+      imgScale.set(Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, state.startScale * (newDistance / state.startDistance))))
+    } else if (state.mode === 'pan' && e.touches.length === 1) {
+      e.preventDefault()
+      const touch = e.touches[0]
+      imgX.set(state.startOffsetX + (touch.clientX - state.startX))
+      imgY.set(state.startOffsetY + (touch.clientY - state.startY))
+    } else if (state.mode === 'swipe' && e.touches.length === 1) {
+      const touch = e.touches[0]
+      const deltaX = touch.clientX - state.startX
+      const deltaY = touch.clientY - state.startY
+      if (Math.abs(deltaX) > Math.abs(deltaY)) e.stopPropagation()
+    }
+  }
+
+  const handleImageTouchEnd = (e) => {
+    const state = gestureRef.current
+    if (state.mode === 'swipe') {
+      const touch = e.changedTouches[0]
+      const deltaX = touch.clientX - state.startX
+      const deltaY = touch.clientY - state.startY
+      if (Math.abs(deltaX) > SWIPE_THRESHOLD && Math.abs(deltaX) > Math.abs(deltaY) * 1.5) {
+        if (deltaX > 0 && hasPrev) onPrev()
+        else if (deltaX < 0 && hasNext) onNext()
+      }
+    }
+    if (imgScale.get() <= 1) {
+      imgX.set(0)
+      imgY.set(0)
+    }
+    gestureRef.current = { lastTap: state.lastTap }
+  }
+
   const y = useMotionValue(0)
   const scale = useTransform(y, (v) => Math.max(0.86, 1 - Math.abs(v) / 2600))
   const radius = useTransform(y, (v) => Math.min(28, Math.abs(v) / 6))
@@ -148,9 +244,14 @@ function PhotoViewer({ eventId, photo, onClose, onPrev, onNext, hasPrev, hasNext
           onPointerDown={(e) => dragControls.start(e)}
           className="relative flex min-h-0 flex-1 flex-col items-center justify-center gap-1 overflow-y-auto px-2 pb-[26px] pt-2"
         >
-          <img
+          <motion.img
             src={photo.photoUrl}
             alt={photo.filename}
+            onPointerDown={(e) => e.stopPropagation()}
+            onTouchStart={handleImageTouchStart}
+            onTouchMove={handleImageTouchMove}
+            onTouchEnd={handleImageTouchEnd}
+            style={{ x: imgX, y: imgY, scale: imgScale, touchAction: 'none' }}
             className="max-h-[62vh] w-auto max-w-full flex-none rounded-[6px] object-contain"
             draggable={false}
           />
