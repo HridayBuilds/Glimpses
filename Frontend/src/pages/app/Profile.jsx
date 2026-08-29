@@ -129,15 +129,10 @@ function Profile() {
               <div className="min-w-0">
                 <div className="mb-[5px] text-[15.5px] font-semibold tracking-[-0.01em]">{selfieTitle}</div>
                 <div className="text-[14px] leading-[1.55] text-white/50">
-                  {selfieBody}
-                  {!hasSelfie && (
-                    <>
-                      {' '}
-                      <Link to="/app/profile/selfie-info" className="font-medium text-[#FF7A59]">
-                        info
-                      </Link>
-                    </>
-                  )}
+                  {selfieBody}{' '}
+                  <Link to="/app/profile/selfie-info" className="font-medium text-[#FF7A59]">
+                    info
+                  </Link>
                 </div>
               </div>
             </div>
