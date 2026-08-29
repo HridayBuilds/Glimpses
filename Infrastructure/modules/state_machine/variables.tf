@@ -37,7 +37,7 @@ variable "rekognition_search_max_concurrency" {
 }
 
 variable "photo_processing_max_concurrency" {
-  description = "ProcessPhotos Distributed Map's MaxConcurrency, for the per-photo format/HEIC/thumbnail/DynamoDB work split out of Extract. Not Rekognition-bound, so not tied to the 5 TPS quota IndexPhotos/MatchAttendees are capped at - bounded instead by S3/DynamoDB throughput and (for HEIC photos only) synchronous heic_converter invokes."
+  description = "ProcessPhotos Distributed Map's MaxConcurrency"
   type        = number
-  default     = 20
+  default     = 4
 }
