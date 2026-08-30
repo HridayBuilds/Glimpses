@@ -18,17 +18,26 @@
 
 ### Table of contents
 
-| | |
+| Sr No. | Title |
 |---|---|
-| [What it does](#what-it-does) | [The ingestion pipeline (Step Functions)](#the-ingestion-pipeline-step-functions) |
-| [Demo](#demo) | [Triggers and edge cases](#triggers-and-edge-cases) |
-| [Product walkthrough](#product-walkthrough) | [The knowledge graph (`graphify`)](#the-knowledge-graph-graphify) |
-| [Core features](#core-features) | [Cost: built entirely on the AWS Free Tier](#cost-built-entirely-on-the-aws-free-tier) |
-| [Who it's for](#whos-it-for) | [Scaling past the defaults](#scaling-past-the-defaults) |
-| [Tech stack](#tech-stack) | [Running it yourself](#running-it-yourself) |
-| [Architecture](#architecture) | [CI/CD (Jenkins)](#cicd-jenkins) |
-| [Project structure](#project-structure) | [License](#license) |
-| [The Lambdas](#the-lambdas) | [The database (DynamoDB)](#the-database-dynamodb) |
+| 1 | [What it does](#what-it-does) |
+| 2 | [Demo](#demo) |
+| 3 | [Product walkthrough](#product-walkthrough) |
+| 4 | [Core features](#core-features) |
+| 5 | [Who it's for](#whos-it-for) |
+| 6 | [Tech stack](#tech-stack) |
+| 7 | [Architecture](#architecture) |
+| 8 | [Project structure](#project-structure) |
+| 9 | [The Lambdas](#the-lambdas) |
+| 10 | [The database (DynamoDB)](#the-database-dynamodb) |
+| 11 | [The ingestion pipeline (Step Functions)](#the-ingestion-pipeline-step-functions) |
+| 12 | [Triggers and edge cases](#triggers-and-edge-cases) |
+| 13 | [The knowledge graph (`graphify`)](#the-knowledge-graph-graphify) |
+| 14 | [Cost: built entirely on the AWS Free Tier](#cost-built-entirely-on-the-aws-free-tier) |
+| 15 | [Scaling past the defaults](#scaling-past-the-defaults) |
+| 16 | [Running it yourself](#running-it-yourself) |
+| 17 | [CI/CD (Jenkins)](#cicd-jenkins) |
+| 18 | [License](#license) |
 
 ---
 
@@ -131,15 +140,9 @@ It's built entirely on serverless AWS: no servers to provision or patch, nothing
 ## Architecture
 
 <p align="center">
-  <img src="assets/architecture/overview.png" alt="Architecture overview" width="800" />
+  <img src="assets/architecture/tech-stack.png" alt="AWS services and supporting tools, grouped by category" width="900" />
   <br />
-  <sub><i>Full architecture diagram placeholder. Official AWS icons are already sitting in <code>assets/architecture/icon-sources/</code>, ready to build this from.</i></sub>
-</p>
-
-<p align="center">
-  <img src="assets/architecture/cloudcraft.png" alt="Cloudcraft architecture snapshot" width="700" />
-  <br />
-  <sub><i>An early Cloudcraft snapshot of the core architecture, kept here as a simpler at-a-glance view alongside the fuller diagram above.</i></sub>
+  <sub><i>Every AWS service used, grouped by category (compute, database, object storage, API, auth, content delivery, orchestration, eventing, AI/ML, security, monitoring), alongside the supporting tools and libraries that build and run it (Terraform, Jenkins, Python, boto3, pytest, moto, JSONata, and the frontend stack).</i></sub>
 </p>
 
 At a glance:
