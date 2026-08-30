@@ -55,37 +55,55 @@ It's built entirely on serverless AWS: no servers to provision or patch, nothing
 
 ## Product walkthrough
 
-| Sign up | Log in |
-|---|---|
-| ![Sign up](assets/product/sign-up.png) | ![Log in](assets/product/login.png) |
+**Sign up & log in**
 
-| Sharing an event (join code / QR) | Joining an event |
-|---|---|
-| ![Share event](assets/product/share-event.png) | ![Join event](assets/product/join-event.png) |
+<p align="center">
+  <img src="assets/product/sign-up.png" width="430" alt="Sign up" />
+  <img src="assets/product/login.png" width="430" alt="Log in" />
+</p>
 
-| Attendee lobby (admit/deny) | Organizer's events dashboard |
-|---|---|
-| ![Event lobby, admitting an attendee](assets/product/event-lobby-admit.png) | ![Events dashboard](assets/product/events-dashboard.png) |
+**Sharing and joining an event**
 
-| Event analytics | Event settings |
-|---|---|
-| ![Event analytics](assets/product/event-analytics.png) | ![Event settings](assets/product/event-settings.png) |
+<p align="center">
+  <img src="assets/product/share-event.png" width="260" alt="Sharing an event via join code / QR" />
+  <img src="assets/product/join-event.png" width="260" alt="Joining an event" />
+  <img src="assets/product/event-lobby-admit.png" width="260" alt="Attendee lobby, admitting an attendee" />
+</p>
 
-| Privacy controls | Uploading photos |
-|---|---|
-| ![Privacy](assets/product/privacy.png) | ![Uploading photos](assets/product/uploading.png) |
+**Organizer dashboard**
 
-| Photos added | Event gallery |
-|---|---|
-| ![Photos added](assets/product/photos-added.png) | ![Event gallery](assets/product/gallery.png) |
+<p align="center">
+  <img src="assets/product/events-dashboard.png" width="430" alt="Organizer's events dashboard" />
+  <img src="assets/product/event-analytics.png" width="430" alt="Event analytics" />
+</p>
 
-| Photos of me | Downloading as a ZIP |
-|---|---|
-| ![Photos of me](assets/product/photos-of-me.png) | ![Download as ZIP](assets/product/download-zip.png) |
+**Event settings & privacy**
 
-| Profile |
-|---|
-| ![Profile](assets/product/profile.png) |
+<p align="center">
+  <img src="assets/product/privacy.png" width="430" alt="Privacy controls" />
+  <img src="assets/product/download-zip.png" width="430" alt="Downloading photos as a ZIP" />
+</p>
+
+**Uploading photos**
+
+<p align="center">
+  <img src="assets/product/uploading.png" width="260" alt="Uploading photos" />
+  <img src="assets/product/photos-added.png" width="260" alt="Photos added" />
+  <img src="assets/product/event-settings.png" width="260" alt="Event settings" />
+</p>
+
+**The gallery and "Photos of me"**
+
+<p align="center">
+  <img src="assets/product/gallery.jpg" width="380" alt="Event gallery" />
+  <img src="assets/product/photos-of-me.jpg" width="380" alt="Photos of me" />
+</p>
+
+**Profile**
+
+<p align="center">
+  <img src="assets/product/profile.png" width="260" alt="Profile" />
+</p>
 
 ---
 
