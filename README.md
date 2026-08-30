@@ -182,7 +182,7 @@ At a glance, here's the shape of a request:
              API Gateway (REST, Cognito-authorized)
                     │
      ┌──────────────┼──────────────────────────────┐
-     │              │                               │
+     │              │                              │
  10 Lambdas    Step Functions            EventBridge (upload trigger,
  (business     (ingestion pipeline,       daily archive sweep)
   logic)        Distributed Map fan-out)
