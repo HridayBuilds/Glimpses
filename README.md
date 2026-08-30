@@ -55,14 +55,16 @@ It's built entirely on serverless AWS: no servers to provision or patch, nothing
 
 ## Product walkthrough
 
-**Sign up & log in**
+A guest and organizer's path through Glimpses, start to finish.
+
+**Getting in.** Sign up once, then log in for every event after that — the same account works across all of them.
 
 <p align="center">
   <img src="assets/product/sign-up.png" width="430" alt="Sign up" />
   <img src="assets/product/login.png" width="430" alt="Log in" />
 </p>
 
-**Sharing and joining an event**
+**Sharing and joining an event.** The organizer hands out a join code or QR code; guests scan or enter it to request access. On approval-required events, they sit in the lobby until the organizer admits them.
 
 <p align="center">
   <img src="assets/product/share-event.png" width="260" alt="Sharing an event via join code / QR" />
@@ -70,36 +72,41 @@ It's built entirely on serverless AWS: no servers to provision or patch, nothing
   <img src="assets/product/event-lobby-admit.png" width="260" alt="Attendee lobby, admitting an attendee" />
 </p>
 
-**Organizer dashboard**
+**My events.** Every event an organizer has created, in one dashboard.
 
 <p align="center">
-  <img src="assets/product/events-dashboard.png" width="430" alt="Organizer's events dashboard" />
-  <img src="assets/product/event-analytics.png" width="430" alt="Event analytics" />
+  <img src="assets/product/events-dashboard.png" width="430" alt="My events dashboard" />
 </p>
 
-**Event settings & privacy**
+**Event settings, analytics, and downloads.** Who can join, who can upload, and the archive/delete lifecycle, next to live stats for the event and one-click ZIP downloads for a batch of photos.
+
+<p align="center">
+  <img src="assets/product/event-settings.png" width="260" alt="Event settings" />
+  <img src="assets/product/event-analytics.png" width="260" alt="Event analytics" />
+  <img src="assets/product/download-zip.png" width="260" alt="Downloading photos as a ZIP" />
+</p>
+
+**Privacy.** Guest-level controls over who can see what.
 
 <p align="center">
   <img src="assets/product/privacy.png" width="430" alt="Privacy controls" />
-  <img src="assets/product/download-zip.png" width="430" alt="Downloading photos as a ZIP" />
 </p>
 
-**Uploading photos**
+**Uploading photos.** Upload one at a time or in bulk, with confirmation of what made it in.
 
 <p align="center">
   <img src="assets/product/uploading.png" width="260" alt="Uploading photos" />
   <img src="assets/product/photos-added.png" width="260" alt="Photos added" />
-  <img src="assets/product/event-settings.png" width="260" alt="Event settings" />
 </p>
 
-**The gallery and "Photos of me"**
+**Everything, and Photos of me.** Every uploaded photo lands in the shared gallery immediately, while "Photos of me" is built automatically by matching faces against each guest's selfie.
 
 <p align="center">
-  <img src="assets/product/gallery.jpg" width="380" alt="Event gallery" />
+  <img src="assets/product/gallery.jpg" width="380" alt="Everything gallery" />
   <img src="assets/product/photos-of-me.jpg" width="380" alt="Photos of me" />
 </p>
 
-**Profile**
+**Profile.** Manage your own selfie and account details anytime.
 
 <p align="center">
   <img src="assets/product/profile.png" width="260" alt="Profile" />
@@ -110,7 +117,7 @@ It's built entirely on serverless AWS: no servers to provision or patch, nothing
 ## Core features
 
 - **Event creation and join flow.** Organizers create events with a join code or QR code. Guests join instantly on open events, or wait for organizer approval on approval-required events.
-- **Bulk photo upload.** Upload photos one by one, or bundle hundreds into a zip and let the pipeline sort it out. Junk files macOS quietly adds to every zip (`__MACOSX/`, `.DS_Store`) are filtered out automatically, so they never show up as confusing "failed" uploads.
+- **Bulk photo upload.** Upload photos one by one, or bundle hundreds into a zip and let the pipeline sort it out. Junk files macOS quietly adds to every zip (`__MACOSX/`, `._*`, `.DS_Store`) are filtered out automatically, so they never show up as confusing "failed" uploads. Windows' equivalent junk (`Thumbs.db`, `desktop.ini`) isn't filtered yet, so zips built on Windows can still show a stray "failed" entry for those.
 - **Automatic face matching.** Every guest with a selfie on file gets a personal "Photos of me" view, built by comparing their selfie against every face in the event.
 - **HEIC support.** iPhone photos (`.HEIC`/`.HEIF`) are converted to JPEG automatically, with no failed uploads and no visible extra step for the guest.
 - **Duplicate detection.** Identical photos (same content, even under different filenames) are never stored twice, even if two guests upload the exact same photo at the same time.
@@ -119,7 +126,7 @@ It's built entirely on serverless AWS: no servers to provision or patch, nothing
 - **Organizer moderation.** Admit, deny, or eject attendees; delete single or multiple photos; see live event stats (photo count, storage used, attendee count).
 - **Server-side ZIP downloads.** Select photos and download them as one ZIP, built on the server rather than one by one in the browser.
 - **Mobile-first gallery viewer.** Swipe left and right between photos, pinch to zoom, double-tap to zoom, alongside a proper desktop experience with keyboard navigation.
-- **A genuinely production-shaped face-recognition pipeline.** Deduplication, EXIF-aware thumbnailing, format sniffing, and a fan-out ingestion pipeline built to handle real batch uploads at real event scale, not just a small demo set.
+- **A genuinely production-shaped face-recognition pipeline.** Deduplication, EXIF-aware thumbnailing, format sniffing, and a fan-out ingestion pipeline, all built to handle real batch uploads at real event scale, not a scaled-down demo.
 
 ---
 
@@ -167,7 +174,7 @@ It's built entirely on serverless AWS: no servers to provision or patch, nothing
   <sub><i>Every AWS service used, grouped by category (compute, database, object storage, API, auth, content delivery, orchestration, eventing, AI/ML, security, monitoring), alongside the supporting tools and libraries that build and run it (Terraform, Jenkins, Python, boto3, pytest, moto, JSONata, and the frontend stack).</i></sub>
 </p>
 
-At a glance:
+At a glance, here's the shape of a request:
 
 ```
         Browser (React SPA on CloudFront)
@@ -354,7 +361,7 @@ Glimpses is fully open, so nothing stops you from deploying your own copy (see [
 Avoid using your AWS root account's keys for Terraform. Create a dedicated IAM user instead.
 
 1. IAM → Users → Create user (for example `your-project-terraform`), with **programmatic access only** and no console login.
-2. Attach these AWS-managed policies up front. They were discovered piecemeal as each Terraform module hit a permission wall, so attaching them at the start saves that rediscovery:
+2. Attach these AWS-managed policies up front. This project discovered them the slow way, one at a time, whenever the next Terraform module hit a permission wall — attaching them now saves you that trouble:
    `AmazonDynamoDBFullAccess`, `AWSLambda_FullAccess`, `IAMFullAccess`, `AmazonS3FullAccess`, `AmazonAPIGatewayAdministrator`, `AWSStepFunctionsFullAccess`, `AmazonRekognitionFullAccess`, `CloudWatchFullAccess`, `CloudFrontFullAccess`.
 3. IAM caps you at **10 managed policies per user**, and you'll reach that ceiling. Bundle the rest (SNS, Cognito, EventBridge Scheduler, plain EventBridge, WAF) into one custom policy instead:
    ```json
