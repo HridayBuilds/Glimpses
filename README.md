@@ -7,7 +7,6 @@
 <p align="center">Drop in all the photos. It shows you the ones you're in.</p>
 
 <p align="center">
-  <a href="#demo">Demo</a> ·
   <a href="#product-walkthrough">Product walkthrough</a> ·
   <a href="#core-features">Features</a> ·
   <a href="#architecture">Architecture</a> ·
@@ -21,23 +20,22 @@
 | Sr No. | Title |
 |---|---|
 | 1 | [What it does](#what-it-does) |
-| 2 | [Demo](#demo) |
-| 3 | [Product walkthrough](#product-walkthrough) |
-| 4 | [Core features](#core-features) |
-| 5 | [Who it's for](#whos-it-for) |
-| 6 | [Tech stack](#tech-stack) |
-| 7 | [Architecture](#architecture) |
-| 8 | [Project structure](#project-structure) |
-| 9 | [The Lambdas](#the-lambdas) |
-| 10 | [The database (DynamoDB)](#the-database-dynamodb) |
-| 11 | [The ingestion pipeline (Step Functions)](#the-ingestion-pipeline-step-functions) |
-| 12 | [Triggers and edge cases](#triggers-and-edge-cases) |
-| 13 | [The knowledge graph (`graphify`)](#the-knowledge-graph-graphify) |
-| 14 | [Cost: built entirely on the AWS Free Tier](#cost-built-entirely-on-the-aws-free-tier) |
-| 15 | [Scaling past the defaults](#scaling-past-the-defaults) |
-| 16 | [Running it yourself](#running-it-yourself) |
-| 17 | [CI/CD (Jenkins)](#cicd-jenkins) |
-| 18 | [License](#license) |
+| 2 | [Product walkthrough](#product-walkthrough) |
+| 3 | [Core features](#core-features) |
+| 4 | [Who it's for](#whos-it-for) |
+| 5 | [Tech stack](#tech-stack) |
+| 6 | [Architecture](#architecture) |
+| 7 | [Project structure](#project-structure) |
+| 8 | [The Lambdas](#the-lambdas) |
+| 9 | [The database (DynamoDB)](#the-database-dynamodb) |
+| 10 | [The ingestion pipeline (Step Functions)](#the-ingestion-pipeline-step-functions) |
+| 11 | [Triggers and edge cases](#triggers-and-edge-cases) |
+| 12 | [The knowledge graph (`graphify`)](#the-knowledge-graph-graphify) |
+| 13 | [Cost: built entirely on the AWS Free Tier](#cost-built-entirely-on-the-aws-free-tier) |
+| 14 | [Scaling past the defaults](#scaling-past-the-defaults) |
+| 15 | [Running it yourself](#running-it-yourself) |
+| 16 | [CI/CD (Jenkins)](#cicd-jenkins) |
+| 17 | [License](#license) |
 
 ---
 
@@ -49,39 +47,45 @@ Every guest also gets a **"Photos of me"** tab, built automatically. Glimpses co
 
 It's built entirely on serverless AWS: no servers to provision or patch, nothing idling between events, and it scales comfortably from a 10 person dinner to an 800 photo wedding without anyone touching a config file.
 
----
-
-## Demo
-
 <p align="center">
-  <a href="assets/demo/demo.mp4">
-    <img src="assets/marketing/demo-thumbnail.png" alt="Watch the demo" width="720" />
-  </a>
-  <br />
-  <sub><i>Video placeholder: creating an event, uploading a batch of photos, and watching automatic face matching populate "Photos of me" in real time. Add the file at <code>assets/demo/demo.mp4</code> and its thumbnail at <code>assets/marketing/demo-thumbnail.png</code>.</i></sub>
+  <img src="assets/product/how-it-works.png" alt="How Glimpses works" width="720" />
 </p>
 
 ---
 
 ## Product walkthrough
 
-<p align="center"><i>Placeholders below. Add screenshots into <code>assets/product/</code> using these filenames, or update the paths.</i></p>
-
-| Event gallery | Uploading photos |
+| Sign up | Log in |
 |---|---|
-| ![Event gallery](assets/product/gallery.png) | ![Upload flow](assets/product/upload.png) |
+| ![Sign up](assets/product/sign-up.png) | ![Log in](assets/product/login.png) |
 
-| Photos of me | Event settings |
+| Sharing an event (join code / QR) | Joining an event |
 |---|---|
-| ![Photos of me](assets/product/photos-of-me.png) | ![Event settings](assets/product/settings.png) |
+| ![Share event](assets/product/share-event.png) | ![Join event](assets/product/join-event.png) |
 
-| Creating an event | Attendee management |
+| Attendee lobby (admit/deny) | Organizer's events dashboard |
 |---|---|
-| ![Create event](assets/product/create-event.png) | ![Attendee management](assets/product/attendees.png) |
+| ![Event lobby, admitting an attendee](assets/product/event-lobby-admit.png) | ![Events dashboard](assets/product/events-dashboard.png) |
 
-| Mobile gallery (swipe and pinch to zoom) | Profile and selfie |
+| Event analytics | Event settings |
 |---|---|
-| ![Mobile gallery](assets/product/mobile-gallery.png) | ![Profile](assets/product/profile.png) |
+| ![Event analytics](assets/product/event-analytics.png) | ![Event settings](assets/product/event-settings.png) |
+
+| Privacy controls | Uploading photos |
+|---|---|
+| ![Privacy](assets/product/privacy.png) | ![Uploading photos](assets/product/uploading.png) |
+
+| Photos added | Event gallery |
+|---|---|
+| ![Photos added](assets/product/photos-added.png) | ![Event gallery](assets/product/gallery.png) |
+
+| Photos of me | Downloading as a ZIP |
+|---|---|
+| ![Photos of me](assets/product/photos-of-me.png) | ![Download as ZIP](assets/product/download-zip.png) |
+
+| Profile |
+|---|
+| ![Profile](assets/product/profile.png) |
 
 ---
 
@@ -196,7 +200,7 @@ Glimpses/
 │   └── modules/               shared modules: dynamodb, buckets, alarms, cloudfront,
 │                               state_machine, cognito, api_gateway
 ├── assets/                   README media: marketing, product screenshots,
-│                               architecture diagrams, step function graph, demo video
+│                               architecture diagrams, step function graph
 └── graphify-out/             pre-built knowledge graph of this entire codebase
 ```
 
@@ -243,8 +247,6 @@ Every upload, whether a single photo or an 800 photo zip, runs through the same 
 
 <p align="center">
   <img src="assets/step-function/pipeline-graph.png" alt="Step Functions ingestion pipeline" width="800" />
-  <br />
-  <sub><i>Placeholder. Export the state machine's own graph view from the Step Functions console into <code>assets/step-function/pipeline-graph.png</code>.</i></sub>
 </p>
 
 | Step | What it does |
@@ -292,8 +294,6 @@ Without both patterns, someone joining an open event directly would never get ma
 
 <p align="center">
   <img src="assets/graphify/graph-overview.png" alt="Codebase knowledge graph" width="800" />
-  <br />
-  <sub><i>Placeholder. A screenshot of <code>graphify-out/graph.html</code> or the graph visualization tool goes here.</i></sub>
 </p>
 
 This repo's `graphify-out/` folder holds a pre-built knowledge graph of the entire codebase: every file, function, and cross-file relationship, with community detection grouping related code together. It's committed to the repo so anyone cloning it gets it immediately, without regenerating it themselves.
