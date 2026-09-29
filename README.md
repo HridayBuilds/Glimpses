@@ -354,141 +354,176 @@ For faster ingestion on larger events, request a service quota increase for both
 
 ## Running it yourself
 
-Glimpses is fully open, so nothing stops you from deploying your own copy (see [License](#license)). Setup is genuinely involved, since it's a real multi-service AWS deployment rather than a single-container app. Here's the honest path, distilled from the actual setup log kept while building this.
+This is the deployment path for the repository as written: AWS region `ap-south-1`, AWS CLI profile `glimpses`, and AWS resource names beginning with `glimpses`. It uses two Terraform states and three kinds of Jenkins jobs: 17 backend/infrastructure modules, `frontend` for hosting, and `frontend-app` for the built React app. The fixed S3 bucket names must be available in your AWS account and globally; if another account already owns one, change the bucket names and matching hard-coded Jenkins S3 destinations before deploying.
 
-### 1. AWS account and IAM
+The order matters: create the Terraform state bucket, deploy shared backend resources, deploy frontend hosting, deploy the Lambda code, deploy orchestration/auth/API Gateway, then build and publish the React app. In particular, `events` needs the frontend CloudFront domain for QR join links, while `frontend-app` needs Cognito and API Gateway outputs.
 
-Avoid using your AWS root account's keys for Terraform. Create a dedicated IAM user instead.
+### 1. Prepare AWS access and local tools
 
-1. IAM → Users → Create user (for example `your-project-terraform`), with **programmatic access only** and no console login.
-2. Attach these AWS-managed policies up front. This project discovered them the slow way, one at a time, whenever the next Terraform module hit a permission wall — attaching them now saves you that trouble:
-   `AmazonDynamoDBFullAccess`, `AWSLambda_FullAccess`, `IAMFullAccess`, `AmazonS3FullAccess`, `AmazonAPIGatewayAdministrator`, `AWSStepFunctionsFullAccess`, `AmazonRekognitionFullAccess`, `CloudWatchFullAccess`, `CloudFrontFullAccess`.
-3. IAM caps you at **10 managed policies per user**, and you'll reach that ceiling. Bundle the rest (SNS, Cognito, EventBridge Scheduler, plain EventBridge, WAF) into one custom policy instead:
-   ```json
-   {
-     "Version": "2012-10-17",
-     "Statement": [
-       {
-         "Effect": "Allow",
-         "Action": ["sns:*", "cognito-idp:*", "cognito-identity:*", "scheduler:*", "events:*", "wafv2:*"],
-         "Resource": "*"
-       }
-     ]
-   }
-   ```
-4. Create an access key for this user (Security credentials → Create access key → CLI use). Store it in a password manager, never in the repo.
+Use a dedicated IAM principal with permission to create the AWS services in this repository; do not use root access keys. The original deployment used these AWS-managed policies: `AmazonDynamoDBFullAccess`, `AWSLambda_FullAccess`, `IAMFullAccess`, `AmazonS3FullAccess`, `AmazonAPIGatewayAdministrator`, `AWSStepFunctionsFullAccess`, `AmazonRekognitionFullAccess`, `CloudWatchFullAccess`, and `CloudFrontFullAccess`. It also used this custom policy for SNS, Cognito, EventBridge, EventBridge Scheduler, and WAF:
 
-### 2. Local AWS CLI profile
-
-```bash
-aws configure --profile your-profile-name
-# Access Key ID / Secret Access Key from step 1
-# Default region: your chosen region (this project used ap-south-1)
-# Default output format: json
-
-aws sts get-caller-identity --profile your-profile-name   # sanity check
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["sns:*", "cognito-idp:*", "cognito-identity:*", "scheduler:*", "events:*", "wafv2:*"],
+      "Resource": "*"
+    }
+  ]
+}
 ```
 
-Every local Terraform command needs `AWS_PROFILE` exported first, in every new terminal session, since cross-module apply is deliberately manual and never automated through Jenkins:
+These permissions are broad and intended for a dedicated deployment identity. Create its access key in IAM and keep the secret out of the repository.
+
+Install AWS CLI, Terraform 1.10 or newer, Python with `pip` and `zip`, Node.js with `npm`, and Jenkins with the Job DSL and Pipeline plugins. Jenkins must have access to the same AWS profile and tools. Configure the AWS CLI profile that the existing Jenkinsfiles use:
 
 ```bash
-export AWS_PROFILE=your-profile-name
-```
-
-### 3. Terraform 1.10 or newer
-
-Native S3 state locking (`use_lockfile = true`) needs this version or newer.
-
-```bash
+aws configure --profile glimpses
+# Enter your access key, secret key, ap-south-1, and json when prompted.
+aws sts get-caller-identity --profile glimpses
+export AWS_PROFILE=glimpses
 terraform version
-brew upgrade terraform   # if needed
 ```
 
-### 4. Bootstrap the Terraform state bucket by hand, once
+Set `AWS_PROFILE=glimpses` in each new shell used for manual Terraform or AWS CLI commands. The Jenkinsfiles already set this profile internally, so it must also exist for the user running Jenkins.
 
-The state bucket has to exist before any `terraform apply`, so Terraform can't create it itself.
+### 2. Create the Terraform state bucket
+
+Both `Infrastructure/providers.tf` and `Frontend/frontend/providers.tf` expect the same S3 bucket, `glimpses-terraform-state`, in `ap-south-1`. Terraform cannot create its own backend bucket. If you do not already own this bucket, create it once:
 
 ```bash
 aws s3api create-bucket \
-  --bucket your-terraform-state-bucket \
-  --region your-region \
-  --create-bucket-configuration LocationConstraint=your-region \
-  --profile your-profile-name
-
+  --bucket glimpses-terraform-state \
+  --region ap-south-1 \
+  --create-bucket-configuration LocationConstraint=ap-south-1
 aws s3api put-bucket-versioning \
-  --bucket your-terraform-state-bucket \
-  --versioning-configuration Status=Enabled \
-  --profile your-profile-name
-
+  --bucket glimpses-terraform-state \
+  --versioning-configuration Status=Enabled
 aws s3api put-public-access-block \
-  --bucket your-terraform-state-bucket \
-  --public-access-block-configuration BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true \
-  --profile your-profile-name
+  --bucket glimpses-terraform-state \
+  --public-access-block-configuration BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
 ```
 
-Point `Infrastructure/providers.tf`'s `backend "s3" {}` block at this bucket. Backend config values must be literal strings, since Terraform reads them before any variables resolve.
+The backend files use separate state keys: `glimpses/terraform.tfstate` for the backend and `glimpses/frontend/terraform.tfstate` for frontend hosting. Keep `use_lockfile = true` in both. If the bucket name is unavailable, pick a globally unique name and update **both** backend files before running `terraform init`.
 
-### 5. Check your account's real Rekognition quota
+### 3. Set deployment values and check quotas
 
-Don't assume the published default of 50 TPS. New or lightly-used AWS accounts commonly start much lower; this project's actual quota was **5**, for both `IndexFaces` and `SearchFacesByImage`.
+Set `alarm_email` in `Infrastructure/variables.tf` to an address you control, or supply it as a Terraform variable for every backend apply. Confirm the SNS subscription email after the alarms module deploys. Keep `aws_region` aligned with the backend bucket region; this guide uses the default `ap-south-1` throughout.
+
+Check the account's Rekognition quotas before deploying the state machine:
 
 ```bash
 aws service-quotas list-service-quotas --service-code rekognition \
   --query "Quotas[?contains(QuotaName, 'IndexFaces') || contains(QuotaName, 'SearchFaces')]"
 ```
 
-Set `rekognition_index_max_concurrency` and `rekognition_search_max_concurrency` (in `Infrastructure/modules/state_machine`) to whatever your account actually has. This only affects throughput, not correctness.
+Set `rekognition_index_max_concurrency` and `rekognition_search_max_concurrency` in `Infrastructure/modules/state_machine/variables.tf` no higher than the corresponding quotas. Also check the Lambda concurrency limit against `photo_processing_max_concurrency`. The current defaults were tuned for the original account.
 
-### 6. Variables to change for your own deployment
+### 4. Create the Jenkins jobs
 
-| Variable | File | What to set it to |
-|---|---|---|
-| `alarm_email` | `Infrastructure/variables.tf` | Your own email address for CloudWatch alarm notifications (default placeholder: `johndoe@gmail.com`) |
-| `aws_region` | `Infrastructure/variables.tf` | Your chosen AWS region (default `ap-south-1`) |
-| `repoUrl` / `credentialsId` | `Infrastructure/cicd/seed.groovy` | Your own GitHub repo URL and Jenkins credentials ID, if using the Jenkins seed job |
-| Terraform backend bucket name | `Infrastructure/providers.tf` | The state bucket created in step 4 |
+The Lambda Terraform modules point at ZIP files in `glimpses-deploy-artifacts`. Their Jenkins jobs build and upload those ZIPs **before** applying each module, then update the Lambda code. A bare `terraform apply` for a Lambda on a fresh account will fail because its deployment ZIP does not exist yet.
 
-### 7. Deploy
+In `Infrastructure/cicd/seed.groovy`, set `repoUrl` to your Git repository and `credentialsId` to a Jenkins Git credential that can read it. The generated jobs check out `main`; update `branch` there if your deployment branch has a different name. Commit and push configuration changes before running those jobs, because Jenkins reads the remote branch rather than your local working tree. Create a Jenkins job named `glimpses-seed` that runs this Job DSL script. Put a `jenkinsfiles.txt` file in that job's workspace with these paths, one per line:
+
+```text
+Infrastructure/modules/dynamodb/cicd/Jenkinsfile
+Infrastructure/modules/buckets/cicd/Jenkinsfile
+Infrastructure/modules/alarms/cicd/Jenkinsfile
+Infrastructure/modules/cloudfront/cicd/Jenkinsfile
+Backend/heic_converter/cicd/Jenkinsfile
+Backend/db_api/cicd/Jenkinsfile
+Backend/download/cicd/Jenkinsfile
+Backend/ingestion/cicd/Jenkinsfile
+Backend/profile/cicd/Jenkinsfile
+Backend/upload_status/cicd/Jenkinsfile
+Backend/cascadeDelete/cicd/Jenkinsfile
+Backend/events/cicd/Jenkinsfile
+Backend/membership/cicd/Jenkinsfile
+Backend/gallery/cicd/Jenkinsfile
+Infrastructure/modules/state_machine/cicd/Jenkinsfile
+Infrastructure/modules/cognito/cicd/Jenkinsfile
+Infrastructure/modules/api_gateway/cicd/Jenkinsfile
+Frontend/frontend/cicd/Jenkinsfile
+Frontend/frontend-app/cicd/Jenkinsfile
+```
+
+Run `glimpses-seed` once. It creates jobs named from the folder preceding `cicd`, including `frontend` and `frontend-app`. Wait for each deployment job to succeed before starting the next one; they share Terraform state and should not apply concurrently.
+
+### 5. Deploy shared backend resources, then frontend hosting
+
+Run these Jenkins jobs in order:
+
+```text
+dynamodb → buckets → alarms → cloudfront → frontend
+```
+
+The first four jobs create the tables, S3 buckets, alerts, and signed-photo CloudFront distribution. `frontend` applies `Frontend/frontend`, creating the separate `glimpses-frontend` S3 hosting bucket and its CloudFront distribution. It does **not** build or upload the React app yet. Verify that the frontend hosting output exists:
 
 ```bash
-export AWS_PROFILE=your-profile-name
+cd Frontend/frontend
+terraform init
+terraform output -raw distribution_domain_name
+cd ../..
+```
+
+### 6. Deploy Lambda code and remaining backend services
+
+Run these jobs in order:
+
+```text
+heic_converter → db_api → download → ingestion → profile → upload_status
+→ cascadeDelete → events → membership → gallery
+→ state_machine → cognito → api_gateway
+```
+
+`cascadeDelete` must be ready before `events` and `gallery`, which invoke it. The `events` job reads the frontend distribution domain from the frontend Terraform state and passes it into its Terraform apply. `state_machine` needs the ingestion and `db_api` Lambda ARNs. `api_gateway` needs the API Lambda ARNs and Cognito user pool, so it comes last among backend jobs.
+
+The backend outputs needed by the browser should now be available:
+
+```bash
 cd Infrastructure
 terraform init
+terraform output -raw cognito_user_pool_id
+terraform output -raw cognito_user_pool_client_id
+terraform output -raw api_gateway_invoke_url
+cd ..
 ```
 
-Apply modules in dependency order (this project's actual order, run either by hand or through the 17 Jenkins jobs described below):
+### 7. Build and publish the React app
 
-```
-dynamodb -> buckets -> alarms -> cloudfront
-  -> heic_converter -> db_api -> download -> ingestion -> profile
-  -> upload_status -> events -> membership -> gallery -> cascade_delete
-  -> state_machine -> cognito -> api_gateway   (last, since it needs every other module's output)
-```
+Run the **`frontend-app`** Jenkins job last. It reads the three backend outputs above and the `frontend` hosting bucket/distribution outputs, writes `Frontend/.env.production`, runs `npm ci` and `npm run build`, syncs `Frontend/dist/` to the hosting bucket, and invalidates CloudFront. The Vite build needs `VITE_COGNITO_USER_POOL_ID`, `VITE_COGNITO_CLIENT_ID`, and `VITE_API_BASE_URL`; the job fills them from Terraform, so you do not need to type them manually.
+
+Get the live URL from the hosting state:
 
 ```bash
-terraform apply -target=module.dynamodb
-terraform apply -target=module.buckets
-# and so on, in the order above
+cd Frontend/frontend
+terraform output -raw distribution_domain_name
 ```
 
-Frontend deploy is separate; see `Frontend/` once you're building it out for your own use.
+Open the resulting domain over HTTPS, sign up, create an event, and test a photo upload. For later changes, rerun the job for the changed backend module, then rerun `frontend-app` when the React code or its Cognito/API configuration changes. Keep `frontend` for hosting infrastructure changes and `frontend-app` for the browser application.
 
 ---
 
 ## CI/CD (Jenkins)
 
-This project used a local, Homebrew-installed Jenkins rather than an AWS-hosted CI service: one job per Terraform module, 17 jobs in total, each with its own `cicd/Jenkinsfile` sitting right next to the code it builds and deploys. It's genuinely just a laptop running Jenkins in the background. There's nothing exotic about the setup, but it saved an enormous amount of time compared to applying every module by hand on every change.
+Glimpses uses Jenkins running locally on a laptop, installed through Homebrew for the original deployment. The decision was practical: the deployment already used a local AWS CLI profile, and the project was built as independently deployable Terraform modules. Jenkins let each module keep its own visible build log and rerun path, while the seed script created the jobs from the repository. It also avoided repeating a long sequence of manual package, upload, and Terraform commands during development.
 
-Rather than clicking "New Item" 17 times, there's a seed job (`Infrastructure/cicd/seed.groovy`, a Jenkins Job DSL script) that reads a plain-text list of Jenkinsfile paths and creates a pipeline job for each one, pointed at this GitHub repo. To use it:
+GitHub Actions could run these pipelines too. It would require a different runner and AWS authentication setup, plus workflows to replace the existing Jenkinsfiles and Job DSL seed. There is no GitHub Actions workflow in this repository. Jenkins was chosen for this project's local development workflow and for the clear one-module-per-job layout, not because GitHub Actions cannot deploy the architecture.
 
-1. Install the **Job DSL** plugin in Jenkins.
-2. Create one Jenkins job named `glimpses-seed` running that Groovy script.
-3. Give it a `jenkinsfiles.txt` in its workspace, one Jenkinsfile path per line (for example `Backend/events/cicd/Jenkinsfile`), one line per module, 17 total.
-4. Run it once. It creates, or updates, every other job automatically.
+| Job group | Count | What a job does |
+|---|---:|---|
+| Shared infrastructure | 7 | Applies one Terraform module: DynamoDB, buckets, alarms, photo CloudFront, state machine, Cognito, or API Gateway. |
+| Backend Lambdas | 10 | Packages that Lambda's Python code for AWS, uploads its ZIP to `glimpses-deploy-artifacts`, applies its Terraform module, and updates the deployed code. |
+| Frontend hosting | 1 | Applies `Frontend/frontend` to create the S3 bucket and CloudFront distribution for the site. |
+| React app | 1 | Reads Terraform outputs, builds `Frontend/`, syncs `dist/` to S3, and invalidates CloudFront. |
 
-Each per-Lambda `cicd/Jenkinsfile` builds and deploys just that one Lambda; each infra module's Jenkinsfile runs `terraform apply -target=module.X` for just that module. Nothing is bundled together. Every module has its own job on purpose, so a failure or change in one stays isolated and easy to reason about.
+There are **17 backend/infrastructure module jobs plus `frontend` and `frontend-app`**, for 19 deployment jobs. Each Jenkinsfile lives beside the part it deploys. The `glimpses-seed` Job DSL script reads `jenkinsfiles.txt` and creates or updates those jobs with their repository URL, Git credential, branch, and Jenkinsfile path. The exact file list, setup, and first-deploy order are in [Running it yourself](#running-it-yourself). The seed job creates jobs; it does not run the deployment sequence for you.
 
-**If you self-host Jenkins for this:** it runs as a background service with a minimal `PATH`, so build steps that call bare `pip` or `python3` may fail even though they work fine in your interactive terminal. Use `python3 -m pip install ...` rather than bare `pip install ...` in build steps to avoid this.
+The jobs share Terraform state, so run dependent deployments in the documented order and do not run applies against the same state concurrently. On later changes, run only the affected job and any downstream job that needs its new outputs. For example, a React-only change needs `frontend-app`; a change to the frontend hosting distribution needs `frontend`, and may require `events` if the distribution domain changes because QR join links use that domain.
+
+**Local Jenkins note:** a background service can have a smaller `PATH` than your interactive shell. Ensure Jenkins can find `python3`, `zip`, `terraform`, `aws`, and `npm`; the Lambda Jenkinsfiles use `python3 -m pip` rather than a bare `pip` command. Jenkins also needs access to the `glimpses` AWS CLI profile under the account that runs its jobs.
 
 ---
 
