@@ -1,10 +1,18 @@
 import io
 import zipfile
 
+JUNK_FILENAMES = frozenset({".ds_store", "thumbs.db", "desktop.ini", ".nomedia"})
+
 
 def _is_junk_entry(filename):
     basename = filename.rsplit("/", 1)[-1]
-    return filename.startswith("__MACOSX/") or basename.startswith("._") or basename == ".DS_Store"
+    normalized_basename = basename.casefold()
+    return (
+        filename.startswith("__MACOSX/")
+        or basename.startswith("._")
+        or normalized_basename in JUNK_FILENAMES
+        or normalized_basename.endswith(".aae")
+    )
 
 
 def extract_entries(zip_bytes):

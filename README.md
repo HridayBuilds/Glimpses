@@ -117,7 +117,7 @@ A guest and organizer's path through Glimpses, start to finish.
 ## Core features
 
 - **Event creation and join flow.** Organizers create events with a join code or QR code. Guests join instantly on open events, or wait for organizer approval on approval-required events.
-- **Bulk photo upload.** Upload photos one by one, or bundle hundreds into a zip and let the pipeline sort it out. Junk files macOS quietly adds to every zip (`__MACOSX/`, `._*`, `.DS_Store`) are filtered out automatically, so they never show up as confusing "failed" uploads. Windows' equivalent junk (`Thumbs.db`, `desktop.ini`) isn't filtered yet, so zips built on Windows can still show a stray "failed" entry for those.
+- **Bulk photo upload.** Upload photos one by one, or bundle hundreds into a zip and let the pipeline sort it out. Common metadata files from macOS (`__MACOSX/`, `._*`, `.DS_Store`), Windows (`Thumbs.db`, `desktop.ini`), Android (`.nomedia`), and iPhone exports (`.AAE` sidecars) are ignored before photo processing, so they do not appear as failed uploads.
 - **Automatic face matching.** Every guest with a selfie on file gets a personal "Photos of me" view, built by comparing their selfie against every face in the event.
 - **HEIC support.** iPhone photos (`.HEIC`/`.HEIF`) are converted to JPEG automatically, with no failed uploads and no visible extra step for the guest.
 - **Duplicate detection.** Identical photos (same content, even under different filenames) are never stored twice, even if two guests upload the exact same photo at the same time.
