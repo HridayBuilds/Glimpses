@@ -198,12 +198,34 @@ def test_events_ttl_stream_record_cascades_the_deleted_event(monkeypatch):
     s3 = boto3.client("s3", region_name="ap-south-1")
     bucket = os.environ["PHOTOS_BUCKET"]
     s3.create_bucket(Bucket=bucket, CreateBucketConfiguration={"LocationConstraint": "ap-south-1"})
+    photos_table = dynamodb.Table(os.environ["PHOTOS_TABLE_NAME"])
+    faces_table = dynamodb.Table(os.environ["FACES_TABLE_NAME"])
+    attendees_table = dynamodb.Table(os.environ["EVENT_ATTENDEES_TABLE_NAME"])
+    photo_key = "photos/event/evt_1/p1.jpg"
+    thumbnail_key = "thumbnails/event/evt_1/p1.jpg"
+    s3.put_object(Bucket=bucket, Key=photo_key, Body=b"photo")
+    s3.put_object(Bucket=bucket, Key=thumbnail_key, Body=b"thumbnail")
+    photos_table.put_item(Item={
+        "photoID": "p1", "eventID": "evt_1", "uploadedAtFilename": "2026-08-15T10:00:00Z#a.jpg",
+        "s3Key": photo_key, "thumbnailKey": thumbnail_key,
+    })
+    faces_table.put_item(Item={"rekognitionFaceID": "face-1", "eventID": "evt_1", "photoID": "p1"})
+    attendees_table.put_item(Item={"userID": "user_1", "eventID": "evt_1", "status": "ATTENDEE"})
 
     events_table.put_item(Item={"eventID": "evt_1", "rekognitionCollectionID": "glimpses-event-evt_1"})
-    monkeypatch.setattr(delete_event, "delete_collection", lambda collection_id: None)
+    events_table.delete_item(Key={"eventID": "evt_1"})  # TTL has already removed it before the stream fires.
+    collection_deletes = []
+    monkeypatch.setattr(delete_event, "delete_collection", lambda collection_id: collection_deletes.append(collection_id))
 
-    event = {"Records": [{"dynamodb": {"OldImage": {"eventID": {"S": "evt_1"}}}}]}
+    event = {"Records": [{"dynamodb": {"OldImage": {
+        "eventID": {"S": "evt_1"}, "rekognitionCollectionID": {"S": "glimpses-event-evt_1"},
+    }}}]}
     result = lambda_handler(event, _FakeLambdaContext())
 
     assert result == [{"eventID": "evt_1", "deleted": True}]
+    assert collection_deletes == ["glimpses-event-evt_1"]
     assert "Item" not in events_table.get_item(Key={"eventID": "evt_1"})
+    assert "Item" not in photos_table.get_item(Key={"photoID": "p1"})
+    assert "Item" not in faces_table.get_item(Key={"rekognitionFaceID": "face-1"})
+    assert "Item" not in attendees_table.get_item(Key={"userID": "user_1", "eventID": "evt_1"})
+    assert s3.list_objects_v2(Bucket=bucket).get("Contents", []) == []

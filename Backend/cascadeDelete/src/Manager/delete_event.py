@@ -14,8 +14,10 @@ from DAO.dao import (
 )
 
 
-def delete_event_cascade(event_id):
-    event = get_event(event_id)
+def delete_event_cascade(event_id, deleted_event=None):
+    # DynamoDB TTL removes the Events row before delivering its OLD_IMAGE stream
+    # record. Manual deletion still reads the live row and removes it last.
+    event = deleted_event if deleted_event is not None else get_event(event_id)
     if event is None:
         return {"eventID": event_id, "deleted": False}
 
@@ -35,5 +37,6 @@ def delete_event_cascade(event_id):
     if attendees:
         batch_delete_attendees(event_id, [attendee["userID"] for attendee in attendees])
 
-    delete_event_row(event_id)
+    if deleted_event is None:
+        delete_event_row(event_id)
     return {"eventID": event_id, "deleted": True}
