@@ -21,6 +21,21 @@ resource "aws_api_gateway_model" "profile_update" {
   })
 }
 
+resource "aws_api_gateway_model" "selfie_confirm_body" {
+  rest_api_id  = aws_api_gateway_rest_api.this.id
+  name         = "SelfieConfirmBody"
+  content_type = "application/json"
+  schema = jsonencode({
+    "$schema" = "http://json-schema.org/draft-04/schema#"
+    title     = "SelfieConfirmBody"
+    type      = "object"
+    properties = {
+      uploadId = { type = "string", format = "uuid" }
+    }
+    required = ["uploadId"]
+  })
+}
+
 resource "aws_api_gateway_model" "event_create" {
   rest_api_id  = aws_api_gateway_rest_api.this.id
   name         = "EventCreate"

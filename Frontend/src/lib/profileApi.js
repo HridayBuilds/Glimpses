@@ -16,12 +16,12 @@ export async function updateProfile(displayName) {
 // run face detection on what actually landed.
 export async function uploadSelfie(file) {
   const {
-    data: { uploadUrl },
+    data: { uploadUrl, uploadId },
   } = await api.put('/profile/selfie')
   await axios.put(uploadUrl, file, {
     headers: { 'Content-Type': file.type, 'Cache-Control': 'private, max-age=86400' },
   })
-  const { data } = await api.post('/profile/selfie/confirm')
+  const { data } = await api.post('/profile/selfie/confirm', { uploadId })
   return data
 }
 

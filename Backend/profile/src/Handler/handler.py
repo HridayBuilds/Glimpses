@@ -34,7 +34,14 @@ def mint_selfie_upload_url():
 
 @app.post("/profile/selfie/confirm")
 def confirm_selfie():
-    return manager.confirm_selfie({"userID": _user_id()})
+    body = app.current_event.json_body or {}
+    claims = _claims()
+    return manager.confirm_selfie({
+        "userID": claims["sub"],
+        "email": claims.get("email", ""),
+        "name": claims.get("name", ""),
+        "uploadId": body.get("uploadId"),
+    })
 
 
 @app.delete("/profile/selfie")

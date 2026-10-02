@@ -8,6 +8,7 @@ import Manager.match_attendees as match_attendees
 
 def test_matches_and_stores_photo_ids(monkeypatch):
     added = {}
+    monkeypatch.setattr(match_attendees, "get_user", lambda user_id: {})
     monkeypatch.setattr(match_attendees, "selfie_exists", lambda bucket, key: True)
     monkeypatch.setattr(match_attendees, "get_event", lambda event_id: {"rekognitionCollectionID": "evt_1-collection"})
     monkeypatch.setattr(
@@ -33,6 +34,7 @@ def test_matches_and_stores_photo_ids(monkeypatch):
 
 
 def test_skips_attendee_with_no_selfie(monkeypatch):
+    monkeypatch.setattr(match_attendees, "get_user", lambda user_id: {})
     monkeypatch.setattr(match_attendees, "selfie_exists", lambda bucket, key: False)
 
     result = match_attendees.resolve_and_store_matches("evt_1", "user_1")

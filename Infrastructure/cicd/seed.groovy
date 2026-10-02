@@ -3,7 +3,18 @@ def repoUrl = 'https://github.com/HridayBuilds/Glimpses.git'
 def credentialsId = 'github-glimpses-pat'
 def branch = '*/main'
 
-def jenkinsfiles = readFileFromWorkspace('jenkinsfiles.txt').readLines().findAll { it.trim() }
+def jenkinsfiles
+try {
+    jenkinsfiles = readFileFromWorkspace('Infrastructure/cicd/jenkinsfiles.txt').readLines().findAll { it.trim() }
+} catch (Exception ignored) {
+    // Existing seed jobs may still keep the manifest directly in their workspace.
+    jenkinsfiles = readFileFromWorkspace('jenkinsfiles.txt').readLines().findAll { it.trim() }
+}
+
+def dispatcherJenkinsfile = 'Backend/selfie_match_dispatcher/cicd/Jenkinsfile'
+if (!jenkinsfiles.contains(dispatcherJenkinsfile)) {
+    jenkinsfiles.add(dispatcherJenkinsfile)
+}
 
 jenkinsfiles.each { path ->
     def jobName = path.split('/')[-3]

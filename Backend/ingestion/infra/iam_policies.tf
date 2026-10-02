@@ -44,7 +44,7 @@ resource "aws_iam_role_policy" "faces_access" {
 data "aws_iam_policy_document" "event_attendees_access" {
   statement {
     effect    = "Allow"
-    actions   = ["dynamodb:UpdateItem"]
+    actions   = ["dynamodb:UpdateItem", "dynamodb:TransactWriteItems"]
     resources = [var.event_attendees_table_arn]
   }
 
@@ -70,7 +70,7 @@ resource "aws_iam_role_policy" "event_attendees_access" {
 data "aws_iam_policy_document" "users_access" {
   statement {
     effect    = "Allow"
-    actions   = ["dynamodb:GetItem"]
+    actions   = ["dynamodb:GetItem", "dynamodb:TransactWriteItems"]
     resources = [var.users_table_arn]
   }
 }

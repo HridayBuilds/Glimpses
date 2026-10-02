@@ -74,15 +74,30 @@ module "ingestion" {
   alarm_sns_topic_arn          = module.alarms.alarm_sns_topic_arn
 }
 
+module "selfie_match_dispatcher" {
+  source = "../Backend/selfie_match_dispatcher/infra"
+
+  deploy_artifacts_bucket    = module.buckets.deploy_artifacts_bucket_name
+  users_table_name           = module.dynamodb.table_names["users"]
+  users_table_arn            = module.dynamodb.table_arns["users"]
+  event_attendees_table_name = module.dynamodb.table_names["event_attendees"]
+  event_attendees_table_arn  = module.dynamodb.table_arns["event_attendees"]
+  ingestion_function_name    = module.ingestion.function_name
+  ingestion_function_arn     = module.ingestion.function_arn
+  alarm_sns_topic_arn        = module.alarms.alarm_sns_topic_arn
+}
+
 module "profile" {
   source = "../Backend/profile/infra"
 
-  deploy_artifacts_bucket = module.buckets.deploy_artifacts_bucket_name
-  users_table_name        = module.dynamodb.table_names["users"]
-  users_table_arn         = module.dynamodb.table_arns["users"]
-  photos_bucket_name      = module.buckets.photos_bucket_name
-  photos_bucket_arn       = module.buckets.photos_bucket_arn
-  alarm_sns_topic_arn     = module.alarms.alarm_sns_topic_arn
+  deploy_artifacts_bucket               = module.buckets.deploy_artifacts_bucket_name
+  users_table_name                      = module.dynamodb.table_names["users"]
+  users_table_arn                       = module.dynamodb.table_arns["users"]
+  photos_bucket_name                    = module.buckets.photos_bucket_name
+  photos_bucket_arn                     = module.buckets.photos_bucket_arn
+  alarm_sns_topic_arn                   = module.alarms.alarm_sns_topic_arn
+  selfie_match_dispatcher_function_name = module.selfie_match_dispatcher.function_name
+  selfie_match_dispatcher_function_arn  = module.selfie_match_dispatcher.function_arn
 }
 
 module "upload_status" {

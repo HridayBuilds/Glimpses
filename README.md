@@ -159,7 +159,7 @@ A guest and organizer's path through Glimpses, start to finish.
 - **TanStack Query**: server state, polling, and cache invalidation
 
 **Infrastructure and tooling**
-- **Terraform** (1.10 or newer, native S3 state locking, no DynamoDB lock table): 17 independently deployable modules
+- **Terraform** (1.10 or newer, native S3 state locking, no DynamoDB lock table): 18 independently deployable modules
 - **Jenkins** (local, Homebrew-installed): one CI/CD job per Terraform module, seeded automatically from a Job DSL script
 - **Python** (`boto3`, `Pillow`, `pillow-heif`, `cryptography`) for Lambda logic
 - **moto** for AWS-mocked unit and integration testing: every Lambda has its own `test/unit` and `test/integration` suite
@@ -183,7 +183,7 @@ At a glance, here's the shape of a request:
                     │
      ┌──────────────┼──────────────────────────────┐
      │              │                              │
- 10 Lambdas    Step Functions            EventBridge (upload trigger,
+ 11 Lambdas    Step Functions            EventBridge (upload trigger,
  (business     (ingestion pipeline,       daily archive sweep)
   logic)        Distributed Map fan-out)
      │              │
@@ -200,7 +200,7 @@ Nothing runs unless something's actually happening. There are no EC2 instances a
 
 ```
 Glimpses/
-├── Backend/                 10 Lambdas, each with the same internal shape:
+├── Backend/                 11 Lambdas, each with the same internal shape:
 │   ├── events/                 routeHandler.py -> Handler/ -> Manager/ -> (Converter/) -> DAO/
 │   │   ├── src/
 │   │   ├── test/unit/       moto-backed unit tests
@@ -208,6 +208,7 @@ Glimpses/
 │   │   ├── infra/            this Lambda's own Terraform module
 │   │   └── cicd/Jenkinsfile  this Lambda's own CI/CD job
 │   ├── ingestion/            same shape, repeated for every Lambda
+│   ├── selfie_match_dispatcher/
 │   ├── gallery/
 │   ├── membership/
 │   ├── profile/
@@ -218,7 +219,7 @@ Glimpses/
 │   └── heic_converter/
 ├── Frontend/                 React 19 + Vite SPA
 ├── Infrastructure/
-│   ├── imports.tf            the composition root, wires all 17 modules together
+│   ├── imports.tf            the composition root, wires all 18 modules together
 │   ├── providers.tf          Terraform/AWS provider config, S3 backend
 │   ├── variables.tf          top-level variables (region, alarm email, etc.)
 │   ├── cicd/seed.groovy      Jenkins Job DSL seed script
@@ -238,6 +239,7 @@ Glimpses/
 | **events** | Creates, lists, and updates events; generates QR codes and join codes; computes event stats (photo count, storage used, attendee count); handles archiving and the daily auto-archive sweep |
 | **membership** | Handles joining and leaving an event, listing attendees, admitting/denying/ejecting requests, and access-code based joining |
 | **profile** | Uploads, replaces, and deletes a selfie; reads and updates basic profile info |
+| **selfie_match_dispatcher** | After selfie confirmation, finds every event where the user is admitted and invokes ingestion matching for each one |
 | **upload_status** | Mints presigned S3 upload URLs, and is polled by the frontend to show live upload and processing progress |
 | **ingestion** | The engine room. Unpacks uploaded zips, converts, hashes, and thumbnails each photo, indexes faces via Rekognition, and matches attendees to the photos they appear in. Invoked as discrete steps by the Step Functions pipeline below |
 | **heic_converter** | Converts iPhone `.HEIC`/`.HEIF` photos to JPEG, called synchronously by `ingestion` mid-pipeline |
@@ -256,12 +258,12 @@ Every Lambda follows the same internal shape: `routeHandler.py` → `Handler/han
 
 | Table | Primary key | GSIs | Notes |
 |---|---|---|---|
-| **Users** | `userID` | none | |
+| **Users** | `userID` | none | Stores the current `selfieKey` and `selfieVersion` after confirmation |
 | **Events** | `eventID` | `organizerID-status-index`, `accessCode-index`, `status-lastUploadAt-index` | Stream enabled (`OLD_IMAGE`), drives the TTL-based cascade delete described below. TTL on `deleteAt` |
 | **Jobs** | `jobId` | `eventUploaderKey-startedAt-index` | Tracks each upload's pipeline progress (`CREATED → EXTRACTING → INDEXING → MATCHING → SUCCESS`/`FAILED`) |
 | **Photos** | `photoID` | `eventID-uploadedAtFilename-index`, `eventID-contentHash-index` | The content-hash index backs duplicate detection |
 | **Faces** | `rekognitionFaceID` | `eventID-photoID-index` | One row per face Rekognition indexed |
-| **EventAttendees** | `userID` + `eventID` | `eventID-status-index` | Stream enabled (`NEW_AND_OLD_IMAGES`), drives automatic face-matching for new or rejoining attendees, described below. Rows are never deleted, only status-transitioned (`PENDING`/`ATTENDEE`/`LEFT`/`BLOCKED`) |
+| **EventAttendees** | `userID` + `eventID` | `eventID-status-index` | Stream enabled (`NEW_AND_OLD_IMAGES`), drives automatic face-matching for new or rejoining attendees, described below. Rows are never deleted, only status-transitioned (`PENDING`/`ATTENDEE`/`LEFT`/`BLOCKED`). Also stores `matchedPhotoIDs` and `matchedSelfieVersion` |
 | **Downloads** | `downloadId` | none | Tracks server-built ZIP download jobs |
 
 ---
@@ -313,6 +315,8 @@ Every upload, whether a single photo or an 800 photo zip, runs through the same 
 
 Without both patterns, someone joining an open event directly would never get matched against the event's existing photos until the next full batch re-match.
 
+**Matching after a selfie is added or replaced.** The browser uploads to a temporary `selfies/pending/` key. Profile confirms that the image has exactly one face, copies it to a versioned permanent key, updates the current selfie pointer in `Users`, and asynchronously invokes `selfie_match_dispatcher`. The dispatcher queries all of that user's `EventAttendees` rows and invokes ingestion's existing `match_attendees` step for each `ATTENDEE` event. Event photos are not reprocessed or reindexed. On a new selfie version, ingestion replaces that attendee's previous matched-photo set; concurrent searches using the same version can add results. A DynamoDB transaction checks the current selfie version before writing, so work from an older version cannot overwrite newer results. Archived events are skipped because their Rekognition collections have been deleted. Invalid candidates leave the previous selfie intact, and abandoned temporary uploads expire after two days.
+
 ---
 
 ## The knowledge graph (`graphify`)
@@ -354,7 +358,7 @@ For faster ingestion on larger events, request a service quota increase for both
 
 ## Running it yourself
 
-This is the deployment path for the repository as written: AWS region `ap-south-1`, AWS CLI profile `glimpses`, and AWS resource names beginning with `glimpses`. It uses two Terraform states and three kinds of Jenkins jobs: 17 backend/infrastructure modules, `frontend` for hosting, and `frontend-app` for the built React app. The fixed S3 bucket names must be available in your AWS account and globally; if another account already owns one, change the bucket names and matching hard-coded Jenkins S3 destinations before deploying.
+This is the deployment path for the repository as written: AWS region `ap-south-1`, AWS CLI profile `glimpses`, and AWS resource names beginning with `glimpses`. It uses two Terraform states and three kinds of Jenkins jobs: 18 backend/infrastructure modules, `frontend` for hosting, and `frontend-app` for the built React app. The fixed S3 bucket names must be available in your AWS account and globally; if another account already owns one, change the bucket names and matching hard-coded Jenkins S3 destinations before deploying.
 
 The order matters: create the Terraform state bucket, deploy shared backend resources, deploy frontend hosting, deploy the Lambda code, deploy orchestration/auth/API Gateway, then build and publish the React app. In particular, `events` needs the frontend CloudFront domain for QR join links, while `frontend-app` needs Cognito and API Gateway outputs.
 
@@ -425,31 +429,9 @@ Set `rekognition_index_max_concurrency` and `rekognition_search_max_concurrency`
 
 The Lambda Terraform modules point at ZIP files in `glimpses-deploy-artifacts`. Their Jenkins jobs build and upload those ZIPs **before** applying each module, then update the Lambda code. A bare `terraform apply` for a Lambda on a fresh account will fail because its deployment ZIP does not exist yet.
 
-In `Infrastructure/cicd/seed.groovy`, set `repoUrl` to your Git repository and `credentialsId` to a Jenkins Git credential that can read it. The generated jobs check out `main`; update `branch` there if your deployment branch has a different name. Commit and push configuration changes before running those jobs, because Jenkins reads the remote branch rather than your local working tree. Create a Jenkins job named `glimpses-seed` that runs this Job DSL script. Put a `jenkinsfiles.txt` file in that job's workspace with these paths, one per line:
+In `Infrastructure/cicd/seed.groovy`, set `repoUrl` to your Git repository and `credentialsId` to a Jenkins Git credential that can read it. The generated jobs check out `main`; update `branch` there if your deployment branch has a different name. Commit and push configuration changes before running those jobs, because Jenkins reads the remote branch rather than your local working tree. Create a Jenkins job named `glimpses-seed` that checks out this repository, then runs `Infrastructure/cicd/seed.groovy` as its Job DSL script. The seed script reads the tracked `Infrastructure/cicd/jenkinsfiles.txt` from that checkout. An existing seed job that uses a workspace-root `jenkinsfiles.txt` still works: the updated script adds the dispatcher path if that older list lacks it. If your seed job uses a pasted Job DSL script, update that script from the repository before rerunning it.
 
-```text
-Infrastructure/modules/dynamodb/cicd/Jenkinsfile
-Infrastructure/modules/buckets/cicd/Jenkinsfile
-Infrastructure/modules/alarms/cicd/Jenkinsfile
-Infrastructure/modules/cloudfront/cicd/Jenkinsfile
-Backend/heic_converter/cicd/Jenkinsfile
-Backend/db_api/cicd/Jenkinsfile
-Backend/download/cicd/Jenkinsfile
-Backend/ingestion/cicd/Jenkinsfile
-Backend/profile/cicd/Jenkinsfile
-Backend/upload_status/cicd/Jenkinsfile
-Backend/cascadeDelete/cicd/Jenkinsfile
-Backend/events/cicd/Jenkinsfile
-Backend/membership/cicd/Jenkinsfile
-Backend/gallery/cicd/Jenkinsfile
-Infrastructure/modules/state_machine/cicd/Jenkinsfile
-Infrastructure/modules/cognito/cicd/Jenkinsfile
-Infrastructure/modules/api_gateway/cicd/Jenkinsfile
-Frontend/frontend/cicd/Jenkinsfile
-Frontend/frontend-app/cicd/Jenkinsfile
-```
-
-Run `glimpses-seed` once. It creates jobs named from the folder preceding `cicd`, including `frontend` and `frontend-app`. Wait for each deployment job to succeed before starting the next one; they share Terraform state and should not apply concurrently.
+Run or rerun `glimpses-seed`. It creates or updates jobs named from the folder preceding `cicd`, including `selfie_match_dispatcher`, `frontend`, and `frontend-app`. Wait for each deployment job to succeed before starting the next one; they share Terraform state and should not apply concurrently.
 
 ### 5. Deploy shared backend resources, then frontend hosting
 
@@ -473,12 +455,12 @@ cd ../..
 Run these jobs in order:
 
 ```text
-heic_converter → db_api → download → ingestion → profile → upload_status
+heic_converter → db_api → download → ingestion → selfie_match_dispatcher → profile → upload_status
 → cascadeDelete → events → membership → gallery
 → state_machine → cognito → api_gateway
 ```
 
-`cascadeDelete` must be ready before `events` and `gallery`, which invoke it. The `events` job reads the frontend distribution domain from the frontend Terraform state and passes it into its Terraform apply. `state_machine` needs the ingestion and `db_api` Lambda ARNs. `api_gateway` needs the API Lambda ARNs and Cognito user pool, so it comes last among backend jobs.
+`selfie_match_dispatcher` needs ingestion deployed before it, and profile needs the dispatcher deployed before it. `cascadeDelete` must be ready before `events` and `gallery`, which invoke it. The `events` job reads the frontend distribution domain from the frontend Terraform state and passes it into its Terraform apply. `state_machine` needs the ingestion and `db_api` Lambda ARNs. `api_gateway` needs the API Lambda ARNs and Cognito user pool, so it comes last among backend jobs.
 
 The backend outputs needed by the browser should now be available:
 
@@ -515,11 +497,11 @@ GitHub Actions could run these pipelines too. It would require a different runne
 | Job group | Count | What a job does |
 |---|---:|---|
 | Shared infrastructure | 7 | Applies one Terraform module: DynamoDB, buckets, alarms, photo CloudFront, state machine, Cognito, or API Gateway. |
-| Backend Lambdas | 10 | Packages that Lambda's Python code for AWS, uploads its ZIP to `glimpses-deploy-artifacts`, applies its Terraform module, and updates the deployed code. |
+| Backend Lambdas | 11 | Packages that Lambda's Python code for AWS, uploads its ZIP to `glimpses-deploy-artifacts`, applies its Terraform module, and updates the deployed code. |
 | Frontend hosting | 1 | Applies `Frontend/frontend` to create the S3 bucket and CloudFront distribution for the site. |
 | React app | 1 | Reads Terraform outputs, builds `Frontend/`, syncs `dist/` to S3, and invalidates CloudFront. |
 
-There are **17 backend/infrastructure module jobs plus `frontend` and `frontend-app`**, for 19 deployment jobs. Each Jenkinsfile lives beside the part it deploys. The `glimpses-seed` Job DSL script reads `jenkinsfiles.txt` and creates or updates those jobs with their repository URL, Git credential, branch, and Jenkinsfile path. The exact file list, setup, and first-deploy order are in [Running it yourself](#running-it-yourself). The seed job creates jobs; it does not run the deployment sequence for you.
+There are **18 backend/infrastructure module jobs plus `frontend` and `frontend-app`**, for 20 deployment jobs. Each Jenkinsfile lives beside the part it deploys. The `glimpses-seed` Job DSL script reads the tracked `Infrastructure/cicd/jenkinsfiles.txt` and creates or updates those jobs with their repository URL, Git credential, branch, and Jenkinsfile path. The exact file list, setup, and first-deploy order are in [Running it yourself](#running-it-yourself). The seed job creates jobs; it does not run the deployment sequence for you.
 
 The jobs share Terraform state, so run dependent deployments in the documented order and do not run applies against the same state concurrently. On later changes, run only the affected job and any downstream job that needs its new outputs. For example, a React-only change needs `frontend-app`; a change to the frontend hosting distribution needs `frontend`, and may require `events` if the distribution domain changes because QR join links use that domain.
 

@@ -52,7 +52,7 @@ locals {
       http_method   = "POST"
       function_name = var.profile_function_name
       function_arn  = var.profile_function_arn
-      request_model = null
+      request_model = aws_api_gateway_model.selfie_confirm_body.name
     }
   }
 }

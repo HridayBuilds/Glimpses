@@ -237,3 +237,49 @@ def test_event_attendees_stream_record_triggers_match_attendees(monkeypatch):
 
     attendee_row = event_attendees_table.get_item(Key={"userID": "user_1", "eventID": "evt_1"})["Item"]
     assert attendee_row["matchedPhotoIDs"] == {"photo_1"}
+
+
+@mock_aws
+def test_new_selfie_replaces_previous_matches_and_rejects_stale_work(monkeypatch):
+    dynamodb = boto3.resource("dynamodb", region_name="ap-south-1")
+    _create_tables(dynamodb)
+    users = dynamodb.Table(os.environ["USERS_TABLE_NAME"])
+    attendees = dynamodb.Table(os.environ["EVENT_ATTENDEES_TABLE_NAME"])
+    events = dynamodb.Table(os.environ["EVENTS_TABLE_NAME"])
+    faces = dynamodb.Table(os.environ["FACES_TABLE_NAME"])
+    s3 = boto3.client("s3", region_name="ap-south-1")
+    bucket = os.environ["PHOTOS_BUCKET"]
+    s3.create_bucket(Bucket=bucket, CreateBucketConfiguration={"LocationConstraint": "ap-south-1"})
+    for version in ("old", "new"):
+        s3.put_object(Bucket=bucket, Key=f"selfies/user/user_1/{version}.jpg", Body=_JPEG_BYTES)
+    users.put_item(Item={"userID": "user_1", "selfieVersion": "old", "selfieKey": "selfies/user/user_1/old.jpg"})
+    attendees.put_item(Item={"userID": "user_1", "eventID": "evt_1", "status": "ATTENDEE"})
+    events.put_item(Item={"eventID": "evt_1", "rekognitionCollectionID": "evt_1-collection"})
+    for face_id, photo_id in (("old-face", "old-photo"), ("new-face", "new-photo")):
+        faces.put_item(Item={"rekognitionFaceID": face_id, "eventID": "evt_1", "photoID": photo_id})
+
+    monkeypatch.setattr(match_attendees, "search_faces_by_image", lambda collection_id, bucket, key, threshold: [
+        {"Face": {"FaceId": "old-face" if key.endswith("old.jpg") else "new-face"}}
+    ])
+    assert match_attendees.resolve_and_store_matches("evt_1", "user_1", "old")["matchedCount"] == 1
+    users.update_item(
+        Key={"userID": "user_1"},
+        UpdateExpression="SET selfieVersion = :v, selfieKey = :k",
+        ExpressionAttributeValues={":v": "new", ":k": "selfies/user/user_1/new.jpg"},
+    )
+    assert match_attendees.resolve_and_store_matches("evt_1", "user_1", "old")["stale"] is True
+    assert match_attendees.resolve_and_store_matches("evt_1", "user_1", "new")["matchedCount"] == 1
+    row = attendees.get_item(Key={"userID": "user_1", "eventID": "evt_1"})["Item"]
+    assert row["matchedPhotoIDs"] == {"new-photo"}
+    assert row["matchedSelfieVersion"] == "new"
+
+    users.update_item(
+        Key={"userID": "user_1"},
+        UpdateExpression="SET selfieVersion = :v",
+        ExpressionAttributeValues={":v": "no-matches"},
+    )
+    monkeypatch.setattr(match_attendees, "search_faces_by_image", lambda collection_id, bucket, key, threshold: [])
+    assert match_attendees.resolve_and_store_matches("evt_1", "user_1", "no-matches")["matchedCount"] == 0
+    row = attendees.get_item(Key={"userID": "user_1", "eventID": "evt_1"})["Item"]
+    assert "matchedPhotoIDs" not in row
+    assert row["matchedSelfieVersion"] == "no-matches"

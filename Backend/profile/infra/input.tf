@@ -33,3 +33,13 @@ variable "alarm_sns_topic_arn" {
   description = "ARN of the shared operator-alerts SNS topic (T-07), subscribed alarms publish here"
   type        = string
 }
+
+variable "selfie_match_dispatcher_function_name" {
+  description = "Function invoked after a valid selfie is confirmed"
+  type        = string
+}
+
+variable "selfie_match_dispatcher_function_arn" {
+  description = "Dispatcher ARN for the profile Lambda invoke policy"
+  type        = string
+}

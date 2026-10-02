@@ -53,4 +53,17 @@ resource "aws_s3_bucket_lifecycle_configuration" "photos" {
       days_after_initiation = 1
     }
   }
+
+  rule {
+    id     = "expire-unconfirmed-selfies"
+    status = "Enabled"
+
+    filter {
+      prefix = "selfies/pending/"
+    }
+
+    expiration {
+      days = 2
+    }
+  }
 }

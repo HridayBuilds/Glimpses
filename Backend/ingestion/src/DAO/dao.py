@@ -105,7 +105,7 @@ def increment_event_counters(event_id, photo_count_delta=0, size_bytes_delta=0):
 
 
 def get_user(user_id):
-    response = _users_table().get_item(Key={"userID": user_id})
+    response = _users_table().get_item(Key={"userID": user_id}, ConsistentRead=True)
     return response.get("Item")
 
 
@@ -152,9 +152,63 @@ def add_matched_photo_ids(user_id, event_id, photo_ids):
         return
     _event_attendees_table().update_item(
         Key={"userID": user_id, "eventID": event_id},
-        UpdateExpression="ADD matchedPhotoIDs :p",
-        ExpressionAttributeValues={":p": set(photo_ids)},
+        UpdateExpression="ADD matchedPhotoIDs :p SET matchedSelfieVersion = :legacy",
+        ExpressionAttributeValues={":p": set(photo_ids), ":legacy": "legacy", ":attendee": "ATTENDEE"},
+        ConditionExpression="(#s = :attendee) AND (attribute_not_exists(matchedSelfieVersion) OR matchedSelfieVersion = :legacy)",
+        ExpressionAttributeNames={"#s": "status"},
     )
+
+
+def save_versioned_matches(user_id, event_id, version, photo_ids):
+    """Replace old-version matches once, then union concurrent same-version searches."""
+    client = boto3.client("dynamodb")
+    users_table = os.environ["USERS_TABLE_NAME"]
+    attendees_table = os.environ["EVENT_ATTENDEES_TABLE_NAME"]
+    user_check = {
+        "ConditionCheck": {
+            "TableName": users_table,
+            "Key": {"userID": {"S": user_id}},
+            "ConditionExpression": "selfieVersion = :version",
+            "ExpressionAttributeValues": {":version": {"S": version}},
+        }
+    }
+    values = {":version": {"S": version}, ":attendee": {"S": "ATTENDEE"}}
+    if photo_ids:
+        values[":photos"] = {"SS": list(photo_ids)}
+        replacement = "SET matchedSelfieVersion = :version, matchedPhotoIDs = :photos"
+    else:
+        replacement = "SET matchedSelfieVersion = :version REMOVE matchedPhotoIDs"
+
+    update = {
+        "TableName": attendees_table,
+        "Key": {"userID": {"S": user_id}, "eventID": {"S": event_id}},
+        "UpdateExpression": replacement,
+        "ConditionExpression": "#s = :attendee AND (attribute_not_exists(matchedSelfieVersion) OR matchedSelfieVersion <> :version)",
+        "ExpressionAttributeNames": {"#s": "status"},
+        "ExpressionAttributeValues": values,
+    }
+    try:
+        client.transact_write_items(TransactItems=[user_check, {"Update": update}])
+        return True
+    except ClientError as error:
+        if error.response["Error"]["Code"] != "TransactionCanceledException":
+            raise
+
+    current_user = _users_table().get_item(Key={"userID": user_id}, ConsistentRead=True).get("Item")
+    if not current_user or current_user.get("selfieVersion") != version:
+        return False
+    if not photo_ids:
+        return True
+
+    update["UpdateExpression"] = "ADD matchedPhotoIDs :photos"
+    update["ConditionExpression"] = "#s = :attendee AND matchedSelfieVersion = :version"
+    try:
+        client.transact_write_items(TransactItems=[user_check, {"Update": update}])
+        return True
+    except ClientError as error:
+        if error.response["Error"]["Code"] != "TransactionCanceledException":
+            raise
+        return False
 
 
 def invoke_heic_converter(bucket, key):

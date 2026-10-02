@@ -40,3 +40,17 @@ resource "aws_iam_role_policy" "rekognition_access" {
   role   = aws_iam_role.this.id
   policy = data.aws_iam_policy_document.rekognition_access.json
 }
+
+data "aws_iam_policy_document" "invoke_selfie_match_dispatcher" {
+  statement {
+    effect    = "Allow"
+    actions   = ["lambda:InvokeFunction"]
+    resources = [var.selfie_match_dispatcher_function_arn]
+  }
+}
+
+resource "aws_iam_role_policy" "invoke_selfie_match_dispatcher" {
+  name   = "${var.name_prefix}-profile-invoke-selfie-match-dispatcher"
+  role   = aws_iam_role.this.id
+  policy = data.aws_iam_policy_document.invoke_selfie_match_dispatcher.json
+}

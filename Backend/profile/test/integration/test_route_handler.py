@@ -118,21 +118,24 @@ def test_selfie_mint_confirm_then_get_returns_selfie_url(monkeypatch):
         _api_event("PUT", "/profile/selfie", claims={"sub": "user_1"}), _FakeLambdaContext()
     )
     assert mint_response["statusCode"] == 200
-    assert "uploadUrl" in json.loads(mint_response["body"])
+    upload_id = json.loads(mint_response["body"])["uploadId"]
 
-    s3.put_object(Bucket=bucket, Key="selfies/user/user_1/selfie.jpg", Body=b"selfie-bytes")
+    s3.put_object(Bucket=bucket, Key=f"selfies/pending/user/user_1/{upload_id}.jpg", Body=b"selfie-bytes")
 
     monkeypatch.setattr(manager, "detect_face_count", lambda bucket, key: 1)
+    dispatched = []
+    monkeypatch.setattr(manager, "invoke_selfie_match_dispatcher", lambda user_id, version: dispatched.append((user_id, version)))
 
     confirm_response = lambda_handler(
-        _api_event("POST", "/profile/selfie/confirm", claims={"sub": "user_1"}), _FakeLambdaContext()
+        _api_event("POST", "/profile/selfie/confirm", body={"uploadId": upload_id}, claims={"sub": "user_1"}), _FakeLambdaContext()
     )
     assert confirm_response["statusCode"] == 200
     assert json.loads(confirm_response["body"]) == {"confirmed": True}
 
     get_response = lambda_handler(_api_event("GET", "/profile", claims={"sub": "user_1"}), _FakeLambdaContext())
     get_result = json.loads(get_response["body"])
-    assert "selfies/user/user_1/selfie.jpg" in get_result["selfieUrl"]
+    assert f"selfies/user/user_1/{upload_id}.jpg" in get_result["selfieUrl"]
+    assert dispatched == [("user_1", upload_id)]
 
 
 @mock_aws
@@ -146,13 +149,14 @@ def test_confirm_selfie_rejects_and_deletes_when_not_exactly_one_face(monkeypatc
     bucket = os.environ["PHOTOS_BUCKET"]
     s3 = boto3.client("s3", region_name="ap-south-1")
     s3.create_bucket(Bucket=bucket, CreateBucketConfiguration={"LocationConstraint": "ap-south-1"})
-    key = "selfies/user/user_1/selfie.jpg"
+    upload_id = "12345678-1234-4123-8123-123456789abc"
+    key = f"selfies/pending/user/user_1/{upload_id}.jpg"
     s3.put_object(Bucket=bucket, Key=key, Body=b"selfie-bytes")
 
     monkeypatch.setattr(manager, "detect_face_count", lambda bucket, key: 0)
 
     try:
-        lambda_handler(_api_event("POST", "/profile/selfie/confirm", claims={"sub": "user_1"}), _FakeLambdaContext())
+        lambda_handler(_api_event("POST", "/profile/selfie/confirm", body={"uploadId": upload_id}, claims={"sub": "user_1"}), _FakeLambdaContext())
         assert False, "expected ValueError"
     except ValueError:
         pass

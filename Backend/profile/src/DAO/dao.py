@@ -1,4 +1,5 @@
 import os
+import json
 
 import boto3
 from botocore.exceptions import ClientError
@@ -24,8 +25,12 @@ def _rekognition():
     return boto3.client("rekognition")
 
 
+def _lambda_client():
+    return boto3.client("lambda")
+
+
 def get_user(user_id):
-    response = _users_table().get_item(Key={"userID": user_id})
+    response = _users_table().get_item(Key={"userID": user_id}, ConsistentRead=True)
     return response.get("Item")
 
 
@@ -45,6 +50,23 @@ def update_display_name(user_id, display_name):
         Key={"userID": user_id},
         UpdateExpression="SET displayName = :d",
         ExpressionAttributeValues={":d": display_name},
+    )
+
+
+def set_current_selfie(user_id, key, version):
+    _users_table().update_item(
+        Key={"userID": user_id},
+        UpdateExpression="SET selfieKey = :key, selfieVersion = :version",
+        ExpressionAttributeValues={":key": key, ":version": version},
+        ConditionExpression="attribute_exists(userID)",
+    )
+
+
+def clear_current_selfie(user_id):
+    _users_table().update_item(
+        Key={"userID": user_id},
+        UpdateExpression="REMOVE selfieKey, selfieVersion",
+        ConditionExpression="attribute_exists(userID)",
     )
 
 
@@ -79,6 +101,25 @@ def selfie_exists(bucket, key):
 
 def delete_object(bucket, key):
     _s3().delete_object(Bucket=bucket, Key=key)
+
+
+def copy_object(bucket, source_key, target_key):
+    _s3().copy_object(
+        Bucket=bucket,
+        CopySource={"Bucket": bucket, "Key": source_key},
+        Key=target_key,
+        MetadataDirective="REPLACE",
+        ContentType="image/jpeg",
+        CacheControl=SELFIE_CACHE_CONTROL,
+    )
+
+
+def invoke_selfie_match_dispatcher(user_id, version):
+    _lambda_client().invoke(
+        FunctionName=os.environ["SELFIE_MATCH_DISPATCHER_FUNCTION_NAME"],
+        InvocationType="Event",
+        Payload=json.dumps({"userID": user_id, "selfieVersion": version}).encode("utf-8"),
+    )
 
 
 def detect_face_count(bucket, key):

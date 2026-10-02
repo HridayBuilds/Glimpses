@@ -1,20 +1,26 @@
 import os
 
-from DAO.dao import add_matched_photo_ids, get_event, get_faces, search_faces_by_image, selfie_exists
+from DAO.dao import add_matched_photo_ids, get_event, get_faces, get_user, save_versioned_matches, search_faces_by_image, selfie_exists
 
 
 def handle_match_attendees(payload):
-    return resolve_and_store_matches(payload["eventID"], payload["userID"])
+    return resolve_and_store_matches(payload["eventID"], payload["userID"], payload.get("selfieVersion"))
 
 
-def resolve_and_store_matches(event_id, user_id):
+def resolve_and_store_matches(event_id, user_id, expected_version=None):
     bucket = os.environ["PHOTOS_BUCKET"]
-    selfie_key = f"selfies/user/{user_id}/selfie.jpg"
+    user = get_user(user_id) or {}
+    version = user.get("selfieVersion", "legacy")
+    if expected_version is not None and expected_version != version:
+        return {"eventID": event_id, "userID": user_id, "matchedCount": 0, "stale": True}
+    selfie_key = user.get("selfieKey") or f"selfies/user/{user_id}/selfie.jpg"
 
     if not selfie_exists(bucket, selfie_key):
         return {"eventID": event_id, "userID": user_id, "matchedCount": 0}
 
     event = get_event(event_id)
+    if not event or event.get("status", "ACTIVE") != "ACTIVE":
+        return {"eventID": event_id, "userID": user_id, "matchedCount": 0, "skipped": "event_unavailable"}
     collection_id = event["rekognitionCollectionID"]
 
     threshold = float(os.environ["FACE_MATCH_SIMILARITY_THRESHOLD"])
@@ -23,5 +29,8 @@ def resolve_and_store_matches(event_id, user_id):
     faces = get_faces(face_ids)
     photo_ids = {face["photoID"] for face in faces}
 
-    add_matched_photo_ids(user_id, event_id, photo_ids)
+    if version == "legacy":
+        add_matched_photo_ids(user_id, event_id, photo_ids)
+    elif not save_versioned_matches(user_id, event_id, version, photo_ids):
+        return {"eventID": event_id, "userID": user_id, "matchedCount": 0, "stale": True}
     return {"eventID": event_id, "userID": user_id, "matchedCount": len(photo_ids)}

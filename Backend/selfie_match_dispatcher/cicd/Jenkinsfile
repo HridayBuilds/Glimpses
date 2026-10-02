@@ -1,0 +1,63 @@
+pipeline {
+    agent any
+
+    environment {
+        AWS_PROFILE = 'glimpses'
+    }
+
+    stages {
+        stage('Build') {
+            steps {
+                dir('Backend/selfie_match_dispatcher') {
+                    sh '''
+                        set -e
+                        rm -rf build build.zip
+                        mkdir -p build
+                        python3 -m pip install -r requirements.txt \
+                          --target build \
+                          --platform manylinux2014_x86_64 \
+                          --implementation cp \
+                          --python-version 3.13 \
+                          --only-binary=:all: \
+                          --upgrade
+                        cp -r src/. build/
+                        cd build && zip -r ../build.zip . && cd ..
+                    '''
+                }
+            }
+        }
+        stage('Push to deployment-artifacts') {
+            steps {
+                dir('Backend/selfie_match_dispatcher') {
+                    sh 'aws s3 cp build.zip s3://glimpses-deploy-artifacts/selfie_match_dispatcher/build.zip'
+                }
+            }
+        }
+        stage('Terraform Init') {
+            steps {
+                dir('Infrastructure') {
+                    sh 'terraform init'
+                }
+            }
+        }
+        stage('Terraform Validate') {
+            steps {
+                dir('Infrastructure') {
+                    sh 'terraform validate'
+                }
+            }
+        }
+        stage('Terraform Apply - selfie_match_dispatcher') {
+            steps {
+                dir('Infrastructure') {
+                    sh 'terraform apply -target=module.selfie_match_dispatcher -auto-approve'
+                }
+            }
+        }
+        stage('Update Lambda code') {
+            steps {
+                sh 'aws lambda update-function-code --function-name glimpses-selfie-match-dispatcher --s3-bucket glimpses-deploy-artifacts --s3-key selfie_match_dispatcher/build.zip'
+            }
+        }
+    }
+}

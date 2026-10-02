@@ -1,7 +1,7 @@
 resource "aws_lambda_function" "this" {
-  function_name = "${var.name_prefix}-profile"
+  function_name = "${var.name_prefix}-selfie-match-dispatcher"
   s3_bucket     = var.deploy_artifacts_bucket
-  s3_key        = "profile/build.zip"
+  s3_key        = "selfie_match_dispatcher/build.zip"
   handler       = "routeHandler.lambda_handler"
   runtime       = "python3.13"
   architectures = ["x86_64"]
@@ -11,9 +11,9 @@ resource "aws_lambda_function" "this" {
 
   environment {
     variables = {
-      USERS_TABLE_NAME                      = var.users_table_name
-      PHOTOS_BUCKET                         = var.photos_bucket_name
-      SELFIE_MATCH_DISPATCHER_FUNCTION_NAME = var.selfie_match_dispatcher_function_name
+      USERS_TABLE_NAME           = var.users_table_name
+      EVENT_ATTENDEES_TABLE_NAME = var.event_attendees_table_name
+      INGESTION_FUNCTION_NAME    = var.ingestion_function_name
     }
   }
 
