@@ -117,6 +117,7 @@ A guest and organizer's path through Glimpses, start to finish.
 ## Core features
 
 - **Event creation and join flow.** Organizers create events with a join code or QR code. Guests join instantly on open events, or wait for organizer approval on approval-required events.
+- **Public Google Drive imports.** In Add Photos, choose From Google Drive and paste a folder link shared with Anyone with the link. Only direct photo children are imported. Subfolders, shortcuts, junk files, and non-photo files are skipped. Imports continue after the browser closes.
 - **Bulk photo upload.** Upload photos one by one, or bundle hundreds into a zip and let the pipeline sort it out. Common metadata files from macOS (`__MACOSX/`, `._*`, `.DS_Store`), Windows (`Thumbs.db`, `desktop.ini`), Android (`.nomedia`), and iPhone exports (`.AAE` sidecars) are ignored before photo processing, so they do not appear as failed uploads.
 - **Automatic face matching.** Every guest with a selfie on file gets a personal "Photos of me" view, built by comparing their selfie against every face in the event.
 - **HEIC support.** iPhone photos (`.HEIC`/`.HEIF`) are converted to JPEG automatically, with no failed uploads and no visible extra step for the guest.
@@ -142,7 +143,7 @@ A guest and organizer's path through Glimpses, start to finish.
 
 **Backend**
 - **AWS Lambda** (Python 3.13): every piece of business logic, 10 functions in total
-- **Amazon API Gateway** (REST): 30 explicit routes, each with a JSON-schema request validator where a body is expected
+- **Amazon API Gateway** (REST): 31 explicit routes, each with a JSON-schema request validator where a body is expected
 - **Amazon DynamoDB**: 8 tables, on-demand billing, GSIs for every query pattern, Streams for event-driven triggers
 - **Amazon S3**: one bucket, six prefixes (`photos/`, `thumbnails/`, `qrcodes/`, `selfies/`, `uploads/`, and staging areas)
 - **Amazon CloudFront**: signed-URL delivery for photos and thumbnails, public delivery for QR codes
@@ -160,7 +161,7 @@ A guest and organizer's path through Glimpses, start to finish.
 - **TanStack Query**: server state, polling, and cache invalidation
 
 **Infrastructure and tooling**
-- **Terraform** (1.10 or newer, native S3 state locking, no DynamoDB lock table): 20 independently deployable modules
+- **Terraform** (1.10 or newer, native S3 state locking, no DynamoDB lock table): 21 independently deployable modules
 - **Jenkins** (local, Homebrew-installed): one CI/CD job per Terraform module, seeded automatically from a Job DSL script
 - **Python** (`boto3`, `Pillow`, `pillow-heif`, `cryptography`) for Lambda logic
 - **moto** for AWS-mocked unit and integration testing: every Lambda has its own `test/unit` and `test/integration` suite
@@ -184,7 +185,7 @@ At a glance, here's the shape of a request:
                     │
      ┌──────────────┼──────────────────────────────┐
      │              │                              │
- 12 Lambdas    Step Functions            EventBridge (upload trigger,
+ 13 Lambdas    Step Functions            EventBridge (upload trigger,
  (business     (ingestion pipeline,       daily archive sweep)
   logic)        Distributed Map fan-out)
      │              │
@@ -201,13 +202,14 @@ Nothing runs unless something's actually happening. There are no EC2 instances a
 
 ```
 Glimpses/
-├── Backend/                 12 Lambdas, each with the same internal shape:
+├── Backend/                 13 Lambdas, each with the same internal shape:
 │   ├── events/                 routeHandler.py -> Handler/ -> Manager/ -> (Converter/) -> DAO/
 │   │   ├── src/
 │   │   ├── test/unit/       moto-backed unit tests
 │   │   ├── test/integration/  moto-backed integration tests
 │   │   ├── infra/            this Lambda's own Terraform module
 │   │   └── cicd/Jenkinsfile  this Lambda's own CI/CD job
+│   ├── drive_import/
 │   ├── ingestion/            same shape, repeated for every Lambda
 │   ├── selfie_match_dispatcher/
 │   ├── notifications/
@@ -221,7 +223,7 @@ Glimpses/
 │   └── heic_converter/
 ├── Frontend/                 React 19 + Vite SPA
 ├── Infrastructure/
-│   ├── imports.tf            the composition root, wires all 20 modules together
+│   ├── imports.tf            the composition root, wires all 21 modules together
 │   ├── providers.tf          Terraform/AWS provider config, S3 backend
 │   ├── variables.tf          top-level variables (region, alarm email, etc.)
 │   ├── cicd/seed.groovy      Jenkins Job DSL seed script
@@ -243,6 +245,7 @@ Glimpses/
 | **profile** | Uploads, replaces, and deletes a selfie; reads and updates basic profile info |
 | **selfie_match_dispatcher** | After selfie confirmation, finds every event where the user is admitted and invokes ingestion matching for each one |
 | **notifications** | Reads completed changes from DynamoDB Streams and event deletion, creates a short HTML and text email for each recipient, and sends through SES |
+| **drive_import** | Imports photos directly inside public Google Drive folders. Owns a separate Standard workflow, paginated discovery, and streaming downloads to S3; reuses the ingestion workflow template for photo processing, indexing, and matching |
 | **upload_status** | Mints presigned S3 upload URLs, and is polled by the frontend to show live upload and processing progress |
 | **ingestion** | The engine room. Unpacks uploaded zips, converts, hashes, and thumbnails each photo, indexes faces via Rekognition, and matches attendees to the photos they appear in. Invoked as discrete steps by the Step Functions pipeline below |
 | **heic_converter** | Converts iPhone `.HEIC`/`.HEIF` photos to JPEG, called synchronously by `ingestion` mid-pipeline |
@@ -274,7 +277,7 @@ Every Lambda follows the same internal shape: `routeHandler.py` → `Handler/han
 
 ## The ingestion pipeline (Step Functions)
 
-Every upload, whether a single photo or an 800 photo zip, runs through the same Step Functions state machine. It's written in **JSONata** (Step Functions' newer, more expressive query language) rather than the older JSONPath dialect.
+Every device upload, whether a single photo or an 800 photo zip, runs through the original ingestion Step Functions state machine. Google Drive imports use a separate workflow described below. It's written in **JSONata** (Step Functions' newer, more expressive query language) rather than the older JSONPath dialect.
 
 <p align="center">
   <img src="assets/step-function/pipeline-graph.png" alt="Step Functions ingestion pipeline" width="800" />
@@ -304,6 +307,16 @@ Every upload, whether a single photo or an 800 photo zip, runs through the same 
 ---
 
 ## Triggers and edge cases
+
+**Google Drive imports.** The separate `glimpses-drive-import` Standard workflow is packaged with the `drive_import` Lambda module. `POST /events/{eventID}/drive-import` authenticates the contributor, validates an HTTPS Google Drive folder link, and returns a job ID. The request ID makes submission retries idempotent. Public access is checked asynchronously; a private, deleted, or invalid folder produces a clear error through the existing job-status API. There is no Google sign-in or access to a user's private Drive.
+
+The workflow lists one page of direct children per task, writes that page to S3, and downloads its photos through a Distributed Map with four concurrent workers. Each worker streams bytes into an S3 multipart upload, verifies the transferred size when available, and aborts incomplete transfers on failure. Access is rechecked against the event's contribution policy as work progresses. Subfolders are never traversed. A failed download is counted without discarding successful downloads. Page manifests are combined into the staged-photo manifest expected by `ProcessPhotos`.
+
+Terraform derives the downstream states from the existing ingestion template at deployment time. The original `state_machine` module and ZIP workflow are not changed. Conversion, thumbnails, content-based duplicate detection, indexing, and matching invoke the existing ingestion Lambda actions. Redeploy `drive_import` whenever a shared ingestion template change should also reach the Drive workflow. Its matching map fails the import if attendee tasks fail after retries. The `db_api` Lambda remains the only writer of job statuses; it adds named actions for Drive discovery and progress. The existing job-status API exposes download, duplicate, skipped-file, and skipped-folder counts. Results are partial when some photos fail; a job with only duplicates completes without reindexing them. No supported photos produces an actionable error.
+
+The frontend's dedicated Drive screen polls every five seconds and retains the job ID in its URL so a refresh can resume progress. The existing job-completion notifications also cover Drive imports. Temporary Drive objects under `uploads/drive/` expire after seven days; originals and thumbnails use the usual permanent photo prefixes. The bucket-wide incomplete multipart cleanup remains a fallback if a worker is terminated before it can abort.
+
+There are no application-imposed byte or photo-count caps on Drive imports. Service limits still apply: the new worker has 1024 MB and a 300-second timeout; the reused ingestion Lambda still uses 1024 MB and 300 seconds and processes image bytes in memory. Very large images, very slow downloads, large manifest aggregation, Step Functions execution/history limits, or Google quotas can therefore cause failures. A folder listing is not an immutable snapshot: keep its contents and public access stable during import. No paid download intermediary is used, but AWS usage still consumes allowances or credits and can incur charges. [Google Drive API quotas and pricing](https://developers.google.com/workspace/drive/api/guides/limits) apply independently.
 
 **Upload trigger.** An EventBridge rule watches for new objects landing under the S3 uploads prefix and starts the Step Functions execution. There's no polling and no manual kick-off.
 
@@ -364,7 +377,7 @@ For faster ingestion on larger events, request a service quota increase for both
 
 ## Running it yourself
 
-This is the deployment path for the repository as written: AWS region `ap-south-1`, AWS CLI profile `glimpses`, and AWS resource names beginning with `glimpses`. It uses two Terraform states and three kinds of Jenkins jobs: 20 backend/infrastructure modules, `frontend` for hosting, and `frontend-app` for the built React app. The fixed S3 bucket names must be available in your AWS account and globally; if another account already owns one, change the bucket names and matching hard-coded Jenkins S3 destinations before deploying.
+This is the deployment path for the repository as written: AWS region `ap-south-1`, AWS CLI profile `glimpses`, and AWS resource names beginning with `glimpses`. It uses two Terraform states and three kinds of Jenkins jobs: 21 backend/infrastructure modules, `frontend` for hosting, and `frontend-app` for the built React app. The fixed S3 bucket names must be available in your AWS account and globally; if another account already owns one, change the bucket names and matching hard-coded Jenkins S3 destinations before deploying.
 
 The order matters: create the Terraform state bucket, deploy shared backend resources, deploy frontend hosting, deploy the Lambda code, deploy orchestration/auth/API Gateway, then build and publish the React app. In particular, `events` needs the frontend CloudFront domain for QR join links, while `frontend-app` needs Cognito and API Gateway outputs.
 
@@ -433,11 +446,19 @@ aws service-quotas list-service-quotas --service-code rekognition \
 
 Set `rekognition_index_max_concurrency` and `rekognition_search_max_concurrency` in `Infrastructure/modules/state_machine/variables.tf` no higher than the corresponding quotas. Also check the Lambda concurrency limit against `photo_processing_max_concurrency`. The current defaults were tuned for the original account.
 
+### Google Drive setup and deployment
+
+1. In [Google Cloud Console](https://console.cloud.google.com/apis/library/drive.googleapis.com), select your project and enable Google Drive API. Create an API key under APIs & Services → Credentials and restrict its API access to Google Drive API. Glimpses uses API-key access to public folders only; no OAuth consent flow or service account is needed. This key is unrelated to Graphify's Gemini key.
+2. In AWS Systems Manager → Parameter Store in `ap-south-1`, create a **Standard SecureString** parameter named `/glimpses/google-drive/api-key` and paste the key as its value. Use the default SSM encryption key. The secret is not stored in Terraform, source code, or the frontend. The new Lambda has access only to this parameter. Restart/redeploy its runtime after rotating the key because it caches the decrypted value per execution environment.
+3. Give the Jenkins deployment identity `ssm:GetParameter` on that parameter for its presence check. The `drive_import` job checks the parameter name without printing or decrypting the secret before it builds and deploys the Lambda and workflow.
+4. On an existing deployment, rerun `glimpses-seed`, then run **`buckets → db_api → drive_import → upload_status → api_gateway → frontend-app`**. `ingestion` must already be deployed. The original `state_machine` job does not need to run for this feature. On a fresh deployment, complete the Google/SSM setup before the new job in the normal order below.
+5. Test a small public folder, an inaccessible folder, mixed photos/non-photos/subfolders, a duplicate import, and a larger folder that requires pagination. Check both the gallery and job counts. Local mocked tests and workflow validation do not replace a live Google/AWS smoke test.
+
 ### 4. Create the Jenkins jobs
 
 The Lambda Terraform modules point at ZIP files in `glimpses-deploy-artifacts`. Their Jenkins jobs build and upload those ZIPs **before** applying each module, then update the Lambda code. A bare `terraform apply` for a Lambda on a fresh account will fail because its deployment ZIP does not exist yet.
 
-In `Infrastructure/cicd/seed.groovy`, set `repoUrl` to your Git repository and `credentialsId` to a Jenkins Git credential that can read it. The generated jobs check out `main`; update `branch` there if your deployment branch has a different name. Commit and push configuration changes before running those jobs, because Jenkins reads the remote branch rather than your local working tree. Create a Jenkins job named `glimpses-seed` that checks out this repository, then runs `Infrastructure/cicd/seed.groovy` as its Job DSL script. The seed script reads the tracked `Infrastructure/cicd/jenkinsfiles.txt` from that checkout. An existing seed job that uses a workspace-root `jenkinsfiles.txt` still works: the updated script adds the dispatcher, email, and notifications paths if that older list lacks them. If your seed job uses a pasted Job DSL script, update that script from the repository before rerunning it.
+In `Infrastructure/cicd/seed.groovy`, set `repoUrl` to your Git repository and `credentialsId` to a Jenkins Git credential that can read it. The generated jobs check out `main`; update `branch` there if your deployment branch has a different name. Commit and push configuration changes before running those jobs, because Jenkins reads the remote branch rather than your local working tree. Create a Jenkins job named `glimpses-seed` that checks out this repository, then runs `Infrastructure/cicd/seed.groovy` as its Job DSL script. The seed script reads the tracked `Infrastructure/cicd/jenkinsfiles.txt` from that checkout. An existing seed job that uses a workspace-root `jenkinsfiles.txt` still works: the updated script adds the dispatcher, email, notifications, and Drive import paths if that older list lacks them. If your seed job uses a pasted Job DSL script, update that script from the repository before rerunning it.
 
 Run or rerun `glimpses-seed`. It creates or updates jobs named from the folder preceding `cicd`, including `email`, `notifications`, `frontend`, and `frontend-app`. Wait for each deployment job to succeed before starting the next one; they share Terraform state and should not apply concurrently.
 
@@ -465,7 +486,7 @@ After the `email` job, open the AWS verification email sent to `hriday.mulchanda
 Run these jobs in order:
 
 ```text
-heic_converter → db_api → download → ingestion → selfie_match_dispatcher → notifications → profile → upload_status
+heic_converter → db_api → download → ingestion → drive_import → selfie_match_dispatcher → notifications → profile → upload_status
 → cascadeDelete → events → membership → gallery
 → state_machine → cognito → api_gateway
 ```
@@ -508,11 +529,11 @@ GitHub Actions could run these pipelines too. It would require a different runne
 | Job group | Count | What a job does |
 |---|---:|---|
 | Shared infrastructure | 8 | Applies one Terraform module: DynamoDB, buckets, alarms, SES email identity, photo CloudFront, state machine, Cognito, or API Gateway. |
-| Backend Lambdas | 12 | Packages that Lambda's Python code for AWS, uploads its ZIP to `glimpses-deploy-artifacts`, applies its Terraform module, and updates the deployed code. |
+| Backend Lambdas | 13 | Packages that Lambda's Python code for AWS, uploads its ZIP to `glimpses-deploy-artifacts`, applies its Terraform module, and updates the deployed code. |
 | Frontend hosting | 1 | Applies `Frontend/frontend` to create the S3 bucket and CloudFront distribution for the site. |
 | React app | 1 | Reads Terraform outputs, builds `Frontend/`, syncs `dist/` to S3, and invalidates CloudFront. |
 
-There are **20 backend/infrastructure module jobs plus `frontend` and `frontend-app`**, for 22 deployment jobs. Each Jenkinsfile lives beside the part it deploys. The `glimpses-seed` Job DSL script reads the tracked `Infrastructure/cicd/jenkinsfiles.txt` and creates or updates those jobs with their repository URL, Git credential, branch, and Jenkinsfile path. The exact file list, setup, and first-deploy order are in [Running it yourself](#running-it-yourself). The seed job creates jobs; it does not run the deployment sequence for you.
+There are **21 backend/infrastructure module jobs plus `frontend` and `frontend-app`**, for 23 deployment jobs. Each Jenkinsfile lives beside the part it deploys. The `glimpses-seed` Job DSL script reads the tracked `Infrastructure/cicd/jenkinsfiles.txt` and creates or updates those jobs with their repository URL, Git credential, branch, and Jenkinsfile path. The exact file list, setup, and first-deploy order are in [Running it yourself](#running-it-yourself). The seed job creates jobs; it does not run the deployment sequence for you.
 
 The jobs share Terraform state, so run dependent deployments in the documented order and do not run applies against the same state concurrently. On later changes, run only the affected job and any downstream job that needs its new outputs. For example, a React-only change needs `frontend-app`; a change to the frontend hosting distribution needs `frontend`, and may require `events` if the distribution domain changes because QR join links use that domain.
 

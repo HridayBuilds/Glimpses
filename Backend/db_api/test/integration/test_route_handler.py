@@ -65,3 +65,22 @@ def test_create_then_mark_success_round_trip():
     assert item["succeededCount"] == 594
     assert item["failedCount"] == 6
     assert item["eventUploaderKey"] == "evt_1#user_1"
+
+
+@mock_aws
+def test_drive_create_retry_preserves_progress_and_counts():
+    dynamodb = boto3.resource('dynamodb', region_name='ap-south-1')
+    _create_jobs_table(dynamodb)
+    create = {'action': 'create_drive', 'jobId': 'drive1', 'eventID': 'e', 'uploaderID': 'u', 'startedAt': 'now'}
+    context = _FakeLambdaContext()
+    lambda_handler(create, context)
+    lambda_handler({'action': 'drive_downloading', 'jobId': 'drive1', 'updates': {'downloadedCount': 5}}, context)
+    lambda_handler(create, context)
+    job = dynamodb.Table('glimpses-jobs-test').get_item(Key={'jobId': 'drive1'})['Item']
+    assert job['status'] == 'DOWNLOADING'
+    assert job['downloadedCount'] == 5
+    assert job['source'] == 'GOOGLE_DRIVE'
+    lambda_handler({'action': 'drive_failed', 'jobId': 'drive1', 'updates': {'failedCount': 2, 'errorMessage': 'Access was revoked.'}}, context)
+    job = dynamodb.Table('glimpses-jobs-test').get_item(Key={'jobId': 'drive1'})['Item']
+    assert job['status'] == 'FAILED'
+    assert job['errorMessage'] == 'Access was revoked.'

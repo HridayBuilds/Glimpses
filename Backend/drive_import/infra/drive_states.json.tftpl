@@ -1,0 +1,278 @@
+{
+  "DriveInitialize": {
+    "Type": "Task",
+    "Resource": "arn:aws:states:::lambda:invoke",
+    "Arguments": {
+      "FunctionName": "${drive_function_arn}",
+      "Payload": "{% $merge([$states.input, {'step': 'initialize', 'startedAt': $states.context.Execution.StartTime}]) %}"
+    },
+    "Output": "{% $states.result.Payload %}",
+    "Retry": [
+      {
+        "ErrorEquals": [
+          "DriveTransientError",
+          "Lambda.ServiceException",
+          "Lambda.AWSLambdaException",
+          "Lambda.SdkClientException",
+          "Lambda.TooManyRequestsException"
+        ],
+        "IntervalSeconds": 2,
+        "BackoffRate": 2,
+        "MaxAttempts": 3
+      }
+    ],
+    "Catch": [
+      {
+        "ErrorEquals": [
+          "States.ALL"
+        ],
+        "Output": "{% $merge([$states.input, {'driveError': $states.errorOutput}]) %}",
+        "Next": "UpdateStatusFailed"
+      }
+    ],
+    "Next": "DriveList"
+  },
+  "DriveList": {
+    "Type": "Task",
+    "Resource": "arn:aws:states:::lambda:invoke",
+    "Arguments": {
+      "FunctionName": "${drive_function_arn}",
+      "Payload": "{% $merge([$states.input, {'step': 'list'}]) %}"
+    },
+    "Output": "{% $states.result.Payload %}",
+    "Retry": [
+      {
+        "ErrorEquals": [
+          "DriveTransientError",
+          "Lambda.ServiceException",
+          "Lambda.AWSLambdaException",
+          "Lambda.SdkClientException",
+          "Lambda.TooManyRequestsException"
+        ],
+        "IntervalSeconds": 2,
+        "BackoffRate": 2,
+        "MaxAttempts": 3
+      }
+    ],
+    "Catch": [
+      {
+        "ErrorEquals": [
+          "States.ALL"
+        ],
+        "Output": "{% $merge([$states.input, {'driveError': $states.errorOutput}]) %}",
+        "Next": "UpdateStatusFailed"
+      }
+    ],
+    "Next": "DriveDownload"
+  },
+  "DriveDownload": {
+    "Type": "Map",
+    "Label": "DriveDownload",
+    "MaxConcurrency": 4,
+    "ToleratedFailurePercentage": 100,
+    "ItemReader": {
+      "Resource": "arn:aws:states:::s3:getObject",
+      "ReaderConfig": {
+        "InputType": "JSON"
+      },
+      "Arguments": {
+        "Bucket": "${photos_bucket_name}",
+        "Key": "{% $states.input.pageManifestKey %}"
+      }
+    },
+    "ItemProcessor": {
+      "ProcessorConfig": {
+        "Mode": "DISTRIBUTED",
+        "ExecutionType": "STANDARD"
+      },
+      "StartAt": "DownloadOne",
+      "States": {
+        "DownloadOne": {
+          "Type": "Task",
+          "Resource": "arn:aws:states:::lambda:invoke",
+          "Arguments": {
+            "FunctionName": "${drive_function_arn}",
+            "Payload": "{% $merge([$states.input, {'step': 'download'}]) %}"
+          },
+          "Output": "{% $states.result.Payload %}",
+          "Retry": [
+            {
+              "ErrorEquals": [
+                "States.ALL"
+              ],
+              "IntervalSeconds": 3,
+              "BackoffRate": 2,
+              "MaxAttempts": 2
+            }
+          ],
+          "End": true
+        }
+      }
+    },
+    "ResultWriter": {
+      "Resource": "arn:aws:states:::s3:putObject",
+      "Arguments": {
+        "Bucket": "${photos_bucket_name}",
+        "Prefix": "{% 'uploads/drive/event/' & $states.input.eventID & '/user/' & $states.input.userID & '/job/' & $states.input.jobId & '/drive/pages/' & $string($states.input.page) & '/results' %}"
+      }
+    },
+    "Output": "{% $merge([$states.input, {'downloadResultsKey': $states.result.ResultWriterDetails.Key}]) %}",
+    "Catch": [
+      {
+        "ErrorEquals": [
+          "States.ALL"
+        ],
+        "Output": "{% $merge([$states.input, {'driveError': $states.errorOutput}]) %}",
+        "Next": "UpdateStatusFailed"
+      }
+    ],
+    "Next": "DriveCollect"
+  },
+  "DriveCollect": {
+    "Type": "Task",
+    "Resource": "arn:aws:states:::lambda:invoke",
+    "Arguments": {
+      "FunctionName": "${drive_function_arn}",
+      "Payload": "{% $merge([$states.input, {'step': 'collect'}]) %}"
+    },
+    "Output": "{% $states.result.Payload %}",
+    "Retry": [
+      {
+        "ErrorEquals": [
+          "DriveTransientError",
+          "Lambda.ServiceException",
+          "Lambda.AWSLambdaException",
+          "Lambda.SdkClientException",
+          "Lambda.TooManyRequestsException"
+        ],
+        "IntervalSeconds": 2,
+        "BackoffRate": 2,
+        "MaxAttempts": 3
+      }
+    ],
+    "Catch": [
+      {
+        "ErrorEquals": [
+          "States.ALL"
+        ],
+        "Output": "{% $merge([$states.input, {'driveError': $states.errorOutput}]) %}",
+        "Next": "UpdateStatusFailed"
+      }
+    ],
+    "Next": "DriveMore"
+  },
+  "DriveMore": {
+    "Type": "Choice",
+    "Choices": [
+      {
+        "Condition": "{% $states.input.pageToken != '' %}",
+        "Next": "DriveList"
+      }
+    ],
+    "Default": "DrivePrepare"
+  },
+  "DrivePrepare": {
+    "Type": "Task",
+    "Resource": "arn:aws:states:::lambda:invoke",
+    "Arguments": {
+      "FunctionName": "${drive_function_arn}",
+      "Payload": "{% $merge([$states.input, {'step': 'prepare_manifest'}]) %}"
+    },
+    "Output": "{% $merge([$states.result.Payload, {'stagedManifestBucket': '${photos_bucket_name}'}]) %}",
+    "Retry": [
+      {
+        "ErrorEquals": [
+          "DriveTransientError",
+          "Lambda.ServiceException",
+          "Lambda.AWSLambdaException",
+          "Lambda.SdkClientException",
+          "Lambda.TooManyRequestsException"
+        ],
+        "IntervalSeconds": 2,
+        "BackoffRate": 2,
+        "MaxAttempts": 3
+      }
+    ],
+    "Catch": [
+      {
+        "ErrorEquals": [
+          "States.ALL"
+        ],
+        "Output": "{% $merge([$states.input, {'driveError': $states.errorOutput}]) %}",
+        "Next": "UpdateStatusFailed"
+      }
+    ],
+    "Next": "ProcessPhotos"
+  },
+  "DriveCombine": {
+    "Type": "Task",
+    "Resource": "arn:aws:states:::lambda:invoke",
+    "Arguments": {
+      "FunctionName": "${drive_function_arn}",
+      "Payload": "{% $merge([$states.input, {'step': 'combine'}]) %}"
+    },
+    "Output": "{% $states.result.Payload %}",
+    "Retry": [
+      {
+        "ErrorEquals": [
+          "DriveTransientError",
+          "Lambda.ServiceException",
+          "Lambda.AWSLambdaException",
+          "Lambda.SdkClientException",
+          "Lambda.TooManyRequestsException"
+        ],
+        "IntervalSeconds": 2,
+        "BackoffRate": 2,
+        "MaxAttempts": 3
+      }
+    ],
+    "Catch": [
+      {
+        "ErrorEquals": [
+          "States.ALL"
+        ],
+        "Output": "{% $merge([$states.input, {'driveError': $states.errorOutput}]) %}",
+        "Next": "UpdateStatusFailed"
+      }
+    ],
+    "Next": "CheckAnyPhotosSucceeded"
+  },
+  "CheckAnyPhotosSucceeded": {
+    "Type": "Choice",
+    "Choices": [
+      {
+        "Condition": "{% $states.input.succeededCount > 0 %}",
+        "Next": "UpdateStatusMatching"
+      },
+      {
+        "Condition": "{% $states.input.duplicateCount > 0 %}",
+        "Next": "UpdateStatusSuccess"
+      }
+    ],
+    "Default": "UpdateStatusFailed"
+  },
+  "UpdateStatusFailed": {
+    "Type": "Task",
+    "Resource": "arn:aws:states:::lambda:invoke",
+    "Arguments": {
+      "FunctionName": "${drive_function_arn}",
+      "Payload": "{% $merge([$states.input, {'step': 'fail'}]) %}"
+    },
+    "Output": "{% $states.result.Payload %}",
+    "Retry": [
+      {
+        "ErrorEquals": [
+          "DriveTransientError",
+          "Lambda.ServiceException",
+          "Lambda.AWSLambdaException",
+          "Lambda.SdkClientException",
+          "Lambda.TooManyRequestsException"
+        ],
+        "IntervalSeconds": 2,
+        "BackoffRate": 2,
+        "MaxAttempts": 3
+      }
+    ],
+    "Next": "IngestionFailed"
+  }
+}

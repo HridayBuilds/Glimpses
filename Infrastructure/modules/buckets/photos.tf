@@ -31,6 +31,19 @@ resource "aws_s3_bucket_lifecycle_configuration" "photos" {
   bucket = aws_s3_bucket.photos.id
 
   rule {
+    id     = "expire-drive-import-staging"
+    status = "Enabled"
+
+    filter {
+      prefix = "uploads/drive/"
+    }
+
+    expiration {
+      days = 7
+    }
+  }
+
+  rule {
     id     = "expire-downloads"
     status = "Enabled"
 

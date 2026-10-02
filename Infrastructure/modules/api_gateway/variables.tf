@@ -56,3 +56,6 @@ variable "download_function_name" {
 variable "download_function_arn" {
   type = string
 }
+
+variable "drive_import_function_name" { type = string }
+variable "drive_import_function_arn" { type = string }

@@ -12,6 +12,7 @@ try {
 }
 
 def requiredJenkinsfiles = [
+    'Backend/drive_import/cicd/Jenkinsfile',
     'Backend/selfie_match_dispatcher/cicd/Jenkinsfile',
     'Infrastructure/modules/email/cicd/Jenkinsfile',
     'Backend/notifications/cicd/Jenkinsfile',

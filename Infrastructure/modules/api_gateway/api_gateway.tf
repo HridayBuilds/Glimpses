@@ -21,6 +21,7 @@ locals {
     local.upload_status_routes,
     local.gallery_routes,
     local.download_routes,
+    local.drive_import_routes,
   )
 
   route_resource_ids = distinct([for route in local.routes : route.resource_id])

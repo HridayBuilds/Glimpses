@@ -1,6 +1,7 @@
 import os
 
 import boto3
+from botocore.exceptions import ClientError
 
 
 def _table():
@@ -9,6 +10,14 @@ def _table():
 
 def create_job(item: dict) -> None:
     _table().put_item(Item=item)
+
+
+def create_drive_job(item: dict) -> None:
+    try:
+        _table().put_item(Item=item, ConditionExpression="attribute_not_exists(jobId)")
+    except ClientError as error:
+        if error.response["Error"]["Code"] != "ConditionalCheckFailedException":
+            raise
 
 
 def update_job_status(job_id: str, updates: dict) -> None:

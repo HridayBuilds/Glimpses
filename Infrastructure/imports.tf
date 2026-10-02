@@ -80,6 +80,25 @@ module "ingestion" {
   alarm_sns_topic_arn          = module.alarms.alarm_sns_topic_arn
 }
 
+module "drive_import" {
+  source = "../Backend/drive_import/infra"
+
+  deploy_artifacts_bucket    = module.buckets.deploy_artifacts_bucket_name
+  jobs_table_name            = module.dynamodb.table_names["jobs"]
+  jobs_table_arn             = module.dynamodb.table_arns["jobs"]
+  events_table_name          = module.dynamodb.table_names["events"]
+  events_table_arn           = module.dynamodb.table_arns["events"]
+  event_attendees_table_name = module.dynamodb.table_names["event_attendees"]
+  event_attendees_table_arn  = module.dynamodb.table_arns["event_attendees"]
+  users_table_name           = module.dynamodb.table_names["users"]
+  users_table_arn            = module.dynamodb.table_arns["users"]
+  photos_bucket_name         = module.buckets.photos_bucket_name
+  photos_bucket_arn          = module.buckets.photos_bucket_arn
+  ingestion_function_arn     = module.ingestion.function_arn
+  db_api_function_arn        = module.db_api.function_arn
+  alarm_sns_topic_arn        = module.alarms.alarm_sns_topic_arn
+}
+
 module "selfie_match_dispatcher" {
   source = "../Backend/selfie_match_dispatcher/infra"
 
@@ -246,6 +265,9 @@ module "api_gateway" {
 
   gallery_function_name = module.gallery.function_name
   gallery_function_arn  = module.gallery.function_arn
+
+  drive_import_function_name = module.drive_import.function_name
+  drive_import_function_arn  = module.drive_import.function_arn
 
   download_function_name = module.download.function_name
   download_function_arn  = module.download.function_arn

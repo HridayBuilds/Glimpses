@@ -1,4 +1,13 @@
-from DAO.dao import create_job, update_job_status
+from DAO.dao import create_drive_job, create_job, update_job_status
+
+_DRIVE_STATUS = {
+    "drive_downloading": "DOWNLOADING",
+    "drive_processing": "EXTRACTING",
+    "drive_failed": "FAILED",
+}
+_DRIVE_FIELDS = frozenset({"folderName", "totalCount", "downloadedCount", "downloadFailedCount",
+                           "skippedCount", "skippedFolders", "duplicateCount", "failedCount",
+                           "succeededCount", "errorMessage"})
 
 _STATUS_BY_ACTION = {
     "mark_extracting": "EXTRACTING",
@@ -10,6 +19,19 @@ _STATUS_BY_ACTION = {
 
 
 def handle_action(action, payload):
+    if action == "create_drive":
+        item = {key: payload[key] for key in ("jobId", "eventID", "uploaderID", "startedAt")}
+        item.update(eventUploaderKey=f"{item['eventID']}#{item['uploaderID']}", source="GOOGLE_DRIVE",
+                    status="CHECKING", succeededCount=0, failedCount=0)
+        create_drive_job(item)
+        return {"jobId": item["jobId"]}
+    if action in _DRIVE_STATUS or action == "drive_progress":
+        updates = {key: value for key, value in payload.get("updates", {}).items() if key in _DRIVE_FIELDS}
+        if action in _DRIVE_STATUS:
+            updates["status"] = _DRIVE_STATUS[action]
+        if updates:
+            update_job_status(payload["jobId"], updates)
+        return {"jobId": payload["jobId"]}
     if action == "create":
         return _create(payload)
     if action in _STATUS_BY_ACTION:

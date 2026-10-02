@@ -180,6 +180,16 @@ function UploadFlow() {
         <h1 className="mb-2 text-[30px] font-bold leading-[1.1] tracking-[-0.024em]">{title}</h1>
         <p className="mb-[26px] text-pretty text-[16px] leading-[1.55] text-white/55">{body}</p>
 
+        {phase === 'idle' && (
+          <button
+            onClick={() => navigate(`/app/events/${eventId}/upload/drive`)}
+            className="mb-4 w-full cursor-pointer rounded-2xl border border-white/15 bg-white/5 p-4 text-left transition-colors hover:bg-white/10"
+          >
+            <span className="block font-semibold">From Google Drive</span>
+            <span className="mt-1 block text-sm text-white/55">Import photos from a public folder.</span>
+          </button>
+        )}
+
         {(busy || phase === 'error') && (
           <div className="rounded-[18px] border border-white/[0.08] bg-white/[0.05] p-5">
             {phase === 'error' ? (

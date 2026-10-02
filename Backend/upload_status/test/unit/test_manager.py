@@ -126,3 +126,12 @@ def test_get_latest_job_raises_when_uploader_has_no_jobs(monkeypatch):
         assert False, "expected ValueError"
     except ValueError:
         pass
+
+
+def test_drive_status_exposes_progress_and_access_error(monkeypatch):
+    monkeypatch.setattr(manager, 'get_job', lambda job_id: _job(source='GOOGLE_DRIVE', status='FAILED', errorMessage='Share this folder publicly.', downloadedCount=3, skippedFolders=2))
+    result = manager.get_job_status({'eventID': 'evt_1', 'jobId': 'job_1', 'userID': 'user_1'})
+    assert result['source'] == 'GOOGLE_DRIVE'
+    assert result['downloadedCount'] == 3
+    assert result['skippedFolders'] == 2
+    assert result['errorMessage'] == 'Share this folder publicly.'

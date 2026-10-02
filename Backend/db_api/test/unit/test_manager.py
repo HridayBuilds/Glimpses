@@ -81,3 +81,19 @@ def test_unknown_action_raises():
         assert False, "expected ValueError"
     except ValueError:
         pass
+
+
+def test_drive_creation_owns_status_and_source(monkeypatch):
+    captured = []
+    monkeypatch.setattr(manager, 'create_drive_job', captured.append)
+    manager.handle_action('create_drive', {'jobId': 'j', 'eventID': 'e', 'uploaderID': 'u', 'startedAt': 'now', 'status': 'SUCCESS'})
+    assert captured[0]['status'] == 'CHECKING'
+    assert captured[0]['source'] == 'GOOGLE_DRIVE'
+    assert captured[0]['eventUploaderKey'] == 'e#u'
+
+
+def test_drive_progress_cannot_overwrite_identity_or_arbitrary_status(monkeypatch):
+    captured = []
+    monkeypatch.setattr(manager, 'update_job_status', lambda job_id, updates: captured.append(updates))
+    manager.handle_action('drive_downloading', {'jobId': 'j', 'updates': {'status': 'SUCCESS', 'eventID': 'other', 'downloadedCount': 2}})
+    assert captured == [{'downloadedCount': 2, 'status': 'DOWNLOADING'}]

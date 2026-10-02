@@ -35,10 +35,17 @@ def get_latest_job(payload):
 
 
 def _job_response(job):
-    return {
+    result = {
         "jobId": job["jobId"],
         "status": job["status"],
         "startedAt": job["startedAt"],
         "succeededCount": int(job.get("succeededCount", 0)),
         "failedCount": int(job.get("failedCount", 0)),
     }
+
+    if job.get("source") == "GOOGLE_DRIVE":
+        result.update(source=job["source"], folderName=job.get("folderName", "Google Drive folder"),
+                      errorMessage=job.get("errorMessage"))
+        for key in ("totalCount", "downloadedCount", "downloadFailedCount", "skippedCount", "skippedFolders", "duplicateCount"):
+            result[key] = int(job.get(key, 0))
+    return result

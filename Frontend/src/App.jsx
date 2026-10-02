@@ -23,6 +23,7 @@ import EventSettings from './pages/app/EventSettings'
 import ShareEvent from './pages/app/ShareEvent'
 import EventAnalytics from './pages/app/EventAnalytics'
 import UploadFlow from './pages/app/UploadFlow'
+import DriveImport from './pages/app/DriveImport'
 
 function App() {
   return (
@@ -119,6 +120,7 @@ function App() {
             </RequireAuth>
           }
         />
+        <Route path="/app/events/:eventId/upload/drive" element={<RequireAuth><DriveImport /></RequireAuth>} />
         <Route
           path="/app/profile"
           element={

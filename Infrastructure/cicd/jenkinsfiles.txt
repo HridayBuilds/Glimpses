@@ -7,6 +7,7 @@ Backend/heic_converter/cicd/Jenkinsfile
 Backend/db_api/cicd/Jenkinsfile
 Backend/download/cicd/Jenkinsfile
 Backend/ingestion/cicd/Jenkinsfile
+Backend/drive_import/cicd/Jenkinsfile
 Backend/selfie_match_dispatcher/cicd/Jenkinsfile
 Backend/notifications/cicd/Jenkinsfile
 Backend/profile/cicd/Jenkinsfile
