@@ -25,18 +25,21 @@ def test_kickoff_creates_pending_row_and_invokes_self_async(monkeypatch):
     )
 
     result = manager.kickoff(
-        {"eventID": "evt_1", "requesterID": "user_1", "photoIds": ["p1", "p2"]}
+        {"eventID": "evt_1", "requesterID": "user_1", "photoIds": ["p1", "p2"], "scope": "mine"}
     )
 
     download_id = result["downloadId"]
     assert created["downloadId"] == download_id
     assert created["eventID"] == "evt_1"
     assert created["requesterID"] == "user_1"
+    assert created["scope"] == "mine"
     assert created["status"] == "PENDING"
     assert invoked["payload"] == {
         "action": "build",
         "downloadId": download_id,
         "eventID": "evt_1",
+        "requesterID": "user_1",
+        "scope": "mine",
         "photoIds": ["p1", "p2"],
     }
 
@@ -53,13 +56,13 @@ def test_status_returns_ready_with_presigned_url(monkeypatch):
     monkeypatch.setattr(
         manager,
         "get_download",
-        lambda download_id: {"status": "READY", "s3Key": "downloads/event/evt_1/dl_1.zip"},
+        lambda download_id: {"status": "READY", "s3Key": "downloads/event/evt_1/dl_1/photos-of-me-evt_1.zip", "filename": "photos-of-me-evt_1.zip"},
     )
-    monkeypatch.setattr(manager, "generate_presigned_url", lambda bucket, key: f"https://example/{key}")
+    monkeypatch.setattr(manager, "generate_presigned_url", lambda bucket, key, filename: f"https://example/{key}")
 
     result = manager.status({"downloadId": "dl_1"})
 
-    assert result == {"status": "READY", "downloadUrl": "https://example/downloads/event/evt_1/dl_1.zip"}
+    assert result == {"status": "READY", "downloadUrl": "https://example/downloads/event/evt_1/dl_1/photos-of-me-evt_1.zip"}
 
 
 def test_status_raises_for_unknown_download_id(monkeypatch):
@@ -75,8 +78,8 @@ def test_status_raises_for_unknown_download_id(monkeypatch):
 def test_build_streams_photos_into_zip_and_marks_ready(monkeypatch):
     uploaded_parts = []
     status_updates = {}
-    monkeypatch.setattr(manager, "list_photo_keys", lambda event_id, photo_ids: ["photos/event/evt_1/p1.jpg"])
-    monkeypatch.setattr(manager, "create_multipart_upload", lambda bucket, key: "upload-1")
+    monkeypatch.setattr(manager, "list_photo_keys", lambda event_id, photo_ids, scope, requester_id: ["photos/event/evt_1/p1.jpg"])
+    monkeypatch.setattr(manager, "create_multipart_upload", lambda bucket, key, filename: "upload-1")
     monkeypatch.setattr(
         manager, "get_object_stream", lambda bucket, key: _FakeStreamingBody(b"fake-jpeg-bytes")
     )
@@ -91,19 +94,19 @@ def test_build_streams_photos_into_zip_and_marks_ready(monkeypatch):
     )
 
     result = manager.build(
-        {"downloadId": "dl_1", "eventID": "evt_1", "photoIds": ["p1"]}
+        {"downloadId": "dl_1", "eventID": "evt_1", "requesterID": "user_1", "scope": "mine", "photoIds": ["p1"]}
     )
 
     assert result == {"downloadId": "dl_1", "status": "READY"}
     assert uploaded_parts == [1]
-    assert status_updates == {"status": "READY", "s3Key": "downloads/event/evt_1/dl_1.zip"}
+    assert status_updates == {"status": "READY", "s3Key": "downloads/event/evt_1/dl_1/photos-of-me-evt_1.zip", "filename": "photos-of-me-evt_1.zip"}
 
 
 def test_build_marks_failed_and_aborts_multipart_on_error(monkeypatch):
     status_updates = {}
     aborted = {}
-    monkeypatch.setattr(manager, "list_photo_keys", lambda event_id, photo_ids: ["photos/event/evt_1/p1.jpg"])
-    monkeypatch.setattr(manager, "create_multipart_upload", lambda bucket, key: "upload-1")
+    monkeypatch.setattr(manager, "list_photo_keys", lambda event_id, photo_ids, scope, requester_id: ["photos/event/evt_1/p1.jpg"])
+    monkeypatch.setattr(manager, "create_multipart_upload", lambda bucket, key, filename: "upload-1")
 
     def _raise_get_object_stream(bucket, key):
         raise RuntimeError("S3 read failed")
@@ -124,5 +127,5 @@ def test_build_marks_failed_and_aborts_multipart_on_error(monkeypatch):
     except RuntimeError:
         pass
 
-    assert aborted == {"bucket": "glimpses-photos-test-bucket", "key": "downloads/event/evt_1/dl_1.zip", "upload_id": "upload-1"}
+    assert aborted == {"bucket": "glimpses-photos-test-bucket", "key": "downloads/event/evt_1/dl_1/everyone-photos-evt_1.zip", "upload_id": "upload-1"}
     assert status_updates == {"status": "FAILED"}

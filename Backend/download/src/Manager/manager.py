@@ -20,15 +20,20 @@ from DAO.dao import (
 )
 
 MIN_PART_SIZE = 5 * 1024 * 1024
+ZIP_NAMES = {"mine": "photos-of-me", "all": "everyone-photos"}
 
 
 def kickoff(payload):
+    scope = payload.get("scope", "all")
+    if scope not in ZIP_NAMES:
+        raise ValueError(f"Unknown download scope: {scope}")
     download_id = str(uuid.uuid4())
     create_download(
         {
             "downloadId": download_id,
             "eventID": payload["eventID"],
             "requesterID": payload["requesterID"],
+            "scope": scope,
             "status": "PENDING",
             "createdAt": datetime.now(timezone.utc).isoformat(),
         }
@@ -39,6 +44,8 @@ def kickoff(payload):
             "action": "build",
             "downloadId": download_id,
             "eventID": payload["eventID"],
+            "requesterID": payload["requesterID"],
+            "scope": scope,
             "photoIds": payload.get("photoIds"),
         },
     )
@@ -49,18 +56,22 @@ def build(payload):
     download_id = payload["downloadId"]
     event_id = payload["eventID"]
     bucket = os.environ["PHOTOS_BUCKET"]
-    zip_key = f"downloads/event/{event_id}/{download_id}.zip"
+    scope = payload.get("scope", "all")
+    if scope not in ZIP_NAMES:
+        raise ValueError(f"Unknown download scope: {scope}")
+    filename = f"{ZIP_NAMES[scope]}-{event_id}.zip"
+    zip_key = f"downloads/event/{event_id}/{download_id}/{filename}"
 
     try:
-        photo_keys = list_photo_keys(event_id, payload.get("photoIds"))
-        upload_id = create_multipart_upload(bucket, zip_key)
+        photo_keys = list_photo_keys(event_id, payload.get("photoIds"), scope, payload.get("requesterID"))
+        upload_id = create_multipart_upload(bucket, zip_key, filename)
         try:
             parts = _stream_zip_to_s3(bucket, zip_key, upload_id, photo_keys)
             complete_multipart_upload(bucket, zip_key, upload_id, parts)
         except Exception:
             abort_multipart_upload(bucket, zip_key, upload_id)
             raise
-        update_download_status(download_id, {"status": "READY", "s3Key": zip_key})
+        update_download_status(download_id, {"status": "READY", "s3Key": zip_key, "filename": filename})
     except Exception:
         update_download_status(download_id, {"status": "FAILED"})
         raise
@@ -104,5 +115,5 @@ def status(payload):
 
     result = {"status": item["status"]}
     if item["status"] == "READY":
-        result["downloadUrl"] = generate_presigned_url(os.environ["PHOTOS_BUCKET"], item["s3Key"])
+        result["downloadUrl"] = generate_presigned_url(os.environ["PHOTOS_BUCKET"], item["s3Key"], item.get("filename"))
     return result

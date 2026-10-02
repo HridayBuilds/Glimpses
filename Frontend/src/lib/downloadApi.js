@@ -1,7 +1,10 @@
 import api from './api'
 
-export async function requestDownload(eventId, photoIds) {
-  const { data } = await api.post(`/events/${eventId}/photos/download`, photoIds ? { photoIds } : undefined)
+export async function requestDownload(eventId, photoIds, scope) {
+  const { data } = await api.post(`/events/${eventId}/photos/download`, {
+    scope,
+    ...(photoIds ? { photoIds } : {}),
+  })
   return data
 }
 

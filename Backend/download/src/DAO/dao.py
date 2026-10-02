@@ -1,5 +1,6 @@
 import json
 import os
+import time
 
 import boto3
 
@@ -13,6 +14,10 @@ def _downloads_table():
 
 def _photos_table():
     return boto3.resource("dynamodb").Table(os.environ["PHOTOS_TABLE_NAME"])
+
+
+def _event_attendees_table():
+    return boto3.resource("dynamodb").Table(os.environ["EVENT_ATTENDEES_TABLE_NAME"])
 
 
 def _s3():
@@ -51,13 +56,20 @@ def update_download_status(download_id: str, updates: dict) -> None:
     )
 
 
-def list_photo_keys(event_id: str, photo_ids: list[str] | None) -> list[str]:
+def list_photo_keys(event_id: str, photo_ids: list[str] | None, scope: str = "all", requester_id: str | None = None) -> list[str]:
+    if scope == "mine":
+        attendee = _event_attendees_table().get_item(Key={"userID": requester_id, "eventID": event_id}).get("Item")
+        matched_ids = set(attendee.get("matchedPhotoIDs", set())) if attendee else set()
+        requested_ids = [photo_id for photo_id in photo_ids if photo_id in matched_ids] if photo_ids else list(matched_ids)
+        return _batch_get_photo_keys(event_id, requested_ids)
     if photo_ids:
-        return _batch_get_photo_keys(photo_ids)
+        return _batch_get_photo_keys(event_id, photo_ids)
     return _query_all_photo_keys(event_id)
 
 
-def _batch_get_photo_keys(photo_ids: list[str]) -> list[str]:
+def _batch_get_photo_keys(event_id: str, photo_ids: list[str]) -> list[str]:
+    if not photo_ids:
+        return []
     dynamodb = boto3.resource("dynamodb")
     table_name = _photos_table().name
     keys = [{"photoID": photo_id} for photo_id in photo_ids]
@@ -65,9 +77,18 @@ def _batch_get_photo_keys(photo_ids: list[str]) -> list[str]:
     items = []
     for i in range(0, len(keys), BATCH_GET_LIMIT):
         batch = keys[i : i + BATCH_GET_LIMIT]
-        response = dynamodb.batch_get_item(RequestItems={table_name: {"Keys": batch}})
-        items.extend(response["Responses"][table_name])
-    return [item["s3Key"] for item in items]
+        pending = {table_name: {"Keys": batch}}
+        attempts = 0
+        while pending:
+            response = dynamodb.batch_get_item(RequestItems=pending)
+            items.extend(response.get("Responses", {}).get(table_name, []))
+            pending = response.get("UnprocessedKeys", {})
+            if pending:
+                attempts += 1
+                if attempts >= 8:
+                    raise RuntimeError("Photo lookup remained unprocessed after retries")
+                time.sleep(min(0.1 * 2 ** (attempts - 1), 1))
+    return [item["s3Key"] for item in items if item["eventID"] == event_id]
 
 
 def _query_all_photo_keys(event_id: str) -> list[str]:
@@ -92,8 +113,11 @@ def get_object_stream(bucket: str, key: str):
     return _s3().get_object(Bucket=bucket, Key=key)["Body"]
 
 
-def create_multipart_upload(bucket: str, key: str) -> str:
-    return _s3().create_multipart_upload(Bucket=bucket, Key=key)["UploadId"]
+def create_multipart_upload(bucket: str, key: str, filename: str) -> str:
+    return _s3().create_multipart_upload(
+        Bucket=bucket, Key=key, ContentType="application/zip",
+        ContentDisposition=f'attachment; filename="{filename}"',
+    )["UploadId"]
 
 
 def upload_part(bucket: str, key: str, upload_id: str, part_number: int, body: bytes) -> str:
@@ -112,8 +136,11 @@ def abort_multipart_upload(bucket: str, key: str, upload_id: str) -> None:
     _s3().abort_multipart_upload(Bucket=bucket, Key=key, UploadId=upload_id)
 
 
-def generate_presigned_url(bucket: str, key: str, expires_in: int = 900) -> str:
-    return _s3().generate_presigned_url("get_object", Params={"Bucket": bucket, "Key": key}, ExpiresIn=expires_in)
+def generate_presigned_url(bucket: str, key: str, filename: str | None = None, expires_in: int = 900) -> str:
+    params = {"Bucket": bucket, "Key": key}
+    if filename:
+        params["ResponseContentDisposition"] = f'attachment; filename="{filename}"'
+    return _s3().generate_presigned_url("get_object", Params=params, ExpiresIn=expires_in)
 
 
 def invoke_self_async(function_name: str, payload: dict) -> None:

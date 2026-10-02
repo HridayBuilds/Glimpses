@@ -27,6 +27,20 @@ resource "aws_iam_role_policy" "photos_access" {
   policy = data.aws_iam_policy_document.photos_access.json
 }
 
+data "aws_iam_policy_document" "event_attendees_access" {
+  statement {
+    effect    = "Allow"
+    actions   = ["dynamodb:GetItem"]
+    resources = [var.event_attendees_table_arn]
+  }
+}
+
+resource "aws_iam_role_policy" "event_attendees_access" {
+  name   = "${var.name_prefix}-download-event-attendees-access"
+  role   = aws_iam_role.this.id
+  policy = data.aws_iam_policy_document.event_attendees_access.json
+}
+
 data "aws_iam_policy_document" "photos_bucket_access" {
   statement {
     effect    = "Allow"

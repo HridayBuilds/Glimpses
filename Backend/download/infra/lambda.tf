@@ -11,10 +11,11 @@ resource "aws_lambda_function" "this" {
 
   environment {
     variables = {
-      DOWNLOADS_TABLE_NAME = var.downloads_table_name
-      PHOTOS_TABLE_NAME    = var.photos_table_name
-      PHOTOS_BUCKET        = var.photos_bucket_name
-      FUNCTION_NAME        = "${var.name_prefix}-download"
+      DOWNLOADS_TABLE_NAME       = var.downloads_table_name
+      PHOTOS_TABLE_NAME          = var.photos_table_name
+      EVENT_ATTENDEES_TABLE_NAME = var.event_attendees_table_name
+      PHOTOS_BUCKET              = var.photos_bucket_name
+      FUNCTION_NAME              = "${var.name_prefix}-download"
     }
   }
 

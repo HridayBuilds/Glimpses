@@ -36,7 +36,7 @@ function Gallery({ eventId, eventName, isOrganizer, isArchived, canUpload }) {
     enabled: zip === 'building' && !!downloadId,
     refetchInterval: (query) => {
       const status = query.state.data?.status
-      return status === 'READY' || status === 'FAILED' ? false : 2500
+      return status === 'READY' || status === 'FAILED' ? false : 5000
     },
   })
 
@@ -58,7 +58,7 @@ function Gallery({ eventId, eventName, isOrganizer, isArchived, canUpload }) {
     setZip('building')
     setZipUrl(null)
     try {
-      const { downloadId: newDownloadId } = await requestDownload(eventId, selected.length ? selected : undefined)
+      const { downloadId: newDownloadId } = await requestDownload(eventId, selected.length ? selected : undefined, mode)
       setDownloadId(newDownloadId)
     } catch {
       setZip(null)

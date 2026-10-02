@@ -40,14 +40,16 @@ module "db_api" {
 module "download" {
   source = "../Backend/download/infra"
 
-  deploy_artifacts_bucket = module.buckets.deploy_artifacts_bucket_name
-  downloads_table_name    = module.dynamodb.table_names["downloads"]
-  downloads_table_arn     = module.dynamodb.table_arns["downloads"]
-  photos_table_name       = module.dynamodb.table_names["photos"]
-  photos_table_arn        = module.dynamodb.table_arns["photos"]
-  photos_bucket_name      = module.buckets.photos_bucket_name
-  photos_bucket_arn       = module.buckets.photos_bucket_arn
-  alarm_sns_topic_arn     = module.alarms.alarm_sns_topic_arn
+  deploy_artifacts_bucket    = module.buckets.deploy_artifacts_bucket_name
+  downloads_table_name       = module.dynamodb.table_names["downloads"]
+  downloads_table_arn        = module.dynamodb.table_arns["downloads"]
+  photos_table_name          = module.dynamodb.table_names["photos"]
+  photos_table_arn           = module.dynamodb.table_arns["photos"]
+  event_attendees_table_name = module.dynamodb.table_names["event_attendees"]
+  event_attendees_table_arn  = module.dynamodb.table_arns["event_attendees"]
+  photos_bucket_name         = module.buckets.photos_bucket_name
+  photos_bucket_arn          = module.buckets.photos_bucket_arn
+  alarm_sns_topic_arn        = module.alarms.alarm_sns_topic_arn
 }
 
 module "ingestion" {

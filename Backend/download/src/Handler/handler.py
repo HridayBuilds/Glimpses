@@ -10,7 +10,7 @@ def kickoff(event_id: str):
     requester_id = app.current_event.request_context.authorizer.claims["sub"]
     body = app.current_event.json_body or {}
     return manager.kickoff(
-        {"eventID": event_id, "requesterID": requester_id, "photoIds": body.get("photoIds")}
+        {"eventID": event_id, "requesterID": requester_id, "photoIds": body.get("photoIds"), "scope": body.get("scope", "all")}
     )
 
 

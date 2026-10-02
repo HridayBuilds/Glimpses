@@ -42,4 +42,15 @@ resource "aws_s3_bucket_lifecycle_configuration" "photos" {
       days = var.downloads_expiration_days
     }
   }
+
+  rule {
+    id     = "abort-incomplete-multipart-uploads"
+    status = "Enabled"
+
+    filter {}
+
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 1
+    }
+  }
 }

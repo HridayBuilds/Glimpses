@@ -29,6 +29,16 @@ variable "photos_table_arn" {
   type        = string
 }
 
+variable "event_attendees_table_name" {
+  description = "EventAttendees table used to resolve Photos of me downloads"
+  type        = string
+}
+
+variable "event_attendees_table_arn" {
+  description = "EventAttendees table ARN, for read access to matched photo IDs"
+  type        = string
+}
+
 variable "photos_bucket_name" {
   description = "Name of the shared glimpses-photos S3 bucket (T-09) — one bucket, six prefixes"
   type        = string

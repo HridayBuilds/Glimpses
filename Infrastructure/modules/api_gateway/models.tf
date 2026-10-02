@@ -93,6 +93,7 @@ resource "aws_api_gateway_model" "download_kickoff_body" {
     type      = "object"
     properties = {
       photoIds = { type = "array", items = { type = "string" } }
+      scope    = { type = "string", enum = ["mine", "all"] }
     }
   })
 }
