@@ -12,3 +12,8 @@ output "api_gateway_invoke_url" {
   description = "API base URL, for the frontend's .env.production"
   value       = module.api_gateway.invoke_url
 }
+
+output "ses_sender_email" {
+  description = "Email identity configured for guest notifications"
+  value       = module.email.sender_email
+}

@@ -66,7 +66,7 @@ def test_get_then_put_profile_round_trip():
     get_response = lambda_handler(_api_event("GET", "/profile", claims={"sub": "user_1"}), _FakeLambdaContext())
     assert get_response["statusCode"] == 200
     get_result = json.loads(get_response["body"])
-    assert get_result == {"userID": "user_1", "displayName": "Meera", "email": "meera@example.com"}
+    assert get_result == {"userID": "user_1", "displayName": "Meera", "email": "meera@example.com", "emailNotificationsEnabled": True}
     assert "selfieUrl" not in get_result
 
     put_response = lambda_handler(
@@ -77,6 +77,13 @@ def test_get_then_put_profile_round_trip():
 
     updated_row = users_table.get_item(Key={"userID": "user_1"})["Item"]
     assert updated_row["displayName"] == "Meera Nair"
+
+    preference_response = lambda_handler(
+        _api_event("PUT", "/profile/email-notifications", body={"enabled": False}, claims={"sub": "user_1"}),
+        _FakeLambdaContext(),
+    )
+    assert preference_response["statusCode"] == 200
+    assert users_table.get_item(Key={"userID": "user_1"})["Item"]["emailNotificationsEnabled"] is False
 
 
 @mock_aws
@@ -98,6 +105,7 @@ def test_get_profile_creates_user_on_first_call():
         "userID": "user_new",
         "displayName": "Meera",
         "email": "meera@example.com",
+        "emailNotificationsEnabled": True,
     }
     assert users_table.get_item(Key={"userID": "user_new"})["Item"]["email"] == "meera@example.com"
 

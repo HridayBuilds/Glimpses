@@ -11,6 +11,11 @@ export async function updateProfile(displayName) {
   return data
 }
 
+export async function updateEmailNotifications(enabled) {
+  const { data } = await api.put('/profile/email-notifications', { enabled })
+  return data
+}
+
 // Presigned-PUT flow: mint the URL, upload the bytes directly to S3 (no auth
 // header, not through the `api` instance), then confirm so the backend can
 // run face detection on what actually landed.

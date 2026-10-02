@@ -88,3 +88,16 @@ resource "aws_iam_role_policy" "rekognition_access" {
   role   = aws_iam_role.this.id
   policy = data.aws_iam_policy_document.rekognition_access.json
 }
+
+data "aws_iam_policy_document" "invoke_notifications" {
+  statement {
+    actions   = ["lambda:InvokeFunction"]
+    resources = [var.notifications_function_arn]
+  }
+}
+
+resource "aws_iam_role_policy" "invoke_notifications" {
+  name   = "${var.name_prefix}-cascade-delete-invoke-notifications"
+  role   = aws_iam_role.this.id
+  policy = data.aws_iam_policy_document.invoke_notifications.json
+}

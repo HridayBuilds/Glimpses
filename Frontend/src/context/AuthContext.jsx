@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, useCallback } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import * as cognito from '../lib/cognito'
+import { getProfile } from '../lib/profileApi'
 
 const AuthContext = createContext(null)
 
@@ -13,6 +14,12 @@ export function AuthProvider({ children }) {
   const queryClient = useQueryClient()
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    if (!user) return
+    // The first authenticated profile read creates the Users row used by notifications.
+    getProfile().catch(() => {})
+  }, [user])
 
   useEffect(() => {
     cognito.getCurrentSession().then((session) => {

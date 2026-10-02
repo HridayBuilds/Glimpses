@@ -8,6 +8,7 @@ from DAO.dao import (
     delete_event_row,
     delete_s3_objects,
     get_event,
+    invoke_deleted_notifications,
     query_attendees_by_event,
     query_faces_by_event,
     query_photos_by_event,
@@ -39,4 +40,5 @@ def delete_event_cascade(event_id, deleted_event=None):
 
     if deleted_event is None:
         delete_event_row(event_id)
+    invoke_deleted_notifications(event, [row["userID"] for row in attendees if row.get("status") == "ATTENDEE"])
     return {"eventID": event_id, "deleted": True}

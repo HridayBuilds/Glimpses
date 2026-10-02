@@ -10,6 +10,12 @@ variable "alarm_email" {
   default     = "johndoe@gmail.com"
 }
 
+variable "ses_sender_email" {
+  description = "Verified SES sender address for guest notifications"
+  type        = string
+  default     = "hriday.mulchandani2027@gmail.com"
+}
+
 variable "frontend_domain_name" {
   description = "Frontend app's CloudFront distribution's default domain, fetched by Jenkins from Frontend/frontend's own Terraform state and passed in at apply time. Only module.events consumes it, but Terraform resolves every root variable before honoring -target, so every other per-module Jenkins job needs a default here to keep applying."
   type        = string

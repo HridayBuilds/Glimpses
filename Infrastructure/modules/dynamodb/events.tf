@@ -4,7 +4,7 @@ resource "aws_dynamodb_table" "events" {
   hash_key     = "eventID"
 
   stream_enabled   = true
-  stream_view_type = "OLD_IMAGE"
+  stream_view_type = "NEW_AND_OLD_IMAGES"
 
   attribute {
     name = "eventID"

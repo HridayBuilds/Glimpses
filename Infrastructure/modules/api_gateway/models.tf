@@ -69,6 +69,21 @@ resource "aws_api_gateway_model" "event_update" {
   })
 }
 
+resource "aws_api_gateway_model" "email_notifications_update" {
+  rest_api_id  = aws_api_gateway_rest_api.this.id
+  name         = "EmailNotificationsUpdate"
+  content_type = "application/json"
+  schema = jsonencode({
+    "$schema" = "http://json-schema.org/draft-04/schema#"
+    title     = "EmailNotificationsUpdate"
+    type      = "object"
+    properties = {
+      enabled = { type = "boolean" }
+    }
+    required = ["enabled"]
+  })
+}
+
 resource "aws_api_gateway_model" "event_join_body" {
   rest_api_id  = aws_api_gateway_rest_api.this.id
   name         = "EventJoinBody"

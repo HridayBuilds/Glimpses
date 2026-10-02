@@ -11,9 +11,15 @@ try {
     jenkinsfiles = readFileFromWorkspace('jenkinsfiles.txt').readLines().findAll { it.trim() }
 }
 
-def dispatcherJenkinsfile = 'Backend/selfie_match_dispatcher/cicd/Jenkinsfile'
-if (!jenkinsfiles.contains(dispatcherJenkinsfile)) {
-    jenkinsfiles.add(dispatcherJenkinsfile)
+def requiredJenkinsfiles = [
+    'Backend/selfie_match_dispatcher/cicd/Jenkinsfile',
+    'Infrastructure/modules/email/cicd/Jenkinsfile',
+    'Backend/notifications/cicd/Jenkinsfile',
+]
+requiredJenkinsfiles.each { path ->
+    if (!jenkinsfiles.contains(path)) {
+        jenkinsfiles.add(path)
+    }
 }
 
 jenkinsfiles.each { path ->

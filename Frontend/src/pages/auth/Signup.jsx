@@ -121,6 +121,9 @@ function Signup() {
         >
           {submitting ? 'Creating account…' : 'Create account'}
         </button>
+        <p className="text-[12px] leading-relaxed text-white/45">
+          Glimpses emails you about your events and photos. You can turn these emails off in your profile.
+        </p>
       </form>
       <div className="my-7 h-px bg-white/[0.07]" />
       <div className="text-center text-[15px] text-white/55">

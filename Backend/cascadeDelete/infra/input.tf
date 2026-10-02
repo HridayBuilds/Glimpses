@@ -68,3 +68,6 @@ variable "alarm_sns_topic_arn" {
   description = "ARN of the shared operator-alerts SNS topic (T-07), subscribed alarms publish here"
   type        = string
 }
+
+variable "notifications_function_name" { type = string }
+variable "notifications_function_arn" { type = string }

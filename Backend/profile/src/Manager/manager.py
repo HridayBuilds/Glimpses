@@ -12,6 +12,7 @@ from DAO.dao import (
     get_user,
     invoke_selfie_match_dispatcher,
     set_current_selfie,
+    set_email_notifications_enabled,
     selfie_exists,
     update_display_name,
 )
@@ -41,7 +42,12 @@ def get_profile(payload):
 
     bucket = os.environ["PHOTOS_BUCKET"]
     key = user.get("selfieKey") or _selfie_key(user_id)
-    result = {"userID": user["userID"], "displayName": user["displayName"], "email": user["email"]}
+    result = {
+        "userID": user["userID"],
+        "displayName": user["displayName"],
+        "email": user["email"],
+        "emailNotificationsEnabled": user.get("emailNotificationsEnabled", True),
+    }
     if selfie_exists(bucket, key):
         result["selfieUrl"] = generate_presigned_get_url(bucket, key)
     return result
@@ -51,6 +57,14 @@ def update_profile(payload):
     user_id = payload["userID"]
     update_display_name(user_id, payload["displayName"])
     return {"userID": user_id}
+
+
+def update_email_notifications(payload):
+    enabled = payload.get("enabled")
+    if type(enabled) is not bool:
+        raise ValueError("enabled must be a boolean")
+    set_email_notifications_enabled(payload["userID"], enabled)
+    return {"emailNotificationsEnabled": enabled}
 
 
 def mint_selfie_upload_url(payload):
