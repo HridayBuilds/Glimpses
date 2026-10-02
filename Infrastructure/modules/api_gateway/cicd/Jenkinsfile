@@ -6,6 +6,16 @@ pipeline {
     }
 
     stages {
+        stage('Fetch frontend domain') {
+            steps {
+                dir('Frontend/frontend') {
+                    sh 'terraform init'
+                    script {
+                        env.FRONTEND_DOMAIN = sh(script: 'terraform output -raw distribution_domain_name', returnStdout: true).trim()
+                    }
+                }
+            }
+        }
         stage('Terraform Init') {
             steps {
                 dir('Infrastructure') {
@@ -20,10 +30,17 @@ pipeline {
                 }
             }
         }
+        stage('Create new API paths') {
+            steps {
+                dir('Infrastructure') {
+                    sh 'terraform apply -target=module.api_gateway.aws_api_gateway_resource.event_drive_import -target=module.api_gateway.aws_api_gateway_resource.profile_email_notifications -var frontend_domain_name=${FRONTEND_DOMAIN} -auto-approve'
+                }
+            }
+        }
         stage('Terraform Apply - api_gateway') {
             steps {
                 dir('Infrastructure') {
-                    sh 'terraform apply -target=module.api_gateway -auto-approve'
+                    sh 'terraform apply -target=module.api_gateway -var frontend_domain_name=${FRONTEND_DOMAIN} -auto-approve'
                 }
             }
         }

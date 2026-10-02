@@ -400,7 +400,35 @@ Use a dedicated IAM principal with permission to create the AWS services in this
 
 These permissions are broad and intended for a dedicated deployment identity. Create its access key in IAM and keep the secret out of the repository.
 
-The `email` Jenkins job additionally needs permission to create, read, and delete SES email identities. The SES production-access request also needs account-level SES permissions. Give these to the deployment identity before running the new job; the notification Lambda itself has only `ses:SendEmail` permission for the configured sender identity.
+The `email` Jenkins job needs SES identity permissions that the policies above do not include. In IAM, add this inline policy to the deployment user (`glimpses-terraform` in this account) before running `email`. This example uses the project's current account, Region, and sender; change the account ID and sender address if you deploy your own copy:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ses:CreateEmailIdentity",
+        "ses:GetEmailIdentity",
+        "ses:PutEmailIdentityFeedbackAttributes",
+        "ses:DeleteEmailIdentity",
+        "ses:ListTagsForResource",
+        "ses:TagResource",
+        "ses:UntagResource"
+      ],
+      "Resource": "arn:aws:ses:ap-south-1:921274142861:identity/hriday.mulchandani2027@gmail.com"
+    },
+    {
+      "Effect": "Allow",
+      "Action": "ses:GetAccount",
+      "Resource": "*"
+    }
+  ]
+}
+```
+
+Terraform reads SES identity tags immediately after creating the identity, even when this module declares no tags. If `email` fails on `ses:ListTagsForResource` after creation, add the missing permission and check both SES and Terraform state before rerunning. A failed create can leave the existing identity marked **tainted**, which makes the next apply delete and recreate it. If the identity exists in SES and is recorded in state, clear only that flag with `terraform untaint module.email.aws_sesv2_email_identity.sender` from `Infrastructure`, then run `terraform plan -target=module.email` and confirm the sender will not be replaced. Recreating an email identity requires verifying the new SES email again. The `notifications` Jenkins preflight also reads the account's production-access status, which requires `ses:GetAccount` with resource `*`; this permission only reads status and does not request production access. Requesting SES production access is a separate account-level action done by an authorized AWS user. The notification Lambda has only `ses:SendEmail` permission for the configured sender identity.
 
 Install AWS CLI, Terraform 1.10 or newer, Python with `pip` and `zip`, Node.js with `npm`, and Jenkins with the Job DSL and Pipeline plugins. Jenkins must have access to the same AWS profile and tools. Configure the AWS CLI profile that the existing Jenkinsfiles use:
 
@@ -450,7 +478,22 @@ Set `rekognition_index_max_concurrency` and `rekognition_search_max_concurrency`
 
 1. In [Google Cloud Console](https://console.cloud.google.com/apis/library/drive.googleapis.com), select your project and enable Google Drive API. Create an API key under APIs & Services → Credentials and restrict its API access to Google Drive API. Glimpses uses API-key access to public folders only; no OAuth consent flow or service account is needed. This key is unrelated to Graphify's Gemini key.
 2. In AWS Systems Manager → Parameter Store in `ap-south-1`, create a **Standard SecureString** parameter named `/glimpses/google-drive/api-key` and paste the key as its value. Use the default SSM encryption key. The secret is not stored in Terraform, source code, or the frontend. The new Lambda has access only to this parameter. Restart/redeploy its runtime after rotating the key because it caches the decrypted value per execution environment.
-3. Give the Jenkins deployment identity `ssm:GetParameter` on that parameter for its presence check. The `drive_import` job checks the parameter name without printing or decrypting the secret before it builds and deploys the Lambda and workflow.
+3. Add this inline policy to the Jenkins deployment IAM user before running `drive_import`. The parameter ARN must use the account and Region where you created the SecureString; this example uses the project's current account:
+
+   ```json
+   {
+     "Version": "2012-10-17",
+     "Statement": [
+       {
+         "Effect": "Allow",
+         "Action": "ssm:GetParameter",
+         "Resource": "arn:aws:ssm:ap-south-1:921274142861:parameter/glimpses/google-drive/api-key"
+       }
+     ]
+   }
+   ```
+
+   The `drive_import` job queries only the parameter name, without requesting decryption or printing the key. The Lambda's own Terraform role policy grants the runtime access to the SecureString and its KMS key. Because this parameter uses the default `aws/ssm` key, a principal granted `ssm:GetParameter` could also request its decrypted value outside this Jenkins check; keep the policy scoped to this one parameter.
 4. On an existing deployment, rerun `glimpses-seed`, then run **`buckets → db_api → drive_import → upload_status → api_gateway → frontend-app`**. `ingestion` must already be deployed. The original `state_machine` job does not need to run for this feature. On a fresh deployment, complete the Google/SSM setup before the new job in the normal order below.
 5. Test a small public folder, an inaccessible folder, mixed photos/non-photos/subfolders, a duplicate import, and a larger folder that requires pagination. Check both the gallery and job counts. Local mocked tests and workflow validation do not replace a live Google/AWS smoke test.
 
@@ -492,6 +535,9 @@ heic_converter → db_api → download → ingestion → drive_import → selfie
 ```
 
 `selfie_match_dispatcher` needs ingestion deployed before it, and profile needs the dispatcher deployed before it. `cascadeDelete` must be ready before `events` and `gallery`, which invoke it. The `events` job reads the frontend distribution domain from the frontend Terraform state and passes it into its Terraform apply. `state_machine` needs the ingestion and `db_api` Lambda ARNs. `api_gateway` needs the API Lambda ARNs and Cognito user pool, so it comes last among backend jobs.
+
+The `api_gateway` job also passes the frontend domain to Terraform so its dependency refresh does not remove that setting from the events Lambda. It first applies the new Drive import and email-preference path resources; their API Gateway IDs must exist before the module can plan CORS `OPTIONS` methods keyed by those IDs. Its second apply deploys the methods, integrations, and API stage.
+
 `notifications` reads the frontend distribution domain from the frontend Terraform state. Run `dynamodb` before it because the new Notifications table and Jobs stream are required. Run `cascadeDelete` after `notifications` because it invokes that Lambda when event cleanup succeeds. Rerun `api_gateway` and `frontend-app` to expose the Profile email switch.
 
 The backend outputs needed by the browser should now be available:
