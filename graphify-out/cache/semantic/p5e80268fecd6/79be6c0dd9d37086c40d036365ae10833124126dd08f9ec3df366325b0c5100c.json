@@ -1,0 +1,1 @@
+{"nodes": [{"id": "backend_membership", "label": "Membership Lambda", "file_type": "code", "source_file": "Backend/membership/requirements.txt", "rationale": "Handles joining/leaving events, listing attendees, and access-code based joining."}], "edges": [], "hyperedges": []}

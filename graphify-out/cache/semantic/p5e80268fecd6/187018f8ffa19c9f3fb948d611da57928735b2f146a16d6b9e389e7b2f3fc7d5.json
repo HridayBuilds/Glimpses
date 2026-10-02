@@ -1,0 +1,1 @@
+{"nodes": [{"id": "backend_profile", "label": "Profile Lambda", "file_type": "code", "source_file": "Backend/profile/requirements.txt", "rationale": "Uploads/deletes selfies; reads and updates basic profile info."}], "edges": [], "hyperedges": []}

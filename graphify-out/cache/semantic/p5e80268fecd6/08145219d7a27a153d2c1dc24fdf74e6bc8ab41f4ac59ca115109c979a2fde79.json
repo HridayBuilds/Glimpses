@@ -1,0 +1,1 @@
+{"nodes": [{"id": "backend_cascadedelete", "label": "Cascade Delete Lambda", "file_type": "code", "source_file": "Backend/cascadeDelete/requirements.txt", "rationale": "Tears down S3 objects, Rekognition collections, and DB rows for deleted events."}], "edges": [], "hyperedges": []}

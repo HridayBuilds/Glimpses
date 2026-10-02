@@ -1,0 +1,1 @@
+{"nodes": [{"id": "backend_gallery", "label": "Gallery Lambda", "file_type": "code", "source_file": "Backend/gallery/requirements.txt", "rationale": "Lists event photos and returns time-limited CloudFront-signed URLs."}], "edges": [], "hyperedges": []}

@@ -1,0 +1,1 @@
+{"nodes": [{"id": "backend_ingestion", "label": "Ingestion Lambda", "file_type": "code", "source_file": "Backend/ingestion/requirements.txt", "rationale": "Core engine for unpacking zips, hashing, thumbnailing, and indexing faces via Rekognition."}], "edges": [], "hyperedges": []}

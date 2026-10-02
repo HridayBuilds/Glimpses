@@ -1,0 +1,1 @@
+{"nodes": [{"id": "assets_step_function_pipeline_graph", "label": "AWS Step Function Workflow", "file_type": "image", "source_file": "assets/step-function/pipeline-graph.png", "rationale": "Visual representation of the ingestion pipeline including IndexPhotos and MatchAttendees stages."}], "edges": [], "hyperedges": []}

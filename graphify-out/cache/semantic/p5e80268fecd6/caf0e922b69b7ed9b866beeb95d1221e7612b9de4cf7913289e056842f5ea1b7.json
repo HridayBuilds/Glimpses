@@ -1,0 +1,1 @@
+{"nodes": [{"id": "backend_upload_status", "label": "Upload Status Lambda", "file_type": "code", "source_file": "Backend/upload_status/requirements.txt", "rationale": "Mints presigned S3 upload URLs and provides progress polling for the frontend."}], "edges": [], "hyperedges": []}
