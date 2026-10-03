@@ -1,6 +1,4 @@
 locals {
-  # Read the original template without changing its deployed workflow. Processing
-  # fixes in that template are inherited when this separate module is redeployed.
   ingestion = jsondecode(templatefile("${path.module}/../../../Infrastructure/modules/state_machine/templates/ingestion_pipeline.asl.json.tftpl", {
     ingestion_function_arn             = var.ingestion_function_arn
     db_api_function_arn                = var.db_api_function_arn
@@ -20,7 +18,6 @@ locals {
     StartAt       = "DriveInitialize"
     States = merge(local.shared_states, local.drive_states, {
       SummarizeResults = merge(local.ingestion.States.SummarizeResults, { Next = "DriveCombine" })
-      # A matching failure must not produce a completion email claiming success.
       MatchAttendees = merge(local.ingestion.States.MatchAttendees, { ToleratedFailurePercentage = 0 })
     })
   }

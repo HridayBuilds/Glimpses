@@ -105,6 +105,22 @@ def test_access_revoked_is_individual_failure(monkeypatch):
     assert 'Anyone with the link' in result['reason']
 
 
+def test_temporary_download_error_reaches_step_functions_retry(monkeypatch):
+    monkeypatch.setattr(manager, '_authorize', Mock())
+    monkeypatch.setattr(drive, 'download', Mock(side_effect=drive.DriveTransientError('Temporary rejection')))
+    with pytest.raises(drive.DriveTransientError, match='Temporary rejection'):
+        manager.download_file(payload(id='photo', name='photo.jpg'), None)
+
+
+def test_download_worker_retries_transient_google_errors_with_backoff():
+    workflow = json.loads((Path(__file__).resolve().parents[2] / 'infra' / 'drive_states.json.tftpl').read_text())
+    retries = workflow['DriveDownload']['ItemProcessor']['States']['DownloadOne']['Retry']
+    google_retry = next(retry for retry in retries if 'DriveTransientError' in retry['ErrorEquals'])
+    assert google_retry['MaxAttempts'] >= 3
+    assert google_retry['BackoffRate'] > 1
+    assert google_retry['JitterStrategy'] == 'FULL'
+
+
 def test_collect_keeps_successes_and_counts_task_failures(monkeypatch):
     files = {
         'manifest': {'ResultFiles': {'SUCCEEDED': [{'Key': 'ok'}], 'FAILED': [{'Key': 'bad'}]}},
@@ -122,6 +138,24 @@ def test_collect_keeps_successes_and_counts_task_failures(monkeypatch):
     assert result['page'] == 1
     manager.collect_page(payload(downloadResultsKey='manifest'))
     assert update.call_args_list[0] == update.call_args_list[1]
+
+
+def test_collect_explains_google_rejection_after_task_retries(monkeypatch):
+    files = {
+        'manifest': {'ResultFiles': {'FAILED': [{'Key': 'bad'}]}},
+        'bad': [{'Input': json.dumps({'name': 'photo.jpg'}), 'Error': 'States.TaskFailed',
+                 'Cause': json.dumps({'errorType': 'DriveTransientError'})}],
+    }
+    monkeypatch.setattr(dao, 'get_json', files.__getitem__)
+    write = Mock()
+    monkeypatch.setattr(dao, 'put_json', write)
+    monkeypatch.setattr(dao, 'update_job', Mock())
+
+    manager.collect_page(payload(downloadResultsKey='manifest'))
+
+    failure = write.call_args_list[1][0][1][0]
+    assert failure['filename'] == 'photo.jpg'
+    assert 'Google Drive did not serve this photo after retries' in failure['reason']
 
 
 def test_prepare_emits_existing_ingestion_contract(monkeypatch):
@@ -185,6 +219,39 @@ def test_google_throttle_is_retryable_without_exposing_api_key(monkeypatch):
     with pytest.raises(drive.DriveTransientError, match='temporarily limited'):
         drive._request('file')
     response.close.assert_called_once()
+
+
+@pytest.mark.parametrize('status', [403, 404])
+def test_ambiguous_file_rejection_is_retryable_not_a_private_folder_error(monkeypatch, status):
+    monkeypatch.setattr(drive, '_api_key', lambda: 'secret')
+    response = Mock(status_code=status, is_redirect=False)
+    response.json.return_value = {'error': {'code': status, 'message': 'Access denied'}}
+    monkeypatch.setattr(drive.requests, 'get', lambda *args, **kwargs: response)
+
+    with pytest.raises(drive.DriveTransientError, match=f'HTTP {status}.*photo'):
+        drive._request('file', params={'alt': 'media'}, stream=True)
+
+    response.close.assert_called_once()
+
+
+def test_private_folder_rejection_keeps_public_access_message(monkeypatch):
+    monkeypatch.setattr(drive, '_api_key', lambda: 'secret')
+    response = Mock(status_code=403, is_redirect=False)
+    response.json.return_value = {'error': {'code': 403}}
+    monkeypatch.setattr(drive.requests, 'get', lambda *args, **kwargs: response)
+
+    with pytest.raises(drive.DriveAccessError, match='Anyone with the link'):
+        drive._request('folder', params={'fields': 'id,name,mimeType'})
+
+
+def test_explicit_file_download_restriction_does_not_retry(monkeypatch):
+    monkeypatch.setattr(drive, '_api_key', lambda: 'secret')
+    response = Mock(status_code=403, is_redirect=False)
+    response.json.return_value = {'error': {'errors': [{'reason': 'fileNotDownloadable'}]}}
+    monkeypatch.setattr(drive.requests, 'get', lambda *args, **kwargs: response)
+
+    with pytest.raises(drive.DriveAccessError, match='Downloads are disabled'):
+        drive._request('file', params={'alt': 'media'}, stream=True)
 
 
 def test_redirect_rejects_arbitrary_hosts(monkeypatch):

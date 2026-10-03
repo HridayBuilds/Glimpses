@@ -63,6 +63,11 @@ def _request(file_id=None, resource_key="", params=None, stream=False):
     if reasons & {"cannotDownloadFile", "downloadRestrictedForRevision", "fileNotDownloadable"}:
         raise DriveAccessError("Downloads are disabled or unavailable for this file.")
     if status in (403, 404):
+        # A folder/list rejection means the shared link cannot be used. An
+        # individual file can be rejected briefly even when the folder and
+        # neighboring photos are accessible; let the Map retry that file.
+        if file_id and params and params.get("alt") == "media":
+            raise DriveTransientError(f"Google Drive returned HTTP {status} for this photo download.")
         raise DriveAccessError(PUBLIC_MESSAGE)
     raise DriveAccessError("Google Drive could not serve this request. Check the link and try again.")
 

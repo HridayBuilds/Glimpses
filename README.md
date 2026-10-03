@@ -300,13 +300,36 @@ Every device upload, whether a single photo or an 800 photo zip, runs through th
 
 **Named actions, not raw status strings.** The pipeline never writes a literal `Jobs.status` value itself. It only ever sends a named action (`mark_extracting`, `mark_success`, and so on) to the `db_api` Lambda, which owns the action-to-status mapping and enum enforcement internally. An unrecognized action raises an error rather than silently corrupting the status field.
 
+### Google Drive import workflow
+
+Google Drive imports start a separate state machine. The API checks that the person can add photos, starts the execution, and returns a job ID. The first state then creates the `Jobs` record used by the progress screen. **There is one job for the whole folder**, even when Google returns several pages of files.
+
+<p align="center">
+  <img src="assets/step-function/drive-import-state-machine.png" alt="Google Drive import state machine, from folder checks through the shared photo processing steps" width="900" />
+</p>
+
+[Open the full-size Google Drive workflow diagram](assets/step-function/drive-import-state-machine.png)
+
+Only the steps **before `ProcessPhotos`** are new:
+
+| Step | What happens |
+|---|---|
+| **DriveInitialize** | Creates the import job with status `CHECKING` and confirms that Google allows access to the folder. |
+| **DriveList** | Reads one page of files directly inside the folder. It skips subfolders and unsupported files, saves the eligible photo list in S3, and updates the count found so far. |
+| **DriveDownload** *(fan-out)* | Reads that list and downloads up to four photos at a time into temporary S3 objects. Each photo can succeed or fail independently; temporary Google rejections are retried. |
+| **DriveCollect** | Reads the results for that page, records which downloads worked or failed, and updates the job counts. |
+| **DriveMore** | If Google has another page, returns to `DriveList`. Otherwise, moves on. This repeats under the same job ID. |
+| **DrivePrepare** | Makes one S3 manifest pointing to all successfully downloaded photos and sets the job to `EXTRACTING`. It does not copy the photo bytes again. |
+
+`ProcessPhotos` and the states after it reuse the ingestion flow in the table above. They turn those temporary S3 photos into gallery photos, index faces, and match attendees.
+
 ---
 
 ## Triggers and edge cases
 
 **Google Drive imports.** The separate `glimpses-drive-import` Standard workflow is packaged with the `drive_import` Lambda module. `POST /events/{eventID}/drive-import` authenticates the contributor, validates an HTTPS Google Drive folder link, and returns a job ID. The request ID makes submission retries idempotent. Public access is checked asynchronously; a private, deleted, or invalid folder produces a clear error through the existing job-status API. There is no Google sign-in or access to a user's private Drive.
 
-The workflow lists one page of direct children per task, writes that page to S3, and downloads its photos through a Distributed Map with four concurrent workers. Each worker streams bytes into an S3 multipart upload, verifies the transferred size when available, and aborts incomplete transfers on failure. Access is rechecked against the event's contribution policy as work progresses. Subfolders are never traversed. A failed download is counted without discarding successful downloads. Page manifests are combined into the staged-photo manifest expected by `ProcessPhotos`.
+Each worker streams bytes into an S3 multipart upload, verifies the transferred size when available, and aborts incomplete transfers on failure. Access is rechecked against the event's contribution policy as work progresses. Ambiguous Google rejections of individual photo downloads are retried; confirmed download restrictions remain per-file failures. A failed download is counted without discarding successful downloads.
 
 Terraform derives the downstream states from the existing ingestion template at deployment time. The original `state_machine` module and ZIP workflow are not changed. Conversion, thumbnails, content-based duplicate detection, indexing, and matching invoke the existing ingestion Lambda actions. Redeploy `drive_import` whenever a shared ingestion template change should also reach the Drive workflow. Its matching map fails the import if attendee tasks fail after retries. The `db_api` Lambda remains the only writer of job statuses; it adds named actions for Drive discovery and progress. The existing job-status API exposes download, duplicate, skipped-file, and skipped-folder counts. Results are partial when some photos fail; a job with only duplicates completes without reindexing them. No supported photos produces an actionable error.
 

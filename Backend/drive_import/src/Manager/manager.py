@@ -120,8 +120,11 @@ def collect_page(payload):
                 else:
                     raw_input = item.get("Input", {})
                     raw_input = json.loads(raw_input) if isinstance(raw_input, str) else raw_input
+                    error_name = f"{item.get('Error', '')} {item.get('Cause', '')}"
+                    reason = ("Google Drive did not serve this photo after retries. Check the file's sharing and try importing the folder again."
+                              if "DriveTransientError" in error_name else "The download could not finish after retries.")
                     errors.append(output or {"filename": raw_input.get("name", "Unknown file"), "status": "FAILED",
-                                              "reason": "The download could not finish after retries."})
+                                              "reason": reason})
     page_prefix = f"{_prefix(payload)}/pages/{payload['page']}"
     dao.put_json(page_prefix + "/staged.json", staged)
     dao.put_json(page_prefix + "/failures.json", errors)

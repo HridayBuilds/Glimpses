@@ -157,7 +157,7 @@ export default function DriveImport() {
               {job?.status === 'FAILED' && <p role="alert" className="mt-4 text-sm text-[#FF8A8A]">{job.errorMessage || 'The import could not finish. Please try again.'}</p>}
               {(skippedFolders > 0 || skippedFiles > 0) && <p className="mt-5 text-sm text-white/45">{[skippedFolders > 0 && `${skippedFolders} subfolder${skippedFolders === 1 ? '' : 's'}`, skippedFiles > 0 && `${skippedFiles} other file${skippedFiles === 1 ? '' : 's'}`].filter(Boolean).join(' and ')} skipped.</p>}
               {query.isError && <p className="mt-4 text-sm text-white/60">Waiting for a status update. We will keep checking.</p>}
-              {!finished && <p className="mt-7 border-t border-white/[0.07] pt-4 text-sm leading-relaxed text-white/45">You can close this tab. The import continues in the background; return to this page to check progress.</p>}
+              {!finished && job && <p className="mt-7 border-t border-white/[0.07] pt-4 text-sm leading-relaxed text-white/45">Progress updates here automatically. Photos appear in the gallery as they finish processing.</p>}
             </div>
           </section>
         )}

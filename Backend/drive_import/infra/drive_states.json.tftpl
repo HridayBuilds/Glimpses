@@ -98,6 +98,15 @@
           "Retry": [
             {
               "ErrorEquals": [
+                "DriveTransientError"
+              ],
+              "IntervalSeconds": 5,
+              "BackoffRate": 2,
+              "MaxAttempts": 3,
+              "JitterStrategy": "FULL"
+            },
+            {
+              "ErrorEquals": [
                 "States.ALL"
               ],
               "IntervalSeconds": 3,
