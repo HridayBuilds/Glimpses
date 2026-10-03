@@ -308,8 +308,6 @@ Google Drive imports start a separate state machine. The API checks that the per
   <img src="assets/step-function/drive-import-state-machine.png" alt="Google Drive import state machine, from folder checks through the shared photo processing steps" width="900" />
 </p>
 
-[Open the full-size Google Drive workflow diagram](assets/step-function/drive-import-state-machine.png)
-
 Only the steps **before `ProcessPhotos`** are new:
 
 | Step | What happens |
