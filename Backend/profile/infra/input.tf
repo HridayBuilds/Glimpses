@@ -5,12 +5,12 @@ variable "name_prefix" {
 }
 
 variable "deploy_artifacts_bucket" {
-  description = "Name of the shared glimpses-deploy-artifacts S3 bucket Jenkins pushes this Lambda's zip to (T-06)"
+  description = "Name of the shared glimpses-deploy-artifacts S3 bucket Jenkins pushes this Lambda's zip to"
   type        = string
 }
 
 variable "users_table_name" {
-  description = "Name of the Users DynamoDB table (T-04), this Lambda's own table"
+  description = "Name of the Users DynamoDB table, this Lambda's own table"
   type        = string
 }
 
@@ -20,7 +20,7 @@ variable "users_table_arn" {
 }
 
 variable "photos_bucket_name" {
-  description = "Name of the shared glimpses-photos S3 bucket (T-09) — one bucket, six prefixes"
+  description = "Name of the shared glimpses-photos S3 bucket — one bucket, six prefixes"
   type        = string
 }
 
@@ -30,7 +30,7 @@ variable "photos_bucket_arn" {
 }
 
 variable "alarm_sns_topic_arn" {
-  description = "ARN of the shared operator-alerts SNS topic (T-07), subscribed alarms publish here"
+  description = "ARN of the shared operator-alerts SNS topic, subscribed alarms publish here"
   type        = string
 }
 

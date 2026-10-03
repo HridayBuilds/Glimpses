@@ -5,12 +5,12 @@ variable "name_prefix" {
 }
 
 variable "deploy_artifacts_bucket" {
-  description = "Name of the shared glimpses-deploy-artifacts S3 bucket Jenkins pushes this Lambda's zip to (T-06)"
+  description = "Name of the shared glimpses-deploy-artifacts S3 bucket Jenkins pushes this Lambda's zip to"
   type        = string
 }
 
 variable "photos_table_name" {
-  description = "Name of the Photos DynamoDB table (T-04), written by Extract"
+  description = "Name of the Photos DynamoDB table, written by Extract"
   type        = string
 }
 
@@ -20,7 +20,7 @@ variable "photos_table_arn" {
 }
 
 variable "events_table_name" {
-  description = "Name of the Events DynamoDB table (T-04), read for the Rekognition collection ID"
+  description = "Name of the Events DynamoDB table, read for the Rekognition collection ID"
   type        = string
 }
 
@@ -30,7 +30,7 @@ variable "events_table_arn" {
 }
 
 variable "faces_table_name" {
-  description = "Name of the Faces DynamoDB table (T-04), written by IndexOnePhoto and resolved by MatchAttendees"
+  description = "Name of the Faces DynamoDB table, written by IndexOnePhoto and resolved by MatchAttendees"
   type        = string
 }
 
@@ -40,7 +40,7 @@ variable "faces_table_arn" {
 }
 
 variable "event_attendees_table_name" {
-  description = "Name of the EventAttendees DynamoDB table (T-04 follow-up), written by MatchAttendees/MatchOneAttendee"
+  description = "Name of the EventAttendees DynamoDB table, written by MatchAttendees/MatchOneAttendee"
   type        = string
 }
 
@@ -55,7 +55,7 @@ variable "event_attendees_stream_arn" {
 }
 
 variable "users_table_name" {
-  description = "Name of the Users DynamoDB table, read-only for uploader displayName/email snapshotting (P-99)"
+  description = "Name of the Users DynamoDB table, read-only for uploader displayName/email snapshotting"
   type        = string
 }
 
@@ -65,7 +65,7 @@ variable "users_table_arn" {
 }
 
 variable "photos_bucket_name" {
-  description = "Name of the shared glimpses-photos S3 bucket (T-09) — one bucket, six prefixes"
+  description = "Name of the shared glimpses-photos S3 bucket — one bucket, six prefixes"
   type        = string
 }
 
@@ -75,7 +75,7 @@ variable "photos_bucket_arn" {
 }
 
 variable "heic_converter_function_name" {
-  description = "Function name of the heic_converter Lambda, invoked synchronously to convert HEIC uploads (P-35)"
+  description = "Function name of the heic_converter Lambda, invoked synchronously to convert HEIC uploads"
   type        = string
 }
 
@@ -85,7 +85,7 @@ variable "heic_converter_function_arn" {
 }
 
 variable "alarm_sns_topic_arn" {
-  description = "ARN of the shared operator-alerts SNS topic (T-07), subscribed alarms publish here"
+  description = "ARN of the shared operator-alerts SNS topic, subscribed alarms publish here"
   type        = string
 }
 

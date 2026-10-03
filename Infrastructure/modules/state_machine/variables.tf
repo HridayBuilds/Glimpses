@@ -1,5 +1,5 @@
 variable "name_prefix" {
-  description = "Prefix applied to every resource's AWS-visible name (T-06)"
+  description = "Prefix applied to every resource's AWS-visible name"
   type        = string
   default     = "glimpses"
 }
@@ -15,7 +15,7 @@ variable "db_api_function_arn" {
 }
 
 variable "photos_bucket_name" {
-  description = "Name of the glimpses-photos bucket (T-09), matched by the upload-complete EventBridge rule"
+  description = "Name of the glimpses-photos bucket, matched by the upload-complete EventBridge rule"
   type        = string
 }
 

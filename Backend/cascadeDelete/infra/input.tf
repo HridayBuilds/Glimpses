@@ -5,12 +5,12 @@ variable "name_prefix" {
 }
 
 variable "deploy_artifacts_bucket" {
-  description = "Name of the shared glimpses-deploy-artifacts S3 bucket Jenkins pushes this Lambda's zip to (T-06)"
+  description = "Name of the shared glimpses-deploy-artifacts S3 bucket Jenkins pushes this Lambda's zip to"
   type        = string
 }
 
 variable "events_table_name" {
-  description = "Name of the Events DynamoDB table (T-04), read/written for both cascade actions"
+  description = "Name of the Events DynamoDB table, read/written for both cascade actions"
   type        = string
 }
 
@@ -20,12 +20,12 @@ variable "events_table_arn" {
 }
 
 variable "events_stream_arn" {
-  description = "ARN of the Events table's DynamoDB Stream, source for the TTL-delete trigger (P-77)"
+  description = "ARN of the Events table's DynamoDB Stream, source for the TTL-delete trigger"
   type        = string
 }
 
 variable "photos_table_name" {
-  description = "Name of the Photos DynamoDB table (T-04), row deletion owned by this Lambda"
+  description = "Name of the Photos DynamoDB table, row deletion owned by this Lambda"
   type        = string
 }
 
@@ -35,7 +35,7 @@ variable "photos_table_arn" {
 }
 
 variable "faces_table_name" {
-  description = "Name of the Faces DynamoDB table (T-04), row deletion owned by this Lambda"
+  description = "Name of the Faces DynamoDB table, row deletion owned by this Lambda"
   type        = string
 }
 
@@ -45,7 +45,7 @@ variable "faces_table_arn" {
 }
 
 variable "event_attendees_table_name" {
-  description = "Name of the EventAttendees DynamoDB table (T-04 follow-up), rows deleted on whole-event teardown only"
+  description = "Name of the EventAttendees DynamoDB table, rows deleted on whole-event teardown only"
   type        = string
 }
 
@@ -55,7 +55,7 @@ variable "event_attendees_table_arn" {
 }
 
 variable "photos_bucket_name" {
-  description = "Name of the shared glimpses-photos S3 bucket (T-09) — one bucket, six prefixes"
+  description = "Name of the shared glimpses-photos S3 bucket — one bucket, six prefixes"
   type        = string
 }
 
@@ -65,6 +65,6 @@ variable "photos_bucket_arn" {
 }
 
 variable "alarm_sns_topic_arn" {
-  description = "ARN of the shared operator-alerts SNS topic (T-07), subscribed alarms publish here"
+  description = "ARN of the shared operator-alerts SNS topic, subscribed alarms publish here"
   type        = string
 }

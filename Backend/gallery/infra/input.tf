@@ -5,12 +5,12 @@ variable "name_prefix" {
 }
 
 variable "deploy_artifacts_bucket" {
-  description = "Name of the shared glimpses-deploy-artifacts S3 bucket Jenkins pushes this Lambda's zip to (T-06)"
+  description = "Name of the shared glimpses-deploy-artifacts S3 bucket Jenkins pushes this Lambda's zip to"
   type        = string
 }
 
 variable "photos_table_name" {
-  description = "Name of the Photos DynamoDB table (T-04); read-only here — CascadeDelete owns row deletion"
+  description = "Name of the Photos DynamoDB table; read-only here — CascadeDelete owns row deletion"
   type        = string
 }
 
@@ -20,7 +20,7 @@ variable "photos_table_arn" {
 }
 
 variable "events_table_name" {
-  description = "Name of the Events DynamoDB table (T-04); read-only here for P-44's organizer-delete-any-photo check"
+  description = "Name of the Events DynamoDB table; read-only here for P-44's organizer-delete-any-photo check"
   type        = string
 }
 
@@ -30,7 +30,7 @@ variable "events_table_arn" {
 }
 
 variable "event_attendees_table_name" {
-  description = "Name of the EventAttendees DynamoDB table (T-04); read-only here for P-16/P-17's mine=true match set"
+  description = "Name of the EventAttendees DynamoDB table; read-only here for P-16/P-17's mine=true match set"
   type        = string
 }
 
@@ -40,7 +40,7 @@ variable "event_attendees_table_arn" {
 }
 
 variable "photos_bucket_name" {
-  description = "Name of the shared glimpses-photos S3 bucket (T-09) — one bucket, six prefixes"
+  description = "Name of the shared glimpses-photos S3 bucket — one bucket, six prefixes"
   type        = string
 }
 
@@ -50,7 +50,7 @@ variable "photos_bucket_arn" {
 }
 
 variable "cloudfront_domain_name" {
-  description = "CloudFront distribution's default domain, for signed photoUrl/thumbnailUrl construction (T-09)"
+  description = "CloudFront distribution's default domain, for signed photoUrl/thumbnailUrl construction"
   type        = string
 }
 
@@ -78,6 +78,6 @@ variable "cascade_delete_function_arn" {
 }
 
 variable "alarm_sns_topic_arn" {
-  description = "ARN of the shared operator-alerts SNS topic (T-07), subscribed alarms publish here"
+  description = "ARN of the shared operator-alerts SNS topic, subscribed alarms publish here"
   type        = string
 }

@@ -5,7 +5,7 @@ variable "aws_region" {
 }
 
 variable "alarm_email" {
-  description = "Email address subscribed to the shared operator-alerts SNS topic (T-07)"
+  description = "Email address subscribed to the shared operator-alerts SNS topic"
   type        = string
   default     = "johndoe@gmail.com"
 }

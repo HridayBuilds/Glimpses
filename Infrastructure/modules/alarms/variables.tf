@@ -5,6 +5,6 @@ variable "name_prefix" {
 }
 
 variable "alarm_email" {
-  description = "Email address subscribed to the shared operator-alerts SNS topic (T-07) — every Lambda's error alarm publishes here"
+  description = "Email address subscribed to the shared operator-alerts SNS topic — every Lambda's error alarm publishes here"
   type        = string
 }

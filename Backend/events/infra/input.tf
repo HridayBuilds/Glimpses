@@ -5,12 +5,12 @@ variable "name_prefix" {
 }
 
 variable "deploy_artifacts_bucket" {
-  description = "Name of the shared glimpses-deploy-artifacts S3 bucket Jenkins pushes this Lambda's zip to (T-06)"
+  description = "Name of the shared glimpses-deploy-artifacts S3 bucket Jenkins pushes this Lambda's zip to"
   type        = string
 }
 
 variable "events_table_name" {
-  description = "Name of the Events DynamoDB table (T-04), this Lambda's own table"
+  description = "Name of the Events DynamoDB table, this Lambda's own table"
   type        = string
 }
 
@@ -20,7 +20,7 @@ variable "events_table_arn" {
 }
 
 variable "event_attendees_table_name" {
-  description = "Name of the EventAttendees DynamoDB table (T-04); read-only here for GET /events/my-events"
+  description = "Name of the EventAttendees DynamoDB table; read-only here for GET /events/my-events"
   type        = string
 }
 
@@ -30,7 +30,7 @@ variable "event_attendees_table_arn" {
 }
 
 variable "photos_bucket_name" {
-  description = "Name of the shared glimpses-photos S3 bucket (T-09) — one bucket, six prefixes"
+  description = "Name of the shared glimpses-photos S3 bucket — one bucket, six prefixes"
   type        = string
 }
 
@@ -50,7 +50,7 @@ variable "frontend_domain_name" {
 }
 
 variable "cascade_delete_function_name" {
-  description = "Function name of CascadeDelete (P-34), for delete_event's self-invoke; empty until that module lands"
+  description = "Function name of CascadeDelete, for delete_event's self-invoke; empty until that module lands"
   type        = string
   default     = ""
 }
@@ -62,12 +62,12 @@ variable "cascade_delete_function_arn" {
 }
 
 variable "alarm_sns_topic_arn" {
-  description = "ARN of the shared operator-alerts SNS topic (T-07), subscribed alarms publish here"
+  description = "ARN of the shared operator-alerts SNS topic, subscribed alarms publish here"
   type        = string
 }
 
 variable "archive_sweep_schedule_expression" {
-  description = "EventBridge Scheduler cron/rate expression for the daily archive sweep (P-77/P-78)"
+  description = "EventBridge Scheduler cron/rate expression for the daily archive sweep"
   type        = string
   default     = "rate(1 day)"
 }

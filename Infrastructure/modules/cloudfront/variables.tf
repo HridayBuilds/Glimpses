@@ -5,7 +5,7 @@ variable "name_prefix" {
 }
 
 variable "photos_bucket_name" {
-  description = "Name of the shared glimpses-photos bucket (T-09), this distribution's origin"
+  description = "Name of the shared glimpses-photos bucket, this distribution's origin"
   type        = string
 }
 

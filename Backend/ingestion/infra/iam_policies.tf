@@ -70,7 +70,7 @@ resource "aws_iam_role_policy" "event_attendees_access" {
 data "aws_iam_policy_document" "users_access" {
   statement {
     effect    = "Allow"
-    actions   = ["dynamodb:GetItem", "dynamodb:TransactWriteItems"]
+    actions   = ["dynamodb:GetItem", "dynamodb:ConditionCheckItem"]
     resources = [var.users_table_arn]
   }
 }

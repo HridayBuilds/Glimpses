@@ -5,12 +5,12 @@ variable "name_prefix" {
 }
 
 variable "deploy_artifacts_bucket" {
-  description = "Name of the shared glimpses-deploy-artifacts S3 bucket Jenkins pushes this Lambda's zip to (T-06)"
+  description = "Name of the shared glimpses-deploy-artifacts S3 bucket Jenkins pushes this Lambda's zip to"
   type        = string
 }
 
 variable "jobs_table_name" {
-  description = "Name of the Jobs DynamoDB table (T-04), this Lambda's own table"
+  description = "Name of the Jobs DynamoDB table, this Lambda's own table"
   type        = string
 }
 
@@ -20,7 +20,7 @@ variable "jobs_table_arn" {
 }
 
 variable "events_table_name" {
-  description = "Name of the Events DynamoDB table (T-04), read to check the event's contributionPolicy and organizerID"
+  description = "Name of the Events DynamoDB table, read to check the event's contributionPolicy and organizerID"
   type        = string
 }
 
@@ -30,7 +30,7 @@ variable "events_table_arn" {
 }
 
 variable "photos_bucket_name" {
-  description = "Name of the shared glimpses-photos S3 bucket (T-09) — one bucket, six prefixes"
+  description = "Name of the shared glimpses-photos S3 bucket — one bucket, six prefixes"
   type        = string
 }
 
@@ -40,6 +40,6 @@ variable "photos_bucket_arn" {
 }
 
 variable "alarm_sns_topic_arn" {
-  description = "ARN of the shared operator-alerts SNS topic (T-07), which subscribed alarms publish to"
+  description = "ARN of the shared operator-alerts SNS topic, which subscribed alarms publish to"
   type        = string
 }
