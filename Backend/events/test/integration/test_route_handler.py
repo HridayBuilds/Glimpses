@@ -146,6 +146,19 @@ def test_create_list_get_update_and_archive_round_trip(monkeypatch):
     assert archive_response["statusCode"] == 200
     assert events_table.get_item(Key={"eventID": event_id})["Item"]["status"] == "ARCHIVED"
 
+    archived_update_response = lambda_handler(
+        _api_event(
+            "PUT",
+            f"/events/{event_id}",
+            body={"joinPolicy": "APPROVAL"},
+            claims={"sub": "user_1"},
+            path_parameters={"event_id": event_id},
+        ),
+        _FakeLambdaContext(),
+    )
+    assert archived_update_response["statusCode"] == 409
+    assert "archived" in json.loads(archived_update_response["body"])["message"].lower()
+
 
 def _create_event_attendees_table(dynamodb):
     dynamodb.create_table(

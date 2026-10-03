@@ -85,9 +85,11 @@ function EventSettings() {
 
   const submit = (e) => {
     e.preventDefault()
-    if (!name.trim()) return
+    if (event?.status !== 'ACTIVE' || !name.trim()) return
     saveMutation.mutate({ name: name.trim(), description: description.trim(), joinPolicy, contributionPolicy })
   }
+
+  const isArchived = event?.status === 'ARCHIVED'
 
   return (
     <div className="min-h-svh bg-[radial-gradient(120%_60%_at_50%_0%,#131317_0%,#08080A_60%)] text-[#F5F5F7]">
@@ -98,11 +100,17 @@ function EventSettings() {
 
       {event && (
         <form onSubmit={submit} className="mx-auto max-w-[560px] px-5 pb-20 pt-4">
+          {isArchived && (
+            <p className="mb-6 rounded-xl border border-white/10 bg-white/[0.06] px-4 py-3 text-[14px] leading-relaxed text-white/70">
+              This event is archived. Its settings are read-only, but its photos remain available until deletion.
+            </p>
+          )}
           <div className="mb-5 flex flex-col gap-[7px]">
             <label className="text-[13.5px] font-semibold text-white/82">Name</label>
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
+              disabled={isArchived}
               className="w-full rounded-xl border border-white/[0.09] bg-white/[0.06] px-4 py-[14px] text-[16px] text-[#F5F5F7] outline-none"
             />
           </div>
@@ -112,6 +120,7 @@ function EventSettings() {
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
+              disabled={isArchived}
               rows={3}
               className="w-full resize-none rounded-xl border border-white/[0.09] bg-white/[0.06] px-4 py-[14px] text-[15px] text-[#F5F5F7] outline-none"
             />
@@ -124,7 +133,8 @@ function EventSettings() {
                 type="button"
                 key={opt.value}
                 onClick={() => setJoinPolicy(opt.value)}
-                className="w-full cursor-pointer rounded-[14px] border px-4 py-3.5 text-left transition-colors duration-150"
+                disabled={isArchived}
+                className="w-full cursor-pointer rounded-[14px] border px-4 py-3.5 text-left transition-colors duration-150 disabled:cursor-default"
                 style={{
                   borderColor: joinPolicy === opt.value ? 'rgba(255,122,89,0.55)' : 'rgba(255,255,255,0.09)',
                   background: joinPolicy === opt.value ? 'rgba(255,122,89,0.09)' : 'rgba(255,255,255,0.05)',
@@ -145,7 +155,8 @@ function EventSettings() {
                 type="button"
                 key={opt.value}
                 onClick={() => setContributionPolicy(opt.value)}
-                className="w-full cursor-pointer rounded-[14px] border px-4 py-3.5 text-left transition-colors duration-150"
+                disabled={isArchived}
+                className="w-full cursor-pointer rounded-[14px] border px-4 py-3.5 text-left transition-colors duration-150 disabled:cursor-default"
                 style={{
                   borderColor: contributionPolicy === opt.value ? 'rgba(255,122,89,0.55)' : 'rgba(255,255,255,0.09)',
                   background: contributionPolicy === opt.value ? 'rgba(255,122,89,0.09)' : 'rgba(255,255,255,0.05)',
@@ -157,13 +168,15 @@ function EventSettings() {
             ))}
           </div>
 
-          <button
-            type="submit"
-            disabled={!name.trim() || saveMutation.isPending}
-            className="w-full rounded-xl bg-[#FF7A59] py-4 text-[16px] font-semibold text-[#200C05] transition-transform duration-100 ease-out active:scale-[0.975] disabled:opacity-60"
-          >
-            {isSetup ? 'Next' : saveMutation.isPending ? 'Saving…' : 'Save changes'}
-          </button>
+          {!isArchived && (
+            <button
+              type="submit"
+              disabled={!name.trim() || saveMutation.isPending}
+              className="w-full rounded-xl bg-[#FF7A59] py-4 text-[16px] font-semibold text-[#200C05] transition-transform duration-100 ease-out active:scale-[0.975] disabled:opacity-60"
+            >
+              {isSetup ? 'Next' : saveMutation.isPending ? 'Saving…' : 'Save changes'}
+            </button>
+          )}
 
           {!isSetup && (
             <>
@@ -171,16 +184,18 @@ function EventSettings() {
               <div className="mb-2.5 text-[12px] font-semibold uppercase tracking-[0.09em] text-white/36">
                 Danger zone
               </div>
-              <button
-                type="button"
-                onClick={() => setConfirming('archive')}
-                className="mb-2.5 w-full cursor-pointer rounded-[14px] border border-white/[0.09] bg-white/[0.05] px-4 py-3.5 text-left transition-transform duration-100 ease-out active:scale-[0.99]"
-              >
-                <div className="text-[15.5px] font-semibold tracking-[-0.01em]">Archive event</div>
-                <div className="mt-[5px] text-[14px] leading-[1.5] text-white/50 text-pretty">
-                  Photos stay viewable and downloadable, but no one new can join and no more photos can be added.
-                </div>
-              </button>
+              {!isArchived && (
+                <button
+                  type="button"
+                  onClick={() => setConfirming('archive')}
+                  className="mb-2.5 w-full cursor-pointer rounded-[14px] border border-white/[0.09] bg-white/[0.05] px-4 py-3.5 text-left transition-transform duration-100 ease-out active:scale-[0.99]"
+                >
+                  <div className="text-[15.5px] font-semibold tracking-[-0.01em]">Archive event</div>
+                  <div className="mt-[5px] text-[14px] leading-[1.5] text-white/50 text-pretty">
+                    Photos stay viewable and downloadable, but no one new can join and no more photos can be added.
+                  </div>
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => setConfirming('delete')}

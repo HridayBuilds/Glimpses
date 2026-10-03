@@ -1,4 +1,6 @@
-from aws_lambda_powertools.event_handler import APIGatewayRestResolver, CORSConfig
+import json
+
+from aws_lambda_powertools.event_handler import APIGatewayRestResolver, CORSConfig, Response
 
 from Manager import manager
 
@@ -35,16 +37,19 @@ def get_event_detail(event_id: str):
 @app.put("/events/<event_id>")
 def update_event_detail(event_id: str):
     body = app.current_event.json_body or {}
-    return manager.update_event_detail(
-        {
-            "eventID": event_id,
-            "organizerID": _organizer_id(),
-            "name": body.get("name"),
-            "description": body.get("description"),
-            "joinPolicy": body.get("joinPolicy"),
-            "contributionPolicy": body.get("contributionPolicy"),
-        }
-    )
+    try:
+        return manager.update_event_detail(
+            {
+                "eventID": event_id,
+                "organizerID": _organizer_id(),
+                "name": body.get("name"),
+                "description": body.get("description"),
+                "joinPolicy": body.get("joinPolicy"),
+                "contributionPolicy": body.get("contributionPolicy"),
+            }
+        )
+    except manager.EventNotEditableError as error:
+        return Response(status_code=409, content_type="application/json", body=json.dumps({"message": str(error)}))
 
 
 @app.delete("/events/<event_id>")

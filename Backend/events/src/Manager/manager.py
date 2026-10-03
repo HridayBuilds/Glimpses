@@ -38,6 +38,10 @@ EDITABLE_FIELDS = ("name", "description", "joinPolicy", "contributionPolicy")
 MEMBER_ATTENDEE_STATUSES = ("PENDING", "ATTENDEE")
 
 
+class EventNotEditableError(ValueError):
+    pass
+
+
 def _now_iso():
     return datetime.now(timezone.utc).isoformat()
 
@@ -149,7 +153,7 @@ def get_event_detail(payload):
 def update_event_detail(payload):
     event = _get_owned_event(payload["eventID"], payload["organizerID"])
     if event["status"] != "ACTIVE":
-        raise ValueError("Only ACTIVE events can be edited")
+        raise EventNotEditableError("Archived events cannot be edited")
 
     fields = {name: payload[name] for name in EDITABLE_FIELDS if payload.get(name) is not None}
     update_event(payload["eventID"], fields)
