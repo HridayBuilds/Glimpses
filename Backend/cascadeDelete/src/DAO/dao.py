@@ -1,5 +1,4 @@
 import os
-import json
 
 import boto3
 
@@ -30,25 +29,6 @@ def _s3():
 
 def _rekognition():
     return boto3.client("rekognition")
-
-
-def invoke_deleted_notifications(event, user_ids):
-    function_name = os.environ.get("NOTIFICATIONS_FUNCTION_NAME")
-    if not function_name:
-        return
-    client = boto3.client("lambda")
-    for offset in range(0, len(user_ids), 50):
-        client.invoke(
-            FunctionName=function_name,
-            InvocationType="Event",
-            Payload=json.dumps({
-                "kind": "deleted",
-                "eventID": event["eventID"],
-                "eventName": event["name"],
-                "deletedAt": str(event.get("deleteAt") or event["createdAt"]),
-                "userIDs": user_ids[offset:offset + 50],
-            }).encode("utf-8"),
-        )
 
 
 def _query_all(table, **kwargs):

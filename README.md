@@ -142,9 +142,9 @@ A guest and organizer's path through Glimpses, start to finish.
 ## Tech stack
 
 **Backend**
-- **AWS Lambda** (Python 3.13): every piece of business logic, 10 functions in total
-- **Amazon API Gateway** (REST): 31 explicit routes, each with a JSON-schema request validator where a body is expected
-- **Amazon DynamoDB**: 8 tables, on-demand billing, GSIs for every query pattern, Streams for event-driven triggers
+- **AWS Lambda** (Python 3.13): business logic and background processing
+- **Amazon API Gateway** (REST): explicit routes, each with a JSON-schema request validator where a body is expected
+- **Amazon DynamoDB**: 7 tables, on-demand billing, GSIs for every query pattern, Streams for event-driven triggers
 - **Amazon S3**: one bucket, six prefixes (`photos/`, `thumbnails/`, `qrcodes/`, `selfies/`, `uploads/`, and staging areas)
 - **Amazon CloudFront**: signed-URL delivery for photos and thumbnails, public delivery for QR codes
 - **AWS Step Functions** (Standard, JSONata): the photo ingestion pipeline, with Distributed Map fan-outs
@@ -152,7 +152,6 @@ A guest and organizer's path through Glimpses, start to finish.
 - **Amazon Cognito**: user authentication, wired into API Gateway as a `COGNITO_USER_POOLS` authorizer
 - **Amazon EventBridge** (rule and Scheduler): triggers the ingestion pipeline on upload, and runs a daily sweep that auto-archives stale events
 - **Amazon SNS and CloudWatch Alarms**: operator alerting
-- **Amazon SES**: personalized transactional email to guests and organizers
 
 **Frontend**
 - **React 19** with **Vite**
@@ -185,13 +184,13 @@ At a glance, here's the shape of a request:
                     │
      ┌──────────────┼──────────────────────────────┐
      │              │                              │
- 13 Lambdas    Step Functions            EventBridge (upload trigger,
+ 12 Lambdas    Step Functions            EventBridge (upload trigger,
  (business     (ingestion pipeline,       daily archive sweep)
   logic)        Distributed Map fan-out)
      │              │
      └──────┬───────┘
             │
-   DynamoDB (8 tables)   S3 (1 bucket, 6 prefixes)   Rekognition   CloudFront
+   DynamoDB (7 tables)   S3 (1 bucket, 6 prefixes)   Rekognition   CloudFront
 ```
 
 Nothing runs unless something's actually happening. There are no EC2 instances and no containers idling between requests. A quiet event costs nothing, and a busy upload burst scales out automatically through Lambda concurrency and Step Functions' Distributed Map.
@@ -202,7 +201,7 @@ Nothing runs unless something's actually happening. There are no EC2 instances a
 
 ```
 Glimpses/
-├── Backend/                 13 Lambdas, each with the same internal shape:
+├── Backend/                 12 Lambdas, each with the same internal shape:
 │   ├── events/                 routeHandler.py -> Handler/ -> Manager/ -> (Converter/) -> DAO/
 │   │   ├── src/
 │   │   ├── test/unit/       moto-backed unit tests
@@ -212,7 +211,6 @@ Glimpses/
 │   ├── drive_import/
 │   ├── ingestion/            same shape, repeated for every Lambda
 │   ├── selfie_match_dispatcher/
-│   ├── notifications/
 │   ├── gallery/
 │   ├── membership/
 │   ├── profile/
@@ -223,11 +221,11 @@ Glimpses/
 │   └── heic_converter/
 ├── Frontend/                 React 19 + Vite SPA
 ├── Infrastructure/
-│   ├── imports.tf            the composition root, wires all 21 modules together
+│   ├── imports.tf            the composition root, wires all 19 modules together
 │   ├── providers.tf          Terraform/AWS provider config, S3 backend
 │   ├── variables.tf          top-level variables (region, alarm email, etc.)
 │   ├── cicd/seed.groovy      Jenkins Job DSL seed script
-│   └── modules/               shared modules: dynamodb, buckets, alarms, email,
+│   └── modules/               shared modules: dynamodb, buckets, alarms,
 │                               cloudfront, state_machine, cognito, api_gateway
 ├── assets/                   README media: marketing, product screenshots,
 │                               architecture diagrams, step function graph
@@ -244,7 +242,6 @@ Glimpses/
 | **membership** | Handles joining and leaving an event, listing attendees, admitting/denying/ejecting requests, and access-code based joining |
 | **profile** | Uploads, replaces, and deletes a selfie; reads and updates basic profile info |
 | **selfie_match_dispatcher** | After selfie confirmation, finds every event where the user is admitted and invokes ingestion matching for each one |
-| **notifications** | Reads completed changes from DynamoDB Streams and event deletion, creates a short HTML and text email for each recipient, and sends through SES |
 | **drive_import** | Imports photos directly inside public Google Drive folders. Owns a separate Standard workflow, paginated discovery, and streaming downloads to S3; reuses the ingestion workflow template for photo processing, indexing, and matching |
 | **upload_status** | Mints presigned S3 upload URLs, and is polled by the frontend to show live upload and processing progress |
 | **ingestion** | The engine room. Unpacks uploaded zips, converts, hashes, and thumbnails each photo, indexes faces via Rekognition, and matches attendees to the photos they appear in. Invoked as discrete steps by the Step Functions pipeline below |
@@ -260,18 +257,17 @@ Every Lambda follows the same internal shape: `routeHandler.py` → `Handler/han
 
 ## The database (DynamoDB)
 
-8 tables, all on-demand billing (pay per request, not per provisioned capacity):
+7 tables, all on-demand billing (pay per request, not per provisioned capacity):
 
 | Table | Primary key | GSIs | Notes |
 |---|---|---|---|
-| **Users** | `userID` | none | Stores the current `selfieKey`, `selfieVersion`, and email preference after confirmation |
-| **Events** | `eventID` | `organizerID-status-index`, `accessCode-index`, `status-lastUploadAt-index` | Stream enabled (`NEW_AND_OLD_IMAGES`) for archive emails and TTL-based cascade deletion. TTL on `deleteAt` |
-| **Jobs** | `jobId` | `eventUploaderKey-startedAt-index` | Tracks upload progress and streams terminal `SUCCESS`/`FAILED` changes for email |
+| **Users** | `userID` | none | Stores profile data and the current `selfieKey` and `selfieVersion` after confirmation |
+| **Events** | `eventID` | `organizerID-status-index`, `accessCode-index`, `status-lastUploadAt-index` | Stream enabled (`NEW_AND_OLD_IMAGES`) for TTL-based cascade deletion. TTL on `deleteAt` |
+| **Jobs** | `jobId` | `eventUploaderKey-startedAt-index` | Tracks upload progress and terminal `SUCCESS`/`FAILED` status |
 | **Photos** | `photoID` | `eventID-uploadedAtFilename-index`, `eventID-contentHash-index` | The content-hash index backs duplicate detection |
 | **Faces** | `rekognitionFaceID` | `eventID-photoID-index` | One row per face Rekognition indexed |
 | **EventAttendees** | `userID` + `eventID` | `eventID-status-index` | Stream enabled (`NEW_AND_OLD_IMAGES`), drives automatic face-matching for new or rejoining attendees, described below. Rows are never deleted, only status-transitioned (`PENDING`/`ATTENDEE`/`LEFT`/`BLOCKED`). Also stores `matchedPhotoIDs` and `matchedSelfieVersion` |
 | **Downloads** | `downloadId` | none | Tracks server-built ZIP download jobs |
-| **Notifications** | `notificationID` | none | Deduplicates email delivery attempts; TTL expires records after 90 days |
 
 ---
 
@@ -314,7 +310,7 @@ The workflow lists one page of direct children per task, writes that page to S3,
 
 Terraform derives the downstream states from the existing ingestion template at deployment time. The original `state_machine` module and ZIP workflow are not changed. Conversion, thumbnails, content-based duplicate detection, indexing, and matching invoke the existing ingestion Lambda actions. Redeploy `drive_import` whenever a shared ingestion template change should also reach the Drive workflow. Its matching map fails the import if attendee tasks fail after retries. The `db_api` Lambda remains the only writer of job statuses; it adds named actions for Drive discovery and progress. The existing job-status API exposes download, duplicate, skipped-file, and skipped-folder counts. Results are partial when some photos fail; a job with only duplicates completes without reindexing them. No supported photos produces an actionable error.
 
-The frontend's dedicated Drive screen polls every five seconds and retains the job ID in its URL so a refresh can resume progress. The existing job-completion notifications also cover Drive imports. Temporary Drive objects under `uploads/drive/` expire after seven days; originals and thumbnails use the usual permanent photo prefixes. The bucket-wide incomplete multipart cleanup remains a fallback if a worker is terminated before it can abort.
+The frontend's dedicated Drive screen polls every five seconds and retains the job ID in its URL so a refresh can resume progress. Temporary Drive objects under `uploads/drive/` expire after seven days; originals and thumbnails use the usual permanent photo prefixes. The bucket-wide incomplete multipart cleanup remains a fallback if a worker is terminated before it can abort.
 
 There are no application-imposed byte or photo-count caps on Drive imports. Service limits still apply: the new worker has 1024 MB and a 300-second timeout; the reused ingestion Lambda still uses 1024 MB and 300 seconds and processes image bytes in memory. Very large images, very slow downloads, large manifest aggregation, Step Functions execution/history limits, or Google quotas can therefore cause failures. A folder listing is not an immutable snapshot: keep its contents and public access stable during import. No paid download intermediary is used, but AWS usage still consumes allowances or credits and can incur charges. [Google Drive API quotas and pricing](https://developers.google.com/workspace/drive/api/guides/limits) apply independently.
 
@@ -334,7 +330,7 @@ Without both patterns, someone joining an open event directly would never get ma
 
 **Matching after a selfie is added or replaced.** The browser uploads to a temporary `selfies/pending/` key. Profile confirms that the image has exactly one face, copies it to a versioned permanent key, updates the current selfie pointer in `Users`, and asynchronously invokes `selfie_match_dispatcher`. The dispatcher queries all of that user's `EventAttendees` rows and invokes ingestion's existing `match_attendees` step for each `ATTENDEE` event. Event photos are not reprocessed or reindexed. On a new selfie version, ingestion replaces that attendee's previous matched-photo set; concurrent searches using the same version can add results. A DynamoDB transaction checks the current selfie version before writing, so work from an older version cannot overwrite newer results. Archived events are skipped because their Rekognition collections have been deleted. Invalid candidates leave the previous selfie intact, and abandoned temporary uploads expire after two days.
 
-**Guest email notifications.** `EventAttendees`, `Jobs`, and `Events` streams feed the `notifications` Lambda after records are saved. It emails the organizer when a join request arrives, the guest when a pending request is approved or declined, a guest when new matched photos appear (at most one email per event per day), the uploader when a job succeeds or fails, and admitted attendees after an event is archived. The deletion cascade captures admitted attendee IDs before removing their rows and invokes `notifications` only after cleanup succeeds. The deletion email has no event link because the event is gone. Emails use escaped, short HTML with inline CSS and a plain-text alternative. They contain a login-required event link where the event still exists, not photos or face data. Transactional emails are enabled by default for signed-up guests; they can turn them off in Profile. A `Notifications` row prevents normal stream retries from sending the same message twice. Email and DynamoDB cannot provide atomic exactly-once delivery, so a rare retry around the SES response can still need operator review.
+
 
 ---
 
@@ -377,7 +373,7 @@ For faster ingestion on larger events, request a service quota increase for both
 
 ## Running it yourself
 
-This is the deployment path for the repository as written: AWS region `ap-south-1`, AWS CLI profile `glimpses`, and AWS resource names beginning with `glimpses`. It uses two Terraform states and three kinds of Jenkins jobs: 21 backend/infrastructure modules, `frontend` for hosting, and `frontend-app` for the built React app. The fixed S3 bucket names must be available in your AWS account and globally; if another account already owns one, change the bucket names and matching hard-coded Jenkins S3 destinations before deploying.
+This is the deployment path for the repository as written: AWS region `ap-south-1`, AWS CLI profile `glimpses`, and AWS resource names beginning with `glimpses`. It uses two Terraform states and three kinds of Jenkins jobs: 19 backend/infrastructure modules, `frontend` for hosting, and `frontend-app` for the built React app. The fixed S3 bucket names must be available in your AWS account and globally; if another account already owns one, change the bucket names and matching hard-coded Jenkins S3 destinations before deploying.
 
 The order matters: create the Terraform state bucket, deploy shared backend resources, deploy frontend hosting, deploy the Lambda code, deploy orchestration/auth/API Gateway, then build and publish the React app. In particular, `events` needs the frontend CloudFront domain for QR join links, while `frontend-app` needs Cognito and API Gateway outputs.
 
@@ -399,36 +395,6 @@ Use a dedicated IAM principal with permission to create the AWS services in this
 ```
 
 These permissions are broad and intended for a dedicated deployment identity. Create its access key in IAM and keep the secret out of the repository.
-
-The `email` Jenkins job needs SES identity permissions that the policies above do not include. In IAM, add this inline policy to the deployment user (`glimpses-terraform` in this account) before running `email`. This example uses the project's current account, Region, and sender; change the account ID and sender address if you deploy your own copy:
-
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": [
-        "ses:CreateEmailIdentity",
-        "ses:GetEmailIdentity",
-        "ses:PutEmailIdentityFeedbackAttributes",
-        "ses:DeleteEmailIdentity",
-        "ses:ListTagsForResource",
-        "ses:TagResource",
-        "ses:UntagResource"
-      ],
-      "Resource": "arn:aws:ses:ap-south-1:921274142861:identity/hriday.mulchandani2027@gmail.com"
-    },
-    {
-      "Effect": "Allow",
-      "Action": "ses:GetAccount",
-      "Resource": "*"
-    }
-  ]
-}
-```
-
-Terraform reads SES identity tags immediately after creating the identity, even when this module declares no tags. If `email` fails on `ses:ListTagsForResource` after creation, add the missing permission and check both SES and Terraform state before rerunning. A failed create can leave the existing identity marked **tainted**, which makes the next apply delete and recreate it. If the identity exists in SES and is recorded in state, clear only that flag with `terraform untaint module.email.aws_sesv2_email_identity.sender` from `Infrastructure`, then run `terraform plan -target=module.email` and confirm the sender will not be replaced. Recreating an email identity requires verifying the new SES email again. The `notifications` Jenkins preflight also reads the account's production-access status, which requires `ses:GetAccount` with resource `*`; this permission only reads status and does not request production access. Requesting SES production access is a separate account-level action done by an authorized AWS user. The notification Lambda has only `ses:SendEmail` permission for the configured sender identity.
 
 Install AWS CLI, Terraform 1.10 or newer, Python with `pip` and `zip`, Node.js with `npm`, and Jenkins with the Job DSL and Pipeline plugins. Jenkins must have access to the same AWS profile and tools. Configure the AWS CLI profile that the existing Jenkinsfiles use:
 
@@ -463,7 +429,7 @@ The backend files use separate state keys: `glimpses/terraform.tfstate` for the 
 
 ### 3. Set deployment values and check quotas
 
-Set `alarm_email` in `Infrastructure/variables.tf` to an address you control, or supply it as a Terraform variable for every backend apply. Confirm the SNS subscription email after the alarms module deploys. The guest email sender is the separate `ses_sender_email` variable, currently set to `hriday.mulchandani2027@gmail.com`; change the Terraform variable to use another sender. Keep `aws_region` aligned with the backend bucket region; this guide uses the default `ap-south-1` throughout.
+Set `alarm_email` in `Infrastructure/variables.tf` to an address you control, or supply it as a Terraform variable for every backend apply. Confirm the SNS subscription email after the alarms module deploys. Keep `aws_region` aligned with the backend bucket region; this guide uses the default `ap-south-1` throughout.
 
 Check the account's Rekognition quotas before deploying the state machine:
 
@@ -501,19 +467,19 @@ Set `rekognition_index_max_concurrency` and `rekognition_search_max_concurrency`
 
 The Lambda Terraform modules point at ZIP files in `glimpses-deploy-artifacts`. Their Jenkins jobs build and upload those ZIPs **before** applying each module, then update the Lambda code. A bare `terraform apply` for a Lambda on a fresh account will fail because its deployment ZIP does not exist yet.
 
-In `Infrastructure/cicd/seed.groovy`, set `repoUrl` to your Git repository and `credentialsId` to a Jenkins Git credential that can read it. The generated jobs check out `main`; update `branch` there if your deployment branch has a different name. Commit and push configuration changes before running those jobs, because Jenkins reads the remote branch rather than your local working tree. Create a Jenkins job named `glimpses-seed` that checks out this repository, then runs `Infrastructure/cicd/seed.groovy` as its Job DSL script. The seed script reads the tracked `Infrastructure/cicd/jenkinsfiles.txt` from that checkout. An existing seed job that uses a workspace-root `jenkinsfiles.txt` still works: the updated script adds the dispatcher, email, notifications, and Drive import paths if that older list lacks them. If your seed job uses a pasted Job DSL script, update that script from the repository before rerunning it.
+In `Infrastructure/cicd/seed.groovy`, set `repoUrl` to your Git repository and `credentialsId` to a Jenkins Git credential that can read it. The generated jobs check out `main`; update `branch` there if your deployment branch has a different name. Commit and push configuration changes before running those jobs, because Jenkins reads the remote branch rather than your local working tree. Create a Jenkins job named `glimpses-seed` that checks out this repository, then runs `Infrastructure/cicd/seed.groovy` as its Job DSL script. The seed script reads the tracked `Infrastructure/cicd/jenkinsfiles.txt` from that checkout. An existing seed job that uses a workspace-root `jenkinsfiles.txt` still works: the updated script adds the dispatcher and Drive import paths if that older list lacks them. If your seed job uses a pasted Job DSL script, update that script from the repository before rerunning it.
 
-Run or rerun `glimpses-seed`. It creates or updates jobs named from the folder preceding `cicd`, including `email`, `notifications`, `frontend`, and `frontend-app`. Wait for each deployment job to succeed before starting the next one; they share Terraform state and should not apply concurrently.
+Run or rerun `glimpses-seed`. It creates or updates jobs named from the folder preceding `cicd`, including `frontend` and `frontend-app`. Wait for each deployment job to succeed before starting the next one; they share Terraform state and should not apply concurrently.
 
 ### 5. Deploy shared backend resources, then frontend hosting
 
 Run these Jenkins jobs in order:
 
 ```text
-dynamodb → buckets → alarms → email → cloudfront → frontend
+dynamodb → buckets → alarms → cloudfront → frontend
 ```
 
-These jobs create the tables, S3 buckets, alerts, SES sender identity, and signed-photo CloudFront distribution. `frontend` applies `Frontend/frontend`, creating the separate `glimpses-frontend` S3 hosting bucket and its CloudFront distribution. It does **not** build or upload the React app yet. Verify that the frontend hosting output exists:
+These jobs create the tables, S3 buckets, operator alerts, and signed-photo CloudFront distribution. `frontend` applies `Frontend/frontend`, creating the separate `glimpses-frontend` S3 hosting bucket and its CloudFront distribution. It does **not** build or upload the React app yet. Verify that the frontend hosting output exists:
 
 ```bash
 cd Frontend/frontend
@@ -522,23 +488,19 @@ terraform output -raw distribution_domain_name
 cd ../..
 ```
 
-After the `email` job, open the AWS verification email sent to `hriday.mulchandani2027@gmail.com` and click its link. Check the identity's status in SES in `ap-south-1`. Request SES production access in that Region before running `notifications`: while SES is in its sandbox, it can only send to verified recipient addresses. AWS reviews production-access requests; Terraform cannot grant approval. In the request, describe the six transactional messages, the Profile preference, and the app URL. SES forwards bounce and complaint feedback to the sender mailbox; monitor that mailbox and stop sending to addresses that bounce or complain. Do not deploy the stream consumer until the identity is verified and production access is granted.
-
 ### 6. Deploy Lambda code and remaining backend services
 
 Run these jobs in order:
 
 ```text
-heic_converter → db_api → download → ingestion → drive_import → selfie_match_dispatcher → notifications → profile → upload_status
+heic_converter → db_api → download → ingestion → drive_import → selfie_match_dispatcher → profile → upload_status
 → cascadeDelete → events → membership → gallery
 → state_machine → cognito → api_gateway
 ```
 
 `selfie_match_dispatcher` needs ingestion deployed before it, and profile needs the dispatcher deployed before it. `cascadeDelete` must be ready before `events` and `gallery`, which invoke it. The `events` job reads the frontend distribution domain from the frontend Terraform state and passes it into its Terraform apply. `state_machine` needs the ingestion and `db_api` Lambda ARNs. `api_gateway` needs the API Lambda ARNs and Cognito user pool, so it comes last among backend jobs.
 
-The `api_gateway` job also passes the frontend domain to Terraform so its dependency refresh does not remove that setting from the events Lambda. It first applies the new Drive import and email-preference path resources; their API Gateway IDs must exist before the module can plan CORS `OPTIONS` methods keyed by those IDs. Its second apply deploys the methods, integrations, and API stage.
-
-`notifications` reads the frontend distribution domain from the frontend Terraform state. Run `dynamodb` before it because the new Notifications table and Jobs stream are required. Run `cascadeDelete` after `notifications` because it invokes that Lambda when event cleanup succeeds. Rerun `api_gateway` and `frontend-app` to expose the Profile email switch.
+The `api_gateway` job also passes the frontend domain to Terraform so its dependency refresh does not remove that setting from the events Lambda. It first applies the new Drive import path resource; its API Gateway ID must exist before the module can plan CORS `OPTIONS` methods keyed by that ID. Its second apply deploys the methods, integrations, and API stage.
 
 The backend outputs needed by the browser should now be available:
 
@@ -574,12 +536,12 @@ GitHub Actions could run these pipelines too. It would require a different runne
 
 | Job group | Count | What a job does |
 |---|---:|---|
-| Shared infrastructure | 8 | Applies one Terraform module: DynamoDB, buckets, alarms, SES email identity, photo CloudFront, state machine, Cognito, or API Gateway. |
-| Backend Lambdas | 13 | Packages that Lambda's Python code for AWS, uploads its ZIP to `glimpses-deploy-artifacts`, applies its Terraform module, and updates the deployed code. |
+| Shared infrastructure | 7 | Applies one Terraform module: DynamoDB, buckets, alarms, photo CloudFront, state machine, Cognito, or API Gateway. |
+| Backend Lambdas | 12 | Packages that Lambda's Python code for AWS, uploads its ZIP to `glimpses-deploy-artifacts`, applies its Terraform module, and updates the deployed code. |
 | Frontend hosting | 1 | Applies `Frontend/frontend` to create the S3 bucket and CloudFront distribution for the site. |
 | React app | 1 | Reads Terraform outputs, builds `Frontend/`, syncs `dist/` to S3, and invalidates CloudFront. |
 
-There are **21 backend/infrastructure module jobs plus `frontend` and `frontend-app`**, for 23 deployment jobs. Each Jenkinsfile lives beside the part it deploys. The `glimpses-seed` Job DSL script reads the tracked `Infrastructure/cicd/jenkinsfiles.txt` and creates or updates those jobs with their repository URL, Git credential, branch, and Jenkinsfile path. The exact file list, setup, and first-deploy order are in [Running it yourself](#running-it-yourself). The seed job creates jobs; it does not run the deployment sequence for you.
+There are **19 backend/infrastructure module jobs plus `frontend` and `frontend-app`**, for 21 deployment jobs. Each Jenkinsfile lives beside the part it deploys. The `glimpses-seed` Job DSL script reads the tracked `Infrastructure/cicd/jenkinsfiles.txt` and creates or updates those jobs with their repository URL, Git credential, branch, and Jenkinsfile path. The exact file list, setup, and first-deploy order are in [Running it yourself](#running-it-yourself). The seed job creates jobs; it does not run the deployment sequence for you.
 
 The jobs share Terraform state, so run dependent deployments in the documented order and do not run applies against the same state concurrently. On later changes, run only the affected job and any downstream job that needs its new outputs. For example, a React-only change needs `frontend-app`; a change to the frontend hosting distribution needs `frontend`, and may require `events` if the distribution domain changes because QR join links use that domain.
 

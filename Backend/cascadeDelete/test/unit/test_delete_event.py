@@ -51,8 +51,6 @@ def test_delete_event_cascade_deletes_collection_faces_photos_s3_and_attendees(m
     )
     row_calls = []
     monkeypatch.setattr(delete_event, "delete_event_row", lambda event_id: row_calls.append(event_id))
-    notifications = []
-    monkeypatch.setattr(delete_event, "invoke_deleted_notifications", lambda event, user_ids: notifications.append((len(row_calls), user_ids)))
 
     result = delete_event.delete_event_cascade("evt_1")
 
@@ -63,7 +61,6 @@ def test_delete_event_cascade_deletes_collection_faces_photos_s3_and_attendees(m
     assert photos_calls == [["p1"]]
     assert attendees_calls == [("evt_1", ["user_1", "user_2"])]
     assert row_calls == ["evt_1"]
-    assert notifications == [(1, ["user_1"])]
 
 
 def test_delete_event_cascade_skips_batch_calls_when_nothing_to_delete(monkeypatch):

@@ -8,7 +8,6 @@ output "table_names" {
     faces           = aws_dynamodb_table.faces.name
     event_attendees = aws_dynamodb_table.event_attendees.name
     downloads       = aws_dynamodb_table.downloads.name
-    notifications   = aws_dynamodb_table.notifications.name
   }
 }
 
@@ -22,7 +21,6 @@ output "table_arns" {
     faces           = aws_dynamodb_table.faces.arn
     event_attendees = aws_dynamodb_table.event_attendees.arn
     downloads       = aws_dynamodb_table.downloads.arn
-    notifications   = aws_dynamodb_table.notifications.arn
   }
 }
 
@@ -34,9 +32,4 @@ output "events_stream_arn" {
 output "event_attendees_stream_arn" {
   description = "EventAttendees table's DynamoDB Stream ARN, for MatchOneAttendee's event-source-mapping."
   value       = aws_dynamodb_table.event_attendees.stream_arn
-}
-
-output "jobs_stream_arn" {
-  description = "Jobs table stream ARN for terminal upload notification events."
-  value       = aws_dynamodb_table.jobs.stream_arn
 }

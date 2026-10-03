@@ -1,7 +1,6 @@
 Infrastructure/modules/dynamodb/cicd/Jenkinsfile
 Infrastructure/modules/buckets/cicd/Jenkinsfile
 Infrastructure/modules/alarms/cicd/Jenkinsfile
-Infrastructure/modules/email/cicd/Jenkinsfile
 Infrastructure/modules/cloudfront/cicd/Jenkinsfile
 Backend/heic_converter/cicd/Jenkinsfile
 Backend/db_api/cicd/Jenkinsfile
@@ -9,7 +8,6 @@ Backend/download/cicd/Jenkinsfile
 Backend/ingestion/cicd/Jenkinsfile
 Backend/drive_import/cicd/Jenkinsfile
 Backend/selfie_match_dispatcher/cicd/Jenkinsfile
-Backend/notifications/cicd/Jenkinsfile
 Backend/profile/cicd/Jenkinsfile
 Backend/upload_status/cicd/Jenkinsfile
 Backend/cascadeDelete/cicd/Jenkinsfile

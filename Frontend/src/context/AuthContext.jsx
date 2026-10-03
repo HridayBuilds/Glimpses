@@ -17,7 +17,7 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     if (!user) return
-    // The first authenticated profile read creates the Users row used by notifications.
+    // The first authenticated profile read creates the Users row for profile and attendee data.
     getProfile().catch(() => {})
   }, [user])
 

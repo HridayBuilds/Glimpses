@@ -53,15 +53,6 @@ def update_display_name(user_id, display_name):
     )
 
 
-def set_email_notifications_enabled(user_id, enabled):
-    _users_table().update_item(
-        Key={"userID": user_id},
-        UpdateExpression="SET emailNotificationsEnabled = :enabled",
-        ExpressionAttributeValues={":enabled": enabled},
-        ConditionExpression="attribute_exists(userID)",
-    )
-
-
 def set_current_selfie(user_id, key, version):
     _users_table().update_item(
         Key={"userID": user_id},

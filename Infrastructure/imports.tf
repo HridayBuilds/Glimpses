@@ -12,12 +12,6 @@ module "alarms" {
   alarm_email = var.alarm_email
 }
 
-module "email" {
-  source = "./modules/email"
-
-  sender_email = var.ses_sender_email
-}
-
 module "cloudfront" {
   source = "./modules/cloudfront"
 
@@ -112,27 +106,6 @@ module "selfie_match_dispatcher" {
   alarm_sns_topic_arn        = module.alarms.alarm_sns_topic_arn
 }
 
-module "notifications" {
-  source = "../Backend/notifications/infra"
-
-  deploy_artifacts_bucket    = module.buckets.deploy_artifacts_bucket_name
-  users_table_name           = module.dynamodb.table_names["users"]
-  users_table_arn            = module.dynamodb.table_arns["users"]
-  events_table_name          = module.dynamodb.table_names["events"]
-  events_table_arn           = module.dynamodb.table_arns["events"]
-  events_stream_arn          = module.dynamodb.events_stream_arn
-  jobs_stream_arn            = module.dynamodb.jobs_stream_arn
-  event_attendees_table_name = module.dynamodb.table_names["event_attendees"]
-  event_attendees_table_arn  = module.dynamodb.table_arns["event_attendees"]
-  event_attendees_stream_arn = module.dynamodb.event_attendees_stream_arn
-  notifications_table_name   = module.dynamodb.table_names["notifications"]
-  notifications_table_arn    = module.dynamodb.table_arns["notifications"]
-  sender_email               = module.email.sender_email
-  sender_identity_arn        = module.email.sender_identity_arn
-  frontend_domain_name       = var.frontend_domain_name
-  alarm_sns_topic_arn        = module.alarms.alarm_sns_topic_arn
-}
-
 module "profile" {
   source = "../Backend/profile/infra"
 
@@ -216,21 +189,19 @@ module "gallery" {
 module "cascade_delete" {
   source = "../Backend/cascadeDelete/infra"
 
-  deploy_artifacts_bucket     = module.buckets.deploy_artifacts_bucket_name
-  events_table_name           = module.dynamodb.table_names["events"]
-  events_table_arn            = module.dynamodb.table_arns["events"]
-  events_stream_arn           = module.dynamodb.events_stream_arn
-  photos_table_name           = module.dynamodb.table_names["photos"]
-  photos_table_arn            = module.dynamodb.table_arns["photos"]
-  faces_table_name            = module.dynamodb.table_names["faces"]
-  faces_table_arn             = module.dynamodb.table_arns["faces"]
-  event_attendees_table_name  = module.dynamodb.table_names["event_attendees"]
-  event_attendees_table_arn   = module.dynamodb.table_arns["event_attendees"]
-  photos_bucket_name          = module.buckets.photos_bucket_name
-  photos_bucket_arn           = module.buckets.photos_bucket_arn
-  alarm_sns_topic_arn         = module.alarms.alarm_sns_topic_arn
-  notifications_function_name = module.notifications.function_name
-  notifications_function_arn  = module.notifications.function_arn
+  deploy_artifacts_bucket    = module.buckets.deploy_artifacts_bucket_name
+  events_table_name          = module.dynamodb.table_names["events"]
+  events_table_arn           = module.dynamodb.table_arns["events"]
+  events_stream_arn          = module.dynamodb.events_stream_arn
+  photos_table_name          = module.dynamodb.table_names["photos"]
+  photos_table_arn           = module.dynamodb.table_arns["photos"]
+  faces_table_name           = module.dynamodb.table_names["faces"]
+  faces_table_arn            = module.dynamodb.table_arns["faces"]
+  event_attendees_table_name = module.dynamodb.table_names["event_attendees"]
+  event_attendees_table_arn  = module.dynamodb.table_arns["event_attendees"]
+  photos_bucket_name         = module.buckets.photos_bucket_name
+  photos_bucket_arn          = module.buckets.photos_bucket_arn
+  alarm_sns_topic_arn        = module.alarms.alarm_sns_topic_arn
 }
 
 module "state_machine" {

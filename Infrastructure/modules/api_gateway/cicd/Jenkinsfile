@@ -33,7 +33,7 @@ pipeline {
         stage('Create new API paths') {
             steps {
                 dir('Infrastructure') {
-                    sh 'terraform apply -target=module.api_gateway.aws_api_gateway_resource.event_drive_import -target=module.api_gateway.aws_api_gateway_resource.profile_email_notifications -var frontend_domain_name=${FRONTEND_DOMAIN} -auto-approve'
+                    sh 'terraform apply -target=module.api_gateway.aws_api_gateway_resource.event_drive_import -var frontend_domain_name=${FRONTEND_DOMAIN} -auto-approve'
                 }
             }
         }

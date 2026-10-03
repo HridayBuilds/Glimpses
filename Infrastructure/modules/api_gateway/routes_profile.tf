@@ -11,12 +11,6 @@ resource "aws_api_gateway_resource" "profile_selfie" {
   path_part   = "selfie"
 }
 
-resource "aws_api_gateway_resource" "profile_email_notifications" {
-  rest_api_id = aws_api_gateway_rest_api.this.id
-  parent_id   = aws_api_gateway_resource.profile.id
-  path_part   = "email-notifications"
-}
-
 resource "aws_api_gateway_resource" "profile_selfie_confirm" {
   rest_api_id = aws_api_gateway_rest_api.this.id
   parent_id   = aws_api_gateway_resource.profile_selfie.id
@@ -38,13 +32,6 @@ locals {
       function_name = var.profile_function_name
       function_arn  = var.profile_function_arn
       request_model = aws_api_gateway_model.profile_update.name
-    }
-    profile_email_notifications_put = {
-      resource_id   = aws_api_gateway_resource.profile_email_notifications.id
-      http_method   = "PUT"
-      function_name = var.profile_function_name
-      function_arn  = var.profile_function_arn
-      request_model = aws_api_gateway_model.email_notifications_update.name
     }
     profile_selfie_put = {
       resource_id   = aws_api_gateway_resource.profile_selfie.id

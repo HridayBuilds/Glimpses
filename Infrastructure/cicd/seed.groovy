@@ -14,14 +14,19 @@ try {
 def requiredJenkinsfiles = [
     'Backend/drive_import/cicd/Jenkinsfile',
     'Backend/selfie_match_dispatcher/cicd/Jenkinsfile',
-    'Infrastructure/modules/email/cicd/Jenkinsfile',
-    'Backend/notifications/cicd/Jenkinsfile',
 ]
 requiredJenkinsfiles.each { path ->
     if (!jenkinsfiles.contains(path)) {
         jenkinsfiles.add(path)
     }
 }
+
+// Older workspace-root manifests can still list these retired jobs.
+def retiredJenkinsfiles = [
+    'Infrastructure/modules/email/cicd/Jenkinsfile',
+    'Backend/notifications/cicd/Jenkinsfile',
+]
+jenkinsfiles = jenkinsfiles.findAll { !retiredJenkinsfiles.contains(it) }
 
 jenkinsfiles.each { path ->
     def jobName = path.split('/')[-3]

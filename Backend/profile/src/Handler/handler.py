@@ -27,12 +27,6 @@ def update_profile():
     return manager.update_profile({"userID": _user_id(), "displayName": body.get("displayName")})
 
 
-@app.put("/profile/email-notifications")
-def update_email_notifications():
-    body = app.current_event.json_body or {}
-    return manager.update_email_notifications({"userID": _user_id(), "enabled": body.get("enabled")})
-
-
 @app.put("/profile/selfie")
 def mint_selfie_upload_url():
     return manager.mint_selfie_upload_url({"userID": _user_id()})

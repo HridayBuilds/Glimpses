@@ -10,7 +10,7 @@ import ConfirmDialog from '../../components/common/ConfirmDialog'
 import SelfieOptionsSheet from '../../components/profile/SelfieOptionsSheet'
 import CameraCapture from '../../components/profile/CameraCapture'
 import { useAuth } from '../../context/AuthContext'
-import { getProfile, updateProfile, updateEmailNotifications, uploadSelfie, deleteSelfie } from '../../lib/profileApi'
+import { getProfile, updateProfile, uploadSelfie, deleteSelfie } from '../../lib/profileApi'
 
 function Profile() {
   const { logout } = useAuth()
@@ -40,15 +40,6 @@ function Profile() {
       toast.success('Name updated')
     },
     onError: () => toast.error('Could not update your name.'),
-  })
-
-  const emailNotificationsMutation = useMutation({
-    mutationFn: updateEmailNotifications,
-    onSuccess: () => {
-      invalidateProfile()
-      toast.success('Email preference saved')
-    },
-    onError: () => toast.error('Could not update email preference.'),
   })
 
   const uploadSelfieMutation = useMutation({
@@ -192,17 +183,6 @@ function Profile() {
                 {profile.email}
               </div>
             </div>
-
-            <label className="mb-[30px] flex items-start gap-3 text-[14px] text-white/70">
-              <input
-                type="checkbox"
-                checked={profile.emailNotificationsEnabled}
-                disabled={emailNotificationsMutation.isPending}
-                onChange={(event) => emailNotificationsMutation.mutate(event.target.checked)}
-                className="mt-1 accent-[#FF7A59]"
-              />
-              <span>Email me event requests, decisions, photo matches, upload results, archives, and deletions.</span>
-            </label>
 
             <div className="mb-[22px] h-px bg-white/[0.07]" />
             <Link to="/app/privacy" className="text-[15px] font-medium">

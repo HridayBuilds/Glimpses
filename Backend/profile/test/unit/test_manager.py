@@ -16,7 +16,7 @@ def test_get_profile_returns_profile_without_selfie_url_when_no_selfie(monkeypat
 
     result = manager.get_profile({"userID": "user_1"})
 
-    assert result == {"userID": "user_1", "displayName": "Meera", "email": "meera@example.com", "emailNotificationsEnabled": True}
+    assert result == {"userID": "user_1", "displayName": "Meera", "email": "meera@example.com"}
 
 
 def test_get_profile_returns_selfie_url_when_selfie_exists(monkeypatch):
@@ -49,19 +49,7 @@ def test_get_profile_creates_user_when_unknown(monkeypatch):
     result = manager.get_profile({"userID": "missing", "email": "meera@example.com", "name": "Meera"})
 
     assert created == {"userID": "missing", "email": "meera@example.com", "displayName": "Meera"}
-    assert result == {"userID": "missing", "displayName": "Meera", "email": "meera@example.com", "emailNotificationsEnabled": True}
-
-
-def test_email_notifications_preference_requires_boolean(monkeypatch):
-    changed = []
-    monkeypatch.setattr(manager, "set_email_notifications_enabled", lambda user_id, enabled: changed.append((user_id, enabled)))
-    assert manager.update_email_notifications({"userID": "user_1", "enabled": False}) == {"emailNotificationsEnabled": False}
-    assert changed == [("user_1", False)]
-    try:
-        manager.update_email_notifications({"userID": "user_1", "enabled": "false"})
-        assert False, "expected ValueError"
-    except ValueError:
-        pass
+    assert result == {"userID": "missing", "displayName": "Meera", "email": "meera@example.com"}
 
 
 def test_update_profile_updates_display_name(monkeypatch):
