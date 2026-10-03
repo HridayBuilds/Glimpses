@@ -1,4 +1,5 @@
 from aws_lambda_powertools.event_handler import APIGatewayRestResolver, CORSConfig
+from aws_lambda_powertools.event_handler.exceptions import ForbiddenError
 
 from Manager import manager
 
@@ -22,7 +23,10 @@ def leave_event(event_id: str):
 
 @app.get("/events/<event_id>/info")
 def get_event_info(event_id: str):
-    return manager.get_event_info({"eventID": event_id, "callerID": _caller_id()})
+    try:
+        return manager.get_event_info({"eventID": event_id, "callerID": _caller_id()})
+    except manager.EventAccessError as error:
+        raise ForbiddenError(str(error)) from None
 
 
 @app.get("/events/<event_id>/attendees")

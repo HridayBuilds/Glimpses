@@ -250,14 +250,11 @@ def test_get_event_info_gates_fields_by_membership_status():
     assert attendee_body["accessCode"] == "AB23CD"
     assert attendee_body["qrcodeUrl"].endswith("/qrcodes/event/evt_1/qrcode.png")
 
-    try:
-        lambda_handler(
-            _api_event("GET", "/events/evt_1/info", claims={"sub": "user_3"}, path_parameters={"event_id": "evt_1"}),
-            _FakeLambdaContext(),
-        )
-        assert False, "expected ValueError"
-    except ValueError:
-        pass
+    non_member_response = lambda_handler(
+        _api_event("GET", "/events/evt_1/info", claims={"sub": "user_3"}, path_parameters={"event_id": "evt_1"}),
+        _FakeLambdaContext(),
+    )
+    assert non_member_response["statusCode"] == 403
 
 
 @mock_aws
@@ -364,6 +361,13 @@ def test_eject_removes_admitted_attendee():
     attendees_table = dynamodb.Table(os.environ["EVENT_ATTENDEES_TABLE_NAME"])
     item = attendees_table.get_item(Key={"userID": "user_2", "eventID": "evt_1"})["Item"]
     assert item["status"] == "BLOCKED"
+
+    removed_response = lambda_handler(
+        _api_event("GET", "/events/evt_1/info", claims={"sub": "user_2"}, path_parameters={"event_id": "evt_1"}),
+        _FakeLambdaContext(),
+    )
+    assert removed_response["statusCode"] == 403
+    assert json.loads(removed_response["body"])["message"] == "You no longer have access to this event"
 
 
 @mock_aws

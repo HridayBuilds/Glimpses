@@ -13,10 +13,13 @@ function EventEntry() {
   const { eventId } = useParams()
   const navigate = useNavigate()
 
-  const { data: info, isLoading, isError } = useQuery({
+  const { data: info, error, isLoading, isError } = useQuery({
     queryKey: ['events', eventId, 'info'],
     queryFn: () => getEventInfo(eventId),
+    retry: (failures, requestError) => requestError.response?.status !== 403 && failures < 2,
+    refetchInterval: (query) => query.state.error?.response?.status === 403 ? false : 30_000,
   })
+  const accessRemoved = isError && error?.response?.status === 403
 
   // GET /events/{id}/info doesn't carry a role field, so organizer-ness is read off
   // the same organized-events list Home.jsx fetches (GET /events, organizer-only).
@@ -28,6 +31,18 @@ function EventEntry() {
 
   // The reduced shape (no accessCode) is what GET /events/{id}/info returns for a PENDING caller.
   const isPending = info && !info.accessCode
+
+  if (accessRemoved) {
+    return (
+      <div className="min-h-svh bg-[radial-gradient(120%_60%_at_50%_0%,#131317_0%,#08080A_60%)] px-6 pt-24 text-center text-[#F5F5F7]">
+        <h1 className="text-2xl font-semibold">{error.response?.data?.message || 'You cannot access this event'}</h1>
+        <p className="mt-3 text-white/55">It is no longer available in your events.</p>
+        <button onClick={() => navigate('/app', { replace: true })} className="mt-7 cursor-pointer rounded-xl bg-[#FF7A59] px-5 py-3 font-semibold text-[#200C05]">
+          Back to my events
+        </button>
+      </div>
+    )
+  }
 
   if (info && !isPending) {
     return (

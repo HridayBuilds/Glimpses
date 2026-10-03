@@ -20,6 +20,10 @@ STATUS_BLOCKED = "BLOCKED"
 ACTIVE_EVENT_STATUS = "ACTIVE"
 
 
+class EventAccessError(ValueError):
+    pass
+
+
 def _get_event_or_raise(event_id):
     event = get_event(event_id)
     if event is None:
@@ -123,7 +127,9 @@ def get_event_info(payload):
         return _full_event_info(event)
     if attendee is not None and attendee["status"] == STATUS_PENDING:
         return _limited_event_info(event)
-    raise ValueError("Not a member of this event")
+    if attendee is not None and attendee["status"] == STATUS_BLOCKED:
+        raise EventAccessError("You no longer have access to this event")
+    raise EventAccessError("You do not have access to this event")
 
 
 def admit_attendee(payload):
