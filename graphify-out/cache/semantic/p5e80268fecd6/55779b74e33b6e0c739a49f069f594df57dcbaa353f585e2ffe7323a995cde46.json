@@ -1,1 +1,0 @@
-{"nodes": [{"id": "backend_notifications", "label": "Notifications Lambda", "file_type": "code", "source_file": "Backend/notifications/requirements.txt", "rationale": "Sends HTML/text emails via SES based on DynamoDB Streams and event deletions."}], "edges": [], "hyperedges": []}

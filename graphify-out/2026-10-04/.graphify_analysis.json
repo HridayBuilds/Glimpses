@@ -2600,13 +2600,13 @@
       "degree": 17
     },
     {
-      "id": "backend_cascadedelete_src_manager_delete_event_delete_event_cascade",
-      "label": "delete_event_cascade()",
+      "id": "api_gateway_aws_api_gateway_resource_event_id",
+      "label": "aws_api_gateway_resource.event_id",
       "degree": 15
     },
     {
-      "id": "api_gateway_aws_api_gateway_resource_event_id",
-      "label": "aws_api_gateway_resource.event_id",
+      "id": "backend_cascadedelete_src_manager_delete_event_delete_event_cascade",
+      "label": "delete_event_cascade()",
       "degree": 15
     },
     {
@@ -2625,7 +2625,7 @@
       ],
       "confidence": "EXTRACTED",
       "relation": "references",
-      "why": "crosses file types (image ↔ doc); connects across different repos/directories"
+      "why": "crosses file types (doc \u2194 image); connects across different repos/directories"
     },
     {
       "source": "Codebase Knowledge Graph Overview",
@@ -2636,18 +2636,18 @@
       ],
       "confidence": "EXTRACTED",
       "relation": "references",
-      "why": "crosses file types (doc ↔ image); connects across different repos/directories"
+      "why": "crosses file types (doc \u2194 image); connects across different repos/directories"
     },
     {
-      "source": "test_api_returns_accepted_job_and_rejects_bad_links()",
-      "target": "lambda_handler()",
+      "source": "System Architecture Diagram",
+      "target": "Terraform",
       "source_files": [
-        "Backend/drive_import/test/unit/test_import.py",
-        "Backend/drive_import/src/routeHandler.py"
+        "assets/architecture/tech-stack.png",
+        "Frontend/public/images/marketing/stack-terraform.png"
       ],
-      "confidence": "INFERRED",
-      "relation": "calls",
-      "why": "inferred connection - not explicitly stated in source; bridges separate communities; peripheral node `test_api_returns_accepted_job_and_rejects_bad_links()` unexpectedly reaches hub `lambda_handler()`"
+      "confidence": "EXTRACTED",
+      "relation": "references",
+      "why": "connects across different repos/directories; peripheral node `Terraform` unexpectedly reaches hub `System Architecture Diagram`"
     },
     {
       "source": "AWS Lambda Powertools for Python logo",
@@ -2672,41 +2672,8 @@
       "why": "inferred connection - not explicitly stated in source; connects across different repos/directories"
     }
   ],
-  "questions": [
-    {
-      "type": "bridge_node",
-      "question": "Why does `Boto3` connect `Database Integration Tests` to `Cascade Delete Logic`, `User Profile Service`, `Database API Service`, `Drive Import DAO`, `Google Drive Client`?",
-      "why": "High betweenness centrality (0.026) - this node is a cross-community bridge."
-    },
-    {
-      "type": "bridge_node",
-      "question": "Why does `get_event()` connect `Cascade Delete Logic` to `Events Data Access`, `Membership Data Access`, `Upload Status Service`?",
-      "why": "High betweenness centrality (0.019) - this node is a cross-community bridge."
-    },
-    {
-      "type": "bridge_node",
-      "question": "Why does `lambda_handler()` connect `Database Integration Tests` to `Google Drive Manager`?",
-      "why": "High betweenness centrality (0.011) - this node is a cross-community bridge."
-    },
-    {
-      "type": "verify_inferred",
-      "question": "Are the 22 inferred relationships involving `lambda_handler()` (e.g. with `test_create_then_mark_success_round_trip()` and `test_drive_create_retry_preserves_progress_and_counts()`) actually correct?",
-      "why": "`lambda_handler()` has 22 INFERRED edges - model-reasoned connections that need verification."
-    },
-    {
-      "type": "isolated_nodes",
-      "question": "What connects `output.function_arn`, `output.function_name`, `aws_cloudwatch_log_group.this` to the rest of the system?",
-      "why": "328 weakly-connected nodes found - possible documentation gaps or missing edges."
-    },
-    {
-      "type": "low_cohesion",
-      "question": "Should `API Gateway Configuration` be split into smaller, more focused modules?",
-      "why": "Cohesion score 0.05319355464958261 - nodes in this community are weakly interconnected."
-    },
-    {
-      "type": "low_cohesion",
-      "question": "Should `Events Data Access` be split into smaller, more focused modules?",
-      "why": "Cohesion score 0.07364114552893045 - nodes in this community are weakly interconnected."
-    }
-  ]
+  "tokens": {
+    "input": 14761,
+    "output": 1910
+  }
 }
