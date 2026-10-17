@@ -9,7 +9,11 @@ import { pollUploadJobs } from '../../lib/uploadJobStatus'
 
 const MAX_PHOTOS = 500
 
-const STAGE_LABEL = { CREATED: 'Starting', EXTRACTING: 'Extracting', INDEXING: 'Indexing faces', MATCHING: 'Matching attendees', FAILED: 'Processing failed' }
+const PROCESS_STAGES = [
+  { status: 'EXTRACTING', label: 'Extract' },
+  { status: 'INDEXING', label: 'Index faces' },
+  { status: 'MATCHING', label: 'Find matches' },
+]
 const FINISHED_STATES = ['SUCCESS', 'FAILED']
 
 // Fibonacci-spaced polling: quick checks early (a small batch may finish in
@@ -27,7 +31,7 @@ function fibonacciPollDelay(pollCount) {
   return Math.min(a * POLL_BASE_MS, POLL_MAX_MS)
 }
 
-function ProgressRow({ label, value, detail, percent }) {
+function ProgressRow({ label, value, percent, children }) {
   return (
     <div>
       <div className="flex items-baseline justify-between gap-3 text-[14px]">
@@ -40,11 +44,11 @@ function ProgressRow({ label, value, detail, percent }) {
         aria-valuenow={Math.round(percent)}
         aria-valuemin={0}
         aria-valuemax={100}
-        className="mt-2.5 h-[7px] overflow-hidden rounded-full bg-white/[0.1]"
+        className="mt-3 h-[8px] overflow-hidden rounded-full bg-white/[0.1]"
       >
         <div className="h-full rounded-full bg-[#FF7A59] transition-[width] duration-300 ease-out" style={{ width: `${percent}%` }} />
       </div>
-      <p className="mt-2 text-[13px] leading-[1.45] text-white/50">{detail}</p>
+      {children && <div className="mt-3 text-[13px] leading-[1.45] text-white/50">{children}</div>}
     </div>
   )
 }
@@ -64,7 +68,7 @@ function UploadFlow() {
   const [batchTotal, setBatchTotal] = useState(0)
   const [uploadedBatches, setUploadedBatches] = useState(0)
   const [currentBatchPct, setCurrentBatchPct] = useState(null)
-  const [activityLabel, setActivityLabel] = useState('')
+  const [currentBatchStep, setCurrentBatchStep] = useState('preparing')
   const [errorDetail, setErrorDetail] = useState('')
   const [retryPending, setRetryPending] = useState(false)
   const resumeRef = useRef(null)
@@ -124,7 +128,7 @@ function UploadFlow() {
     setUploadedBatches(0)
     setCurrentBatchPct(null)
     knownJobsRef.current = {}
-    setActivityLabel('')
+    setCurrentBatchStep('preparing')
     setErrorDetail('')
     setRetryPending(false)
     resumeRef.current = null
@@ -189,13 +193,13 @@ function UploadFlow() {
     for (let index = startAt; index < batches.length; index++) {
       try {
         setPhase('preparing')
-        setActivityLabel(`Preparing batch ${index + 1} of ${batches.length}`)
+        setCurrentBatchStep('preparing')
         setCurrentBatchPct(0)
         const blob = preparedNext
           ? await preparedNext
           : await zipFilesInWorker(batches[index], setCurrentBatchPct)
         preparedNext = null
-        setActivityLabel(`Uploading batch ${index + 1} of ${batches.length}`)
+        setCurrentBatchStep('uploading')
         setCurrentBatchPct(0)
         // Prepare only one batch ahead. The network uploads remain sequential,
         // while ZIP work can use otherwise idle time during the current PUT.
@@ -294,7 +298,7 @@ function UploadFlow() {
             ? 'Photos added'
             : status === 'FAILED'
               ? 'Photos could not be processed'
-            : 'Adding photos'
+            : 'Processing your photos'
           : phase === 'error'
             ? 'Something went wrong'
             : 'Add photos'
@@ -303,22 +307,26 @@ function UploadFlow() {
     phase === 'error'
       ? errorDetail || "Nothing you've already added was lost. You can try again."
       : phase === 'processing' && status === 'SUCCESS'
-        ? "Matching runs on the new photos automatically. There's nothing else you need to do."
+        ? 'Your photos are ready in the gallery.'
         : phase === 'processing' && status === 'FAILED'
           ? 'The upload reached the server, but photo processing failed. Please try a smaller selection.'
         : phase === 'idle'
           ? 'Pick photos or a ZIP archive to add to this event.'
-          : 'Your photos upload in small groups, then become available as processing finishes.'
+          : phase === 'processing'
+            ? 'Upload complete. Processing continues if you leave this page.'
+            : batchTotal
+              ? 'Small batches make large uploads more reliable. Keep this page open until they finish uploading.'
+              : 'Keep this page open until the ZIP finishes uploading.'
 
   const processingPct = batchTotal ? (finishedJobs.length / batchTotal) * 100 : jobIds.length ? (finishedJobs.length / jobIds.length) * 100 : 0
-  const batchUploadPct = batchTotal ? (uploadedBatches / batchTotal) * 100 : 0
-  const uploadPct = batchTotal ? batchUploadPct : phase === 'processing' ? 100 : pct
+  const uploadPct = batchTotal ? phase === 'processing' ? 100 : currentBatchPct ?? 0 : phase === 'processing' ? 100 : pct
+  const currentBatchNumber = Math.min(uploadedBatches + 1, batchTotal)
   const succeededCount = finishedJobs.reduce((total, job) => total + (job.succeededCount ?? 0), 0)
   const failedCount = finishedJobs.reduce((total, job) => total + (job.failedCount ?? 0), 0)
   const failedJobs = finishedJobs.filter((job) => job.status === 'FAILED').length
   const done = phase === 'processing' && allFinished
   const partial = done && (failedCount > 0 || failedJobs > 0)
-  const activeStages = [...new Set(runningJobs.map((job) => STAGE_LABEL[job.status] ?? 'Starting'))]
+  const stageCounts = Object.fromEntries(PROCESS_STAGES.map(({ status }) => [status, runningJobs.filter((job) => job.status === status).length]))
 
   return (
     <div className="min-h-svh bg-[radial-gradient(120%_60%_at_50%_0%,#131317_0%,#08080A_60%)] text-[#F5F5F7]">
@@ -347,44 +355,65 @@ function UploadFlow() {
         )}
 
         {(busy || phase === 'error') && (
-          <div className="rounded-[18px] border border-white/[0.08] bg-white/[0.05] p-5">
+          <div className="overflow-hidden rounded-[26px] border border-white/[0.11] bg-[linear-gradient(145deg,rgba(255,255,255,0.085),rgba(255,255,255,0.025)_65%)] p-5 shadow-[0_20px_60px_rgba(0,0,0,0.18)] sm:p-6">
             {phase === 'error' ? (
               <div className="text-[15px] font-semibold tracking-[-0.008em] text-[#FF8A8A]">Upload failed</div>
             ) : (
-              <div className="space-y-5">
-                <ProgressRow
-                  label="Upload"
-                  value={batchTotal ? `${uploadedBatches} of ${batchTotal} batches` : `${uploadPct}%`}
-                  percent={uploadPct}
-                  detail={phase === 'processing'
-                    ? 'All files uploaded.'
-                    : batchTotal
-                      ? `${activityLabel}${currentBatchPct === null ? '' : ` · ${currentBatchPct}% of this batch`}. Keep this page open.`
-                      : 'Keep this page open until the ZIP uploads.'}
-                />
-                <div className="border-t border-white/[0.08] pt-5">
-                  <ProgressRow
-                    label="Processing"
-                    value={`${finishedJobs.length} of ${batchTotal || 1} ${batchTotal === 1 || (!batchTotal && jobIds.length <= 1) ? 'batch' : 'batches'}`}
-                    percent={processingPct}
-                    detail={done
-                      ? `${succeededCount} photos added${failedCount ? ` · ${failedCount} failed` : ''}.`
-                      : jobIds.length === 0
-                        ? 'Starts when the first upload finishes.'
-                        : `${activeStages.length ? activeStages.join(', ') : 'Checking uploaded photos'}${unreachableCount ? ` · Retrying ${unreachableCount} status ${unreachableCount === 1 ? 'check' : 'checks'}` : ''}${succeededCount ? ` · ${succeededCount} photos added` : ''}`}
-                  />
+              <div>
+                <div className="mb-6 flex items-center justify-between gap-3 border-b border-white/[0.08] pb-5">
+                  <div className="min-w-0">
+                    <p className="text-[12px] font-semibold uppercase tracking-[0.1em] text-white/40">Photo transfer</p>
+                    <p className="mt-1 truncate text-[18px] font-semibold tracking-[-0.02em]">{pickedLabel}</p>
+                  </div>
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#FF7A59]/12 text-[#FF9578]" aria-hidden="true">↗</div>
                 </div>
-                <p className="text-[12.5px] leading-[1.5] text-white/40">
-                  {phase === 'processing'
-                    ? 'Processing continues if you leave this page. Progress counts completed batches.'
-                    : 'Small batches keep large selections manageable and let photos start processing sooner.'}
-                </p>
+
+                <div className="relative pl-10">
+                  <div className={`absolute left-0 top-0 flex h-7 w-7 items-center justify-center rounded-full text-[12px] font-bold ${phase === 'processing' ? 'bg-[#6FD8B0]/15 text-[#6FD8B0]' : 'bg-[#FF7A59] text-[#200C05]'}`} aria-hidden="true">
+                    {phase === 'processing' ? '✓' : '1'}
+                  </div>
+                  <ProgressRow
+                    label={phase === 'processing' ? 'Upload complete' : batchTotal ? `${currentBatchStep === 'preparing' ? 'Preparing' : 'Uploading'} batch ${currentBatchNumber} of ${batchTotal}` : 'Uploading ZIP'}
+                    value={phase === 'processing' ? '100%' : `${Math.round(uploadPct)}%`}
+                    percent={uploadPct}
+                  >
+                    {batchTotal
+                      ? `${uploadedBatches} of ${batchTotal} batches uploaded`
+                      : phase === 'processing' ? 'ZIP uploaded' : 'Sending your ZIP to storage'}
+                  </ProgressRow>
+                </div>
+
+                <div className="relative mt-6 border-t border-white/[0.08] pt-6 pl-10">
+                  <div className={`absolute left-0 top-6 flex h-7 w-7 items-center justify-center rounded-full text-[12px] font-bold ${jobIds.length ? 'bg-[#FF7A59]/15 text-[#FF9578]' : 'bg-white/[0.08] text-white/40'}`} aria-hidden="true">2</div>
+                  <ProgressRow
+                    label="Processing photos"
+                    value={`${finishedJobs.length} of ${batchTotal || 1} finished`}
+                    percent={processingPct}
+                  >
+                    {jobIds.length === 0
+                      ? 'Starts as soon as a batch finishes uploading.'
+                      : done
+                        ? `${succeededCount} photos added${failedCount ? ` · ${failedCount} failed` : ''}`
+                        : <>
+                            <div className="grid grid-cols-3 gap-1.5" aria-label="Processing stages">
+                              {PROCESS_STAGES.map(({ status: stage, label }) => (
+                                <div key={stage} className={`rounded-[10px] border px-2 py-2 text-center text-[11px] font-medium leading-tight ${stageCounts[stage] ? 'border-[#FF7A59]/30 bg-[#FF7A59]/10 text-[#FFAC96]' : 'border-white/[0.07] bg-white/[0.035] text-white/40'}`}>
+                                  {label}{stageCounts[stage] > 0 && <span className="ml-1 font-mono">{stageCounts[stage]}</span>}
+                                </div>
+                              ))}
+                            </div>
+                            {runningJobs.some((job) => job.status === 'CREATED') && <p className="mt-2">Starting newly uploaded batches</p>}
+                            {unreachableCount > 0 && <p className="mt-2">Retrying {unreachableCount} status {unreachableCount === 1 ? 'check' : 'checks'}</p>}
+                            {succeededCount > 0 && <p className="mt-2">{succeededCount} photos added so far</p>}
+                          </>}
+                  </ProgressRow>
+                </div>
               </div>
             )}
           </div>
         )}
 
-        <div className="mt-3 flex items-center gap-3 rounded-[14px] border border-dashed border-white/[0.14] bg-white/[0.04] p-4">
+        {!busy && <div className="mt-3 flex items-center gap-3 rounded-[14px] border border-dashed border-white/[0.14] bg-white/[0.04] p-4">
           <div className="min-w-0 flex-1">
             <div className="text-[14.5px] font-semibold tracking-[-0.008em]">{pickedLabel ?? 'No files chosen yet'}</div>
             <div className="mt-0.5 text-[13px] leading-[1.55] text-white/42">
@@ -393,8 +422,7 @@ function UploadFlow() {
           </div>
           <button
             onClick={() => fileInputRef.current?.click()}
-            disabled={busy}
-            className="flex-none cursor-pointer rounded-[10px] border border-white/[0.12] bg-white/[0.09] px-[13px] py-2.5 text-[14px] font-medium transition-transform duration-[90ms] ease-out active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
+            className="flex-none cursor-pointer rounded-[10px] border border-white/[0.12] bg-white/[0.09] px-[13px] py-2.5 text-[14px] font-medium transition-transform duration-[90ms] ease-out active:scale-95"
           >
             Choose files
           </button>
@@ -406,7 +434,7 @@ function UploadFlow() {
             onChange={onInputChange}
             className="hidden"
           />
-        </div>
+        </div>}
 
         {done && (
           <div className="mt-3.5">
