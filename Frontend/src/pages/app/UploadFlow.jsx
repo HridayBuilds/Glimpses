@@ -398,7 +398,7 @@ function UploadFlow() {
                             <div className="grid grid-cols-3 gap-1.5" aria-label="Processing stages">
                               {PROCESS_STAGES.map(({ status: stage, label }) => (
                                 <div key={stage} className={`rounded-[10px] border px-2 py-2 text-center text-[11px] font-medium leading-tight ${stageCounts[stage] ? 'border-[#FF7A59]/30 bg-[#FF7A59]/10 text-[#FFAC96]' : 'border-white/[0.07] bg-white/[0.035] text-white/40'}`}>
-                                  {label}{stageCounts[stage] > 0 && <span className="ml-1 font-mono">{stageCounts[stage]}</span>}
+                                  {label}
                                 </div>
                               ))}
                             </div>
