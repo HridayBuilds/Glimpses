@@ -27,6 +27,28 @@ function fibonacciPollDelay(pollCount) {
   return Math.min(a * POLL_BASE_MS, POLL_MAX_MS)
 }
 
+function ProgressRow({ label, value, detail, percent }) {
+  return (
+    <div>
+      <div className="flex items-baseline justify-between gap-3 text-[14px]">
+        <span className="font-semibold text-white/90">{label}</span>
+        <span className="shrink-0 font-mono text-[13px] tabular-nums text-[#FF9578]">{value}</span>
+      </div>
+      <div
+        role="progressbar"
+        aria-label={label}
+        aria-valuenow={Math.round(percent)}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        className="mt-2.5 h-[7px] overflow-hidden rounded-full bg-white/[0.1]"
+      >
+        <div className="h-full rounded-full bg-[#FF7A59] transition-[width] duration-300 ease-out" style={{ width: `${percent}%` }} />
+      </div>
+      <p className="mt-2 text-[13px] leading-[1.45] text-white/50">{detail}</p>
+    </div>
+  )
+}
+
 function UploadFlow() {
   const { eventId } = useParams()
   const navigate = useNavigate()
@@ -161,18 +183,28 @@ function UploadFlow() {
 
   const uploadBatches = async (batches, startAt = 0, completedIds = []) => {
     const ids = [...completedIds]
+    let preparedNext = null
     setBatchTotal(batches.length)
     setUploadedBatches(ids.length)
     for (let index = startAt; index < batches.length; index++) {
       try {
         setPhase('preparing')
-        setActivityLabel(`Packing batch ${index + 1} of ${batches.length}`)
+        setActivityLabel(`Preparing batch ${index + 1} of ${batches.length}`)
         setCurrentBatchPct(0)
-        const blob = await zipFilesInWorker(batches[index], (percent) => {
-          setCurrentBatchPct(percent)
-        })
+        const blob = preparedNext
+          ? await preparedNext
+          : await zipFilesInWorker(batches[index], setCurrentBatchPct)
+        preparedNext = null
         setActivityLabel(`Uploading batch ${index + 1} of ${batches.length}`)
         setCurrentBatchPct(0)
+        // Prepare only one batch ahead. The network uploads remain sequential,
+        // while ZIP work can use otherwise idle time during the current PUT.
+        if (index + 1 < batches.length) {
+          preparedNext = zipFilesInWorker(batches[index + 1], () => {})
+          // Attach a handler immediately so a preparation failure cannot become
+          // an unhandled rejection while the current PUT is still in flight.
+          preparedNext.catch(() => {})
+        }
         const id = await uploadOne(blob, (fraction) => {
           setCurrentBatchPct(Math.round(fraction * 100))
         })
@@ -182,6 +214,7 @@ function UploadFlow() {
         setJobIds([...ids])
         resumeRef.current = { batches, nextIndex: index + 1, ids }
       } catch (error) {
+        preparedNext = null
         resumeRef.current = { batches, nextIndex: index, ids }
         setRetryPending(true)
         setErrorDetail(error.message === 'UPLOAD_UNCERTAIN'
@@ -275,12 +308,11 @@ function UploadFlow() {
           ? 'The upload reached the server, but photo processing failed. Please try a smaller selection.'
         : phase === 'idle'
           ? 'Pick photos or a ZIP archive to add to this event.'
-          : 'Keep this page open while your photos are prepared and uploaded. Processing continues after the upload finishes.'
+          : 'Your photos upload in small groups, then become available as processing finishes.'
 
-  const statusLabel = phase === 'preparing' ? 'Uploading batches' : phase === 'uploading' ? 'Uploading ZIP' : 'Processing photos'
-  const processingPct = jobIds.length ? (finishedJobs.length / jobIds.length) * 100 : 0
+  const processingPct = batchTotal ? (finishedJobs.length / batchTotal) * 100 : jobIds.length ? (finishedJobs.length / jobIds.length) * 100 : 0
   const batchUploadPct = batchTotal ? (uploadedBatches / batchTotal) * 100 : 0
-  const barPct = phase === 'processing' ? processingPct : batchTotal ? batchUploadPct : pct
+  const uploadPct = batchTotal ? batchUploadPct : phase === 'processing' ? 100 : pct
   const succeededCount = finishedJobs.reduce((total, job) => total + (job.succeededCount ?? 0), 0)
   const failedCount = finishedJobs.reduce((total, job) => total + (job.failedCount ?? 0), 0)
   const failedJobs = finishedJobs.filter((job) => job.status === 'FAILED').length
@@ -319,55 +351,35 @@ function UploadFlow() {
             {phase === 'error' ? (
               <div className="text-[15px] font-semibold tracking-[-0.008em] text-[#FF8A8A]">Upload failed</div>
             ) : (
-              <>
-                <div className="mb-3.5 flex items-baseline justify-between">
-                  <div className="text-[15px] font-semibold tracking-[-0.008em]">
-                    {done ? 'Complete' : statusLabel}
-                  </div>
-                  <div className="font-mono text-[15px] font-semibold tabular-nums text-[#FF9578]">
-                    {phase === 'processing'
-                      ? `${finishedJobs.length} / ${jobIds.length} ${jobIds.length === 1 ? 'job' : 'batches'}`
-                      : batchTotal
-                        ? `${uploadedBatches} / ${batchTotal} uploaded`
-                        : `${Math.min(100, barPct)}%`}
-                  </div>
-                </div>
-                <div className="h-[7px] overflow-hidden rounded-full bg-white/[0.09]">
-                  <div
-                    className="h-full rounded-full bg-[#FF7A59] transition-[width] duration-300 ease-out"
-                    style={{ width: `${Math.min(100, barPct)}%` }}
+              <div className="space-y-5">
+                <ProgressRow
+                  label="Upload"
+                  value={batchTotal ? `${uploadedBatches} of ${batchTotal} batches` : `${uploadPct}%`}
+                  percent={uploadPct}
+                  detail={phase === 'processing'
+                    ? 'All files uploaded.'
+                    : batchTotal
+                      ? `${activityLabel}${currentBatchPct === null ? '' : ` · ${currentBatchPct}% of this batch`}. Keep this page open.`
+                      : 'Keep this page open until the ZIP uploads.'}
+                />
+                <div className="border-t border-white/[0.08] pt-5">
+                  <ProgressRow
+                    label="Processing"
+                    value={`${finishedJobs.length} of ${batchTotal || 1} ${batchTotal === 1 || (!batchTotal && jobIds.length <= 1) ? 'batch' : 'batches'}`}
+                    percent={processingPct}
+                    detail={done
+                      ? `${succeededCount} photos added${failedCount ? ` · ${failedCount} failed` : ''}.`
+                      : jobIds.length === 0
+                        ? 'Starts when the first upload finishes.'
+                        : `${activeStages.length ? activeStages.join(', ') : 'Checking uploaded photos'}${unreachableCount ? ` · Retrying ${unreachableCount} status ${unreachableCount === 1 ? 'check' : 'checks'}` : ''}${succeededCount ? ` · ${succeededCount} photos added` : ''}`}
                   />
                 </div>
-                {phase === 'processing' && !done && (
-                  <div className="mt-3 text-pretty text-[13.5px] leading-[1.6] text-white/70">
-                    {runningJobs.length > 0 && `${runningJobs.length} processing${activeStages.length ? ` · ${activeStages.join(', ')}` : ''}`}
-                    {unreachableCount > 0 && `${runningJobs.length > 0 ? ' · ' : ''}Waiting for status from ${unreachableCount} ${unreachableCount === 1 ? 'batch' : 'batches'}`}
-                    {jobs.length === 0 && unreachableCount === 0 && 'Checking batch status'}
-                    {succeededCount + failedCount > 0 && ` · ${succeededCount} added, ${failedCount} failed so far`}
-                  </div>
-                )}
-                <div className="mt-2 text-pretty text-[13.5px] leading-[1.6] text-white/42">
+                <p className="text-[12.5px] leading-[1.5] text-white/40">
                   {phase === 'processing'
-                    ? `The bar counts finished ${jobIds.length === 1 ? 'jobs' : 'batches'}, not individual photos. You can leave this page while processing continues.`
-                    : batchTotal
-                      ? `${activityLabel}${currentBatchPct === null ? '' : ` · ${currentBatchPct}% of this batch`}. Keep this page open until every batch has uploaded.`
-                      : 'Keep this page open until the ZIP has uploaded.'}
-                </div>
-              </>
-            )}
-          </div>
-        )}
-
-        {batchTotal > 0 && phase !== 'idle' && phase !== 'processing' && jobIds.length > 0 && (
-          <div className="mt-3 rounded-[18px] border border-white/[0.08] bg-white/[0.05] p-5">
-            <div className="text-[15px] font-semibold">Processing uploaded batches</div>
-            <div className="mt-2 text-[13.5px] text-white/70">
-              {finishedJobs.length} of {jobIds.length} uploaded batches finished processing
-              {activeStages.length > 0 && ` · ${activeStages.join(', ')}`}
-              {succeededCount + failedCount > 0 && ` · ${succeededCount} photos added, ${failedCount} failed`}
-            </div>
-            {unreachableCount > 0 && (
-              <div className="mt-2 text-[13px] text-white/45">Waiting to check {unreachableCount} {unreachableCount === 1 ? 'batch' : 'batches'} again.</div>
+                    ? 'Processing continues if you leave this page. Progress counts completed batches.'
+                    : 'Small batches keep large selections manageable and let photos start processing sooner.'}
+                </p>
+              </div>
             )}
           </div>
         )}
@@ -376,7 +388,7 @@ function UploadFlow() {
           <div className="min-w-0 flex-1">
             <div className="text-[14.5px] font-semibold tracking-[-0.008em]">{pickedLabel ?? 'No files chosen yet'}</div>
             <div className="mt-0.5 text-[13px] leading-[1.55] text-white/42">
-              Photos or one ZIP archive. Large selections are packed and uploaded in smaller batches.
+              Photos or one ZIP archive.
             </div>
           </div>
           <button
