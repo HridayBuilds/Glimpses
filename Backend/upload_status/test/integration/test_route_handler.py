@@ -176,6 +176,7 @@ def test_job_status_reflects_row_written_by_db_api():
         "startedAt": "2026-08-23T00:00:00Z",
         "succeededCount": 0,
         "failedCount": 0,
+        "duplicateCount": 0,
     }
 
 

@@ -146,6 +146,7 @@ def test_stage_then_process_then_index_then_finalize_full_round_trip(monkeypatch
         _FakeLambdaContext(),
     )
     assert manifest_result["processFailedCount"] == 0
+    assert manifest_result["duplicateCount"] == 0
     manifest = json.loads(s3.get_object(Bucket=bucket, Key=manifest_result["manifestKey"])["Body"].read())
     assert len(manifest) == 1
     photo = manifest[0]
@@ -191,6 +192,7 @@ def test_stage_then_process_then_index_then_finalize_full_round_trip(monkeypatch
             "jobId": "job_1",
             "eventID": "evt_1",
             "processFailedCount": manifest_result["processFailedCount"],
+            "duplicateCount": manifest_result["duplicateCount"],
             "indexResultsBucket": bucket,
             "indexResultsManifestKey": index_results_manifest_key,
         },
@@ -201,6 +203,7 @@ def test_stage_then_process_then_index_then_finalize_full_round_trip(monkeypatch
         "eventID": "evt_1",
         "succeededCount": 1,
         "failedCount": 0,
+        "duplicateCount": 0,
     }
 
 

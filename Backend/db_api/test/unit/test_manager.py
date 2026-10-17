@@ -55,13 +55,14 @@ def test_mark_success_includes_counts_when_provided(monkeypatch):
 
     manager.handle_action(
         "mark_success",
-        {"jobId": "job_1", "succeededCount": 594, "failedCount": 6},
+        {"jobId": "job_1", "succeededCount": 594, "failedCount": 6, "duplicateCount": 1},
     )
 
     assert calls["updates"] == {
         "status": "SUCCESS",
         "succeededCount": 594,
         "failedCount": 6,
+        "duplicateCount": 1,
     }
 
 

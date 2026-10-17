@@ -4,6 +4,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { getUploadUrl, getJobStatus } from '../../lib/uploadApi'
+import { getUploadUrlWithRetry } from '../../lib/uploadUrlRetry'
 import { planUploadBatches, zipFilesInWorker } from '../../lib/uploadBatches'
 import { pollUploadJobs } from '../../lib/uploadJobStatus'
 
@@ -143,7 +144,16 @@ function UploadFlow() {
   }
 
   const uploadOne = async (blob, progress) => {
-    const { jobId, uploadUrl } = await getUploadUrl(eventId)
+    let jobId
+    let uploadUrl
+    try {
+      ({ jobId, uploadUrl } = await getUploadUrlWithRetry(eventId, getUploadUrl))
+    } catch (error) {
+      if (!error.response || [408, 429, 500, 502, 503, 504].includes(error.response.status)) {
+        throw new Error('UPLOAD_URL_UNAVAILABLE', { cause: error })
+      }
+      throw error
+    }
     for (let attempt = 0; attempt < 3; attempt++) {
       const controller = new AbortController()
       let stalled = setTimeout(() => controller.abort(), 75000)
@@ -166,12 +176,12 @@ function UploadFlow() {
       } catch (error) {
         // A mobile connection can lose the response after S3 accepted the ZIP.
         // Check the exact job before repeating a PUT that would trigger ingestion twice.
-        for (let check = 0; check < 2; check++) {
+        for (let check = 0; check < 3; check++) {
           try {
             await getJobStatus(eventId, jobId)
             return jobId
           } catch {
-            if (check === 0) await new Promise((resolve) => setTimeout(resolve, 2000))
+            if (check < 2) await new Promise((resolve) => setTimeout(resolve, 1500 * 2 ** check))
           }
         }
         if (!error.response && allBytesSent) {
@@ -223,6 +233,8 @@ function UploadFlow() {
         setRetryPending(true)
         setErrorDetail(error.message === 'UPLOAD_UNCERTAIN'
           ? `${ids.length} of ${batches.length} batches confirmed. The next batch may have reached the server. Check the gallery before retrying it.`
+          : error.message === 'UPLOAD_URL_UNAVAILABLE'
+            ? `The upload service is temporarily unavailable. ${ids.length} of ${batches.length} batches uploaded; retry the remaining batches.`
           : `${ids.length} of ${batches.length} batches uploaded. The connection or photo preparation failed; retry the remaining photos.`)
         if (ids.length) queryClient.invalidateQueries({ queryKey: ['events', eventId, 'photos'] })
         setPhase('error')
@@ -323,6 +335,7 @@ function UploadFlow() {
   const currentBatchNumber = Math.min(uploadedBatches + 1, batchTotal)
   const succeededCount = finishedJobs.reduce((total, job) => total + (job.succeededCount ?? 0), 0)
   const failedCount = finishedJobs.reduce((total, job) => total + (job.failedCount ?? 0), 0)
+  const duplicateCount = finishedJobs.reduce((total, job) => total + (job.duplicateCount ?? 0), 0)
   const failedJobs = finishedJobs.filter((job) => job.status === 'FAILED').length
   const done = phase === 'processing' && allFinished
   const partial = done && (failedCount > 0 || failedJobs > 0)
@@ -393,7 +406,7 @@ function UploadFlow() {
                     {jobIds.length === 0
                       ? 'Starts as soon as a batch finishes uploading.'
                       : done
-                        ? `${succeededCount} photos added${failedCount ? ` · ${failedCount} failed` : ''}`
+                        ? `${succeededCount} photos added${duplicateCount ? ` · ${duplicateCount} already in event` : ''}${failedCount ? ` · ${failedCount} failed` : ''}`
                         : <>
                             <div className="grid grid-cols-3 gap-1.5" aria-label="Processing stages">
                               {PROCESS_STAGES.map(({ status: stage, label }) => (
@@ -449,12 +462,16 @@ function UploadFlow() {
                 className="mb-1.5 text-[16px] font-semibold tracking-[-0.01em]"
                 style={{ color: partial ? '#E8CE74' : '#6FD8B0' }}
               >
-                {partial ? `${succeededCount} added; ${failedCount} photos failed in processing${failedJobs ? `, ${failedJobs} batch${failedJobs === 1 ? '' : 'es'} did not complete` : ''}` : `${succeededCount} added`}
+                {partial
+                  ? `${succeededCount} added · ${failedCount} failed${duplicateCount ? ` · ${duplicateCount} already in event` : ''}${failedJobs ? ` · ${failedJobs} batch${failedJobs === 1 ? '' : 'es'} did not complete` : ''}`
+                  : `${succeededCount} added${duplicateCount ? ` · ${duplicateCount} already in event` : ''}`}
               </div>
               <p className="text-pretty text-[14.5px] leading-[1.6] text-white/70">
                 {partial
                   ? "Nothing else in the batch was affected. You can try uploading those again from the original folder."
-                  : "Matching runs on the new photos automatically. There's nothing else you need to do."}
+                  : duplicateCount
+                    ? 'Photos already in this event were skipped, not counted as failures.'
+                    : "Matching runs on the new photos automatically. There's nothing else you need to do."}
               </p>
             </div>
             <div className="mt-3 flex gap-2.5">

@@ -39,7 +39,7 @@ def test_all_succeeded(monkeypatch):
         }
     )
 
-    assert result == {"jobId": "job_1", "eventID": "evt_1", "succeededCount": 2, "failedCount": 0}
+    assert result == {"jobId": "job_1", "eventID": "evt_1", "succeededCount": 2, "failedCount": 0, "duplicateCount": 0}
 
 
 def test_some_photos_failed_but_others_succeeded(monkeypatch):
@@ -54,12 +54,13 @@ def test_some_photos_failed_but_others_succeeded(monkeypatch):
             "jobId": "job_1",
             "eventID": "evt_1",
             "processFailedCount": 1,
+            "duplicateCount": 1,
             "indexResultsBucket": "results-bucket",
             "indexResultsManifestKey": "results/manifest.json",
         }
     )
 
-    assert result == {"jobId": "job_1", "eventID": "evt_1", "succeededCount": 1, "failedCount": 2}
+    assert result == {"jobId": "job_1", "eventID": "evt_1", "succeededCount": 1, "failedCount": 2, "duplicateCount": 1}
 
 
 def test_total_failure_when_nothing_succeeded(monkeypatch):
@@ -76,7 +77,7 @@ def test_total_failure_when_nothing_succeeded(monkeypatch):
         }
     )
 
-    assert result == {"jobId": "job_1", "eventID": "evt_1", "succeededCount": 0, "failedCount": 3}
+    assert result == {"jobId": "job_1", "eventID": "evt_1", "succeededCount": 0, "failedCount": 3, "duplicateCount": 0}
 
 
 def test_counts_task_level_index_failures(monkeypatch):
@@ -97,4 +98,4 @@ def test_counts_task_level_index_failures(monkeypatch):
         }
     )
 
-    assert result == {"jobId": "job_1", "eventID": "evt_1", "succeededCount": 1, "failedCount": 1}
+    assert result == {"jobId": "job_1", "eventID": "evt_1", "succeededCount": 1, "failedCount": 1, "duplicateCount": 0}

@@ -23,4 +23,5 @@ def handle_finalize(payload):
         "eventID": payload["eventID"],
         "succeededCount": succeeded_count,
         "failedCount": failed_count,
+        "duplicateCount": payload.get("duplicateCount", 0),
     }

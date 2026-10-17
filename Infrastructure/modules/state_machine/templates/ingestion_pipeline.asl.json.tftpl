@@ -318,6 +318,7 @@
           "jobId": "{% $states.input.jobId %}",
           "eventID": "{% $states.input.eventID %}",
           "processFailedCount": "{% $states.input.processFailedCount %}",
+          "duplicateCount": "{% $states.input.duplicateCount %}",
           "indexResultsBucket": "{% $states.input.indexResultsBucket %}",
           "indexResultsManifestKey": "{% $states.input.indexResultsManifestKey %}"
         }
@@ -342,9 +343,13 @@
     },
 
     "CheckAnyPhotosSucceeded": {
-      "Comment": "Reads SummarizeResults' own succeededCount - if zero photos succeeded, there is nothing new for BuildAttendeesManifest/MatchAttendees to match against, so this routes straight to UpdateStatusFailed and skips them entirely rather than running that work and discarding it.",
+      "Comment": "When every photo is a duplicate, complete the job without matching because there are no new photos. If zero succeeded and some failed, mark the job failed. Otherwise match attendees against the new photos.",
       "Type": "Choice",
       "Choices": [
+        {
+          "Condition": "{% $states.input.succeededCount = 0 and $states.input.duplicateCount > 0 and $states.input.failedCount = 0 %}",
+          "Next": "UpdateStatusSuccess"
+        },
         {
           "Condition": "{% $states.input.succeededCount = 0 %}",
           "Next": "UpdateStatusFailed"
@@ -477,7 +482,7 @@
     },
 
     "UpdateStatusSuccess": {
-      "Comment": "Unconditional - only reached once matching has actually finished, and CheckAnyPhotosSucceeded already confirmed at least one photo succeeded earlier, so there is nothing left to branch on here.",
+      "Comment": "Reached after matching new photos or immediately when every photo was already in the event. Persist added, failed, and duplicate counts separately.",
       "Type": "Task",
       "Resource": "arn:aws:states:::lambda:invoke",
       "Arguments": {
@@ -486,7 +491,8 @@
           "action": "mark_success",
           "jobId": "{% $states.input.jobId %}",
           "succeededCount": "{% $states.input.succeededCount %}",
-          "failedCount": "{% $states.input.failedCount %}"
+          "failedCount": "{% $states.input.failedCount %}",
+          "duplicateCount": "{% $states.input.duplicateCount %}"
         }
       },
       "Output": "{% $states.input %}",

@@ -57,6 +57,7 @@ def test_create_then_mark_success_round_trip():
             "jobId": "job_1",
             "succeededCount": 594,
             "failedCount": 6,
+            "duplicateCount": 1,
         },
         _FakeLambdaContext(),
     )
@@ -66,6 +67,7 @@ def test_create_then_mark_success_round_trip():
     assert item["status"] == "SUCCESS"
     assert item["succeededCount"] == 594
     assert item["failedCount"] == 6
+    assert item["duplicateCount"] == 1
     assert item["eventUploaderKey"] == "evt_1#user_1"
 
 

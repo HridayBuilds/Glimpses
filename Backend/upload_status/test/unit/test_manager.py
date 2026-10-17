@@ -19,6 +19,7 @@ def _job(**overrides):
         "startedAt": "2026-08-23T00:00:00Z",
         "succeededCount": 3,
         "failedCount": 1,
+        "duplicateCount": 0,
     }
     base.update(overrides)
     return base
@@ -88,7 +89,19 @@ def test_get_job_status_returns_job_owned_by_caller(monkeypatch):
         "startedAt": "2026-08-23T00:00:00Z",
         "succeededCount": 3,
         "failedCount": 1,
+        "duplicateCount": 0,
     }
+
+
+def test_get_job_status_reports_duplicates_separately_from_failures(monkeypatch):
+    monkeypatch.setattr(manager, "get_job", lambda job_id: _job(status="SUCCESS", succeededCount=146,
+                                                               failedCount=0, duplicateCount=1))
+
+    result = manager.get_job_status({"eventID": "evt_1", "jobId": "job_1", "userID": "user_1"})
+
+    assert result["succeededCount"] == 146
+    assert result["failedCount"] == 0
+    assert result["duplicateCount"] == 1
 
 
 def test_get_job_status_rejects_job_belonging_to_another_uploader(monkeypatch):

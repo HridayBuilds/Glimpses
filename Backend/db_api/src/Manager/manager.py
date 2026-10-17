@@ -63,5 +63,7 @@ def _update_status(action, payload):
         updates["succeededCount"] = payload["succeededCount"]
     if "failedCount" in payload:
         updates["failedCount"] = payload["failedCount"]
+    if "duplicateCount" in payload:
+        updates["duplicateCount"] = payload["duplicateCount"]
     update_job_status(payload["jobId"], updates)
     return {"jobId": payload["jobId"]}

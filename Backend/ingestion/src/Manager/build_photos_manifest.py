@@ -24,6 +24,7 @@ def handle_build_photos_manifest(payload):
         if output.get("status") == "SUCCEEDED"
     ]
     failed_count += sum(1 for output in outputs if output.get("status") == "FAILED")
+    duplicate_count = sum(1 for output in outputs if output.get("status") == "DUPLICATE")
 
     bucket = os.environ["PHOTOS_BUCKET"]
     manifest_key = f"uploads/event/{event_id}/job/{job_id}/photos-manifest.json"
@@ -35,4 +36,5 @@ def handle_build_photos_manifest(payload):
         "manifestBucket": bucket,
         "manifestKey": manifest_key,
         "processFailedCount": failed_count,
+        "duplicateCount": duplicate_count,
     }

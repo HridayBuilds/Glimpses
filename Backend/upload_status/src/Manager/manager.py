@@ -54,11 +54,12 @@ def _job_response(job):
         "startedAt": job["startedAt"],
         "succeededCount": int(job.get("succeededCount", 0)),
         "failedCount": int(job.get("failedCount", 0)),
+        "duplicateCount": int(job.get("duplicateCount", 0)),
     }
 
     if job.get("source") == "GOOGLE_DRIVE":
         result.update(source=job["source"], folderName=job.get("folderName", "Google Drive folder"),
                       errorMessage=job.get("errorMessage"))
-        for key in ("totalCount", "downloadedCount", "downloadFailedCount", "skippedCount", "skippedFolders", "duplicateCount"):
+        for key in ("totalCount", "downloadedCount", "downloadFailedCount", "skippedCount", "skippedFolders"):
             result[key] = int(job.get(key, 0))
     return result
