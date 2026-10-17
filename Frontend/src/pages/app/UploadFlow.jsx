@@ -1,15 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 import axios from 'axios'
-import JSZip from 'jszip'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { getUploadUrl, getJobStatus } from '../../lib/uploadApi'
+import { planUploadBatches, zipFilesInWorker } from '../../lib/uploadBatches'
 
 const MAX_PHOTOS = 500
 
-const STAGE_PCT = { CREATED: 10, EXTRACTING: 35, INDEXING: 65, MATCHING: 85, SUCCESS: 100 }
-const STAGE_LABEL = { CREATED: 'Starting', EXTRACTING: 'Extracting', INDEXING: 'Indexing faces', MATCHING: 'Matching attendees' }
+const STAGE_LABEL = { CREATED: 'Starting', EXTRACTING: 'Extracting', INDEXING: 'Indexing faces', MATCHING: 'Matching attendees', FAILED: 'Processing failed' }
+const FINISHED_STATES = ['SUCCESS', 'FAILED']
 
 // Fibonacci-spaced polling: quick checks early (a small batch may finish in
 // seconds) backing off as the job runs longer (big batches take minutes), so
@@ -32,69 +32,156 @@ function UploadFlow() {
   const queryClient = useQueryClient()
   const fileInputRef = useRef(null)
 
-  // idle | zipping | uploading | processing | error
+  // idle | preparing | uploading | processing | error
   const [phase, setPhase] = useState('idle')
   const [pct, setPct] = useState(0)
   const [pickedLabel, setPickedLabel] = useState(null)
-  const [jobId, setJobId] = useState(null)
+  const [jobIds, setJobIds] = useState([])
+  const [activityLabel, setActivityLabel] = useState('')
+  const [errorDetail, setErrorDetail] = useState('')
+  const [retryPending, setRetryPending] = useState(false)
+  const resumeRef = useRef(null)
 
   const jobQuery = useQuery({
-    queryKey: ['events', eventId, 'jobs', jobId, 'status'],
-    queryFn: () => getJobStatus(eventId, jobId),
-    enabled: phase === 'processing' && !!jobId,
+    queryKey: ['events', eventId, 'jobs', jobIds, 'status'],
+    queryFn: () => Promise.all(jobIds.map((id) => getJobStatus(eventId, id))),
+    enabled: phase === 'processing' && jobIds.length > 0,
     refetchInterval: (query) => {
-      const status = query.state.data?.status
-      if (status === 'SUCCESS' || status === 'FAILED') return false
-      return fibonacciPollDelay(query.state.dataUpdateCount)
+      const jobs = query.state.data
+      if (jobs?.length === jobIds.length && jobs.every((job) => FINISHED_STATES.includes(job.status))) return false
+      return fibonacciPollDelay(Math.max(query.state.dataUpdateCount, query.state.fetchFailureCount))
     },
   })
 
-  const status = jobQuery.data?.status
+  const jobs = jobQuery.data ?? []
+  const finishedJobs = jobs.filter((job) => FINISHED_STATES.includes(job.status))
+  const allFinished = finishedJobs.length === jobIds.length && jobIds.length > 0
+  const runningJobs = jobs.filter((job) => !FINISHED_STATES.includes(job.status))
+  const status = allFinished
+    ? jobs.every((job) => job.status === 'FAILED') ? 'FAILED' : 'SUCCESS'
+    : runningJobs[0]?.status ?? 'CREATED'
 
   // Only a genuine terminal FAILED status ends the job. A transient fetch error
   // (502, brief network blip) must NOT flip this to 'error' - the backend job is
   // still running regardless of whether polling can currently reach it, and killing
   // 'processing' here would disable the query (enabled: phase === 'processing') and
   // stop polling for good, even though the job goes on to succeed on its own.
-  useEffect(() => {
-    if (phase === 'processing' && status === 'FAILED') {
-      setPhase('error')
-    }
-  }, [phase, status])
-
   // Matching already finished server-side by the time a job reports SUCCESS — the
   // gallery just needs its cached photo lists invalidated so "Photos of me" reflects
   // the new matches instead of the pre-upload snapshot it had cached.
   useEffect(() => {
-    if (phase === 'processing' && status === 'SUCCESS') {
+    if (phase === 'processing' && allFinished) {
       queryClient.invalidateQueries({ queryKey: ['events', eventId, 'photos'] })
     }
-  }, [phase, status, queryClient, eventId])
+  }, [phase, allFinished, queryClient, eventId])
 
-  const busy = phase === 'zipping' || phase === 'uploading' || phase === 'processing'
+  const busy = phase === 'preparing' || phase === 'uploading' || phase === 'processing'
 
   const reset = () => {
     setPhase('idle')
     setPct(0)
     setPickedLabel(null)
-    setJobId(null)
+    setJobIds([])
+    setActivityLabel('')
+    setErrorDetail('')
+    setRetryPending(false)
+    resumeRef.current = null
   }
 
-  const runUpload = async (blob, contentType) => {
+  const retryUpload = () => {
+    const pending = resumeRef.current
+    if (!pending) return reset()
+    setErrorDetail('')
+    setRetryPending(false)
+    uploadBatches(pending.batches, pending.nextIndex, pending.ids)
+  }
+
+  const uploadOne = async (blob, progress) => {
+    const { jobId, uploadUrl } = await getUploadUrl(eventId)
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const controller = new AbortController()
+      let stalled = setTimeout(() => controller.abort(), 75000)
+      let allBytesSent = false
+      try {
+        await axios.put(uploadUrl, blob, {
+          headers: { 'Content-Type': 'application/zip' },
+          signal: controller.signal,
+          timeout: 600000,
+          onUploadProgress: (event) => {
+            clearTimeout(stalled)
+            stalled = setTimeout(() => controller.abort(), 75000)
+            if (event.total) {
+              allBytesSent = event.loaded >= event.total
+              progress(event.loaded / event.total)
+            }
+          },
+        })
+        return jobId
+      } catch (error) {
+        // A mobile connection can lose the response after S3 accepted the ZIP.
+        // Check the exact job before repeating a PUT that would trigger ingestion twice.
+        for (let check = 0; check < 2; check++) {
+          try {
+            await getJobStatus(eventId, jobId)
+            return jobId
+          } catch {
+            if (check === 0) await new Promise((resolve) => setTimeout(resolve, 2000))
+          }
+        }
+        if (!error.response && allBytesSent) {
+          throw new Error('UPLOAD_UNCERTAIN')
+        }
+        if (attempt === 2 || (error.response && ![408, 429, 500, 502, 503, 504].includes(error.response.status))) throw error
+        await new Promise((resolve) => setTimeout(resolve, 2000 * (attempt + 1)))
+      } finally {
+        clearTimeout(stalled)
+      }
+    }
+  }
+
+  const uploadBatches = async (batches, startAt = 0, completedIds = []) => {
+    const ids = [...completedIds]
+    for (let index = startAt; index < batches.length; index++) {
+      try {
+        setPhase('preparing')
+        setActivityLabel(`Packing batch ${index + 1} of ${batches.length}`)
+        const blob = await zipFilesInWorker(batches[index], (percent) => {
+          setPct(Math.round(((index + percent / 200) / batches.length) * 100))
+        })
+        setActivityLabel(`Uploading batch ${index + 1} of ${batches.length}`)
+        const id = await uploadOne(blob, (fraction) => {
+          setPct(Math.round(((index + 0.5 + fraction / 2) / batches.length) * 100))
+        })
+        ids.push(id)
+        setJobIds([...ids])
+        resumeRef.current = { batches, nextIndex: index + 1, ids }
+      } catch (error) {
+        resumeRef.current = { batches, nextIndex: index, ids }
+        setRetryPending(true)
+        setErrorDetail(error.message === 'UPLOAD_UNCERTAIN'
+          ? `${ids.length} of ${batches.length} batches confirmed. The next batch may have reached the server. Check the gallery before retrying it.`
+          : `${ids.length} of ${batches.length} batches uploaded. The connection or photo preparation failed; retry the remaining photos.`)
+        if (ids.length) queryClient.invalidateQueries({ queryKey: ['events', eventId, 'photos'] })
+        setPhase('error')
+        return
+      }
+    }
+    resumeRef.current = null
+    setPct(100)
+    setRetryPending(false)
+    setPhase('processing')
+  }
+
+  const uploadZip = async (file) => {
     setPhase('uploading')
     setPct(0)
     try {
-      const { jobId: newJobId, uploadUrl } = await getUploadUrl(eventId)
-      await axios.put(uploadUrl, blob, {
-        headers: { 'Content-Type': contentType },
-        onUploadProgress: (e) => {
-          if (e.total) setPct(Math.round((e.loaded / e.total) * 100))
-        },
-      })
-      setJobId(newJobId)
-      setPct(STAGE_PCT.CREATED)
+      const id = await uploadOne(file, (fraction) => setPct(Math.round(fraction * 100)))
+      setJobIds([id])
+      setPct(100)
       setPhase('processing')
     } catch {
+      setErrorDetail('The ZIP upload did not finish. Check your connection and try again.')
       setPhase('error')
     }
   }
@@ -103,9 +190,14 @@ function UploadFlow() {
     const files = Array.from(fileList)
     if (files.length === 0) return
 
+    if (files.length > 1 && files.some((file) => /\.zip$/i.test(file.name))) {
+      toast.error('Choose one ZIP archive or select photos, not both together.')
+      return
+    }
+
     if (files.length === 1 && /\.zip$/i.test(files[0].name)) {
       setPickedLabel('1 zip archive selected')
-      await runUpload(files[0], 'application/zip')
+      await uploadZip(files[0])
       return
     }
 
@@ -115,16 +207,10 @@ function UploadFlow() {
     }
 
     setPickedLabel(`${files.length} photo${files.length === 1 ? '' : 's'} selected`)
-    setPhase('zipping')
+    setPhase('preparing')
     setPct(0)
-    try {
-      const zip = new JSZip()
-      files.forEach((f) => zip.file(f.name, f))
-      const blob = await zip.generateAsync({ type: 'blob' }, (meta) => setPct(Math.round(meta.percent)))
-      await runUpload(blob, 'application/zip')
-    } catch {
-      setPhase('error')
-    }
+    setErrorDetail('')
+    await uploadBatches(planUploadBatches(files))
   }
 
   const onInputChange = (e) => {
@@ -133,13 +219,15 @@ function UploadFlow() {
   }
 
   const title =
-    phase === 'zipping'
-      ? 'Packing your photos'
+    phase === 'preparing'
+      ? 'Adding your photos'
       : phase === 'uploading'
         ? 'Uploading'
         : phase === 'processing'
           ? status === 'SUCCESS'
             ? 'Photos added'
+            : status === 'FAILED'
+              ? 'Photos could not be processed'
             : 'Adding photos'
           : phase === 'error'
             ? 'Something went wrong'
@@ -147,22 +235,24 @@ function UploadFlow() {
 
   const body =
     phase === 'error'
-      ? "Nothing you've already added was lost. You can try again."
+      ? errorDetail || "Nothing you've already added was lost. You can try again."
       : phase === 'processing' && status === 'SUCCESS'
         ? "Matching runs on the new photos automatically. There's nothing else you need to do."
+        : phase === 'processing' && status === 'FAILED'
+          ? 'The upload reached the server, but photo processing failed. Please try a smaller selection.'
         : phase === 'idle'
           ? 'Pick photos or a ZIP archive to add to this event.'
-          : "Your photos are uploading together. Faces are matched as each one lands, so you'll start seeing results before the upload finishes."
+          : 'Keep this page open while your photos are prepared and uploaded. Processing continues after the upload finishes.'
 
-  const statusLabel =
-    phase === 'zipping' ? 'Packing' : phase === 'uploading' ? 'Uploading' : phase === 'processing' ? (STAGE_LABEL[status] ?? 'Starting') : ''
-
-  const barPct = phase === 'processing' ? (STAGE_PCT[status] ?? pct) : pct
-
-  const succeededCount = jobQuery.data?.succeededCount ?? 0
-  const failedCount = jobQuery.data?.failedCount ?? 0
-  const done = phase === 'processing' && status === 'SUCCESS'
-  const partial = done && failedCount > 0
+  const statusLabel = phase === 'preparing' ? activityLabel : phase === 'uploading' ? 'Uploading ZIP' : 'Processing photos'
+  const processingPct = jobIds.length ? (finishedJobs.length / jobIds.length) * 100 : 0
+  const barPct = phase === 'processing' ? processingPct : pct
+  const succeededCount = finishedJobs.reduce((total, job) => total + (job.succeededCount ?? 0), 0)
+  const failedCount = finishedJobs.reduce((total, job) => total + (job.failedCount ?? 0), 0)
+  const failedJobs = finishedJobs.filter((job) => job.status === 'FAILED').length
+  const done = phase === 'processing' && allFinished
+  const partial = done && (failedCount > 0 || failedJobs > 0)
+  const activeStages = [...new Set(runningJobs.map((job) => STAGE_LABEL[job.status] ?? 'Starting'))]
 
   return (
     <div className="min-h-svh bg-[radial-gradient(120%_60%_at_50%_0%,#131317_0%,#08080A_60%)] text-[#F5F5F7]">
@@ -201,7 +291,9 @@ function UploadFlow() {
                     {done ? 'Complete' : statusLabel}
                   </div>
                   <div className="font-mono text-[15px] font-semibold tabular-nums text-[#FF9578]">
-                    {Math.min(100, barPct)}%
+                    {phase === 'processing'
+                      ? `${finishedJobs.length} / ${jobIds.length} ${jobIds.length === 1 ? 'job' : 'batches'}`
+                      : `${Math.min(100, barPct)}%`}
                   </div>
                 </div>
                 <div className="h-[7px] overflow-hidden rounded-full bg-white/[0.09]">
@@ -210,10 +302,18 @@ function UploadFlow() {
                     style={{ width: `${Math.min(100, barPct)}%` }}
                   />
                 </div>
-                <div className="mt-3 text-pretty text-[13.5px] leading-[1.6] text-white/42">
+                {phase === 'processing' && !done && (
+                  <div className="mt-3 text-pretty text-[13.5px] leading-[1.6] text-white/70">
+                    {jobQuery.isError
+                      ? 'Checking for an update. Processing continues while we reconnect.'
+                      : `${runningJobs.length} processing${activeStages.length ? ` · ${activeStages.join(', ')}` : ''}`}
+                    {succeededCount + failedCount > 0 && ` · ${succeededCount} added, ${failedCount} failed so far`}
+                  </div>
+                )}
+                <div className="mt-2 text-pretty text-[13.5px] leading-[1.6] text-white/42">
                   {phase === 'processing'
-                    ? "You can close this tab. The upload will finish on its own, and your photos will be in the gallery when you return."
-                    : "Keep this tab open until the upload finishes - closing it now will cancel it before it reaches the server."}
+                    ? `The bar counts finished ${jobIds.length === 1 ? 'jobs' : 'batches'}, not individual photos. You can leave this page while processing continues.`
+                    : 'Keep this page open until every batch has uploaded.'}
                 </div>
               </>
             )}
@@ -224,7 +324,7 @@ function UploadFlow() {
           <div className="min-w-0 flex-1">
             <div className="text-[14.5px] font-semibold tracking-[-0.008em]">{pickedLabel ?? 'No files chosen yet'}</div>
             <div className="mt-0.5 text-[13px] leading-[1.55] text-white/42">
-              Photos or a ZIP archive. Multiple photos are packed into one archive on your device before sending.
+              Photos or one ZIP archive. Large selections are packed and uploaded in smaller batches.
             </div>
           </div>
           <button
@@ -257,7 +357,7 @@ function UploadFlow() {
                 className="mb-1.5 text-[16px] font-semibold tracking-[-0.01em]"
                 style={{ color: partial ? '#E8CE74' : '#6FD8B0' }}
               >
-                {partial ? `${succeededCount} added, ${failedCount} could not be processed` : `${succeededCount} added`}
+                {partial ? `${succeededCount} added; ${failedCount} photos failed in processing${failedJobs ? `, ${failedJobs} batch${failedJobs === 1 ? '' : 'es'} did not complete` : ''}` : `${succeededCount} added`}
               </div>
               <p className="text-pretty text-[14.5px] leading-[1.6] text-white/70">
                 {partial
@@ -284,10 +384,10 @@ function UploadFlow() {
 
         {phase === 'error' && (
           <button
-            onClick={reset}
+            onClick={retryUpload}
             className="mt-3.5 w-full cursor-pointer rounded-xl border-none bg-[#FF7A59] py-[15px] text-[15px] font-semibold text-[#200C05] transition-transform duration-100 ease-out active:scale-[0.975]"
           >
-            Try again
+            {retryPending ? 'Retry remaining photos' : 'Try again'}
           </button>
         )}
       </div>

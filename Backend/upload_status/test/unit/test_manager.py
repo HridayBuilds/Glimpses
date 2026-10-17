@@ -1,5 +1,6 @@
 import os
 import sys
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -108,6 +109,18 @@ def test_get_job_status_rejects_unknown_job(monkeypatch):
         assert False, "expected ValueError"
     except ValueError:
         pass
+
+
+def test_uploaded_zip_without_job_eventually_reports_failed(monkeypatch):
+    job_id = "550e8400-e29b-41d4-a716-446655440000"
+    monkeypatch.setattr(manager, "get_job", lambda _: None)
+    monkeypatch.setattr(manager, "get_uploaded_zip_metadata", lambda _: {
+        "LastModified": datetime.now(timezone.utc) - timedelta(minutes=16)
+    })
+
+    result = manager.get_job_status({"eventID": "evt_1", "jobId": job_id, "userID": "user_1"})
+
+    assert result["status"] == "FAILED"
 
 
 def test_get_latest_job_returns_most_recent_via_dao(monkeypatch):

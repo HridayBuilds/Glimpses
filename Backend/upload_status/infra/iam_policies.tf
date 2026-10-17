@@ -16,7 +16,7 @@ resource "aws_iam_role_policy" "jobs_access" {
 data "aws_iam_policy_document" "photos_bucket_access" {
   statement {
     effect    = "Allow"
-    actions   = ["s3:PutObject"]
+    actions   = ["s3:PutObject", "s3:GetObject"]
     resources = ["${var.photos_bucket_arn}/uploads/*"]
   }
 }

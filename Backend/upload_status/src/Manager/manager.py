@@ -1,6 +1,7 @@
 import uuid
+from datetime import datetime, timedelta, timezone
 
-from DAO.dao import generate_presigned_put_url, get_event, get_job, query_latest_job
+from DAO.dao import generate_presigned_put_url, get_event, get_job, get_uploaded_zip_metadata, query_latest_job
 
 UPLOAD_KEY_TEMPLATE = "uploads/event/{eventID}/user/{userID}/job/{jobId}/original.zip"
 
@@ -22,6 +23,18 @@ def mint_upload_url(payload):
 
 def get_job_status(payload):
     job = get_job(payload["jobId"])
+    if job is None:
+        try:
+            if str(uuid.UUID(payload["jobId"])) != payload["jobId"]:
+                raise ValueError
+        except (TypeError, ValueError, AttributeError):
+            raise ValueError(f"Unknown jobId: {payload['jobId']}") from None
+        key = UPLOAD_KEY_TEMPLATE.format(eventID=payload["eventID"], userID=payload["userID"], jobId=payload["jobId"])
+        uploaded = get_uploaded_zip_metadata(key)
+        if uploaded is not None:
+            status = "FAILED" if datetime.now(timezone.utc) - uploaded["LastModified"] > timedelta(minutes=15) else "CREATED"
+            return {"jobId": payload["jobId"], "status": status, "startedAt": uploaded["LastModified"].isoformat(),
+                    "succeededCount": 0, "failedCount": 0}
     if job is None or job["eventID"] != payload["eventID"] or job["uploaderID"] != payload["userID"]:
         raise ValueError(f"Unknown jobId: {payload['jobId']}")
     return _job_response(job)

@@ -1,6 +1,7 @@
 import os
 
 import boto3
+from botocore.exceptions import ClientError
 
 JOBS_GSI = "eventUploaderKey-startedAt-index"
 PUT_EXPIRES_IN = 3600
@@ -32,8 +33,17 @@ def get_event(event_id):
 
 
 def get_job(job_id):
-    response = _jobs_table().get_item(Key={"jobId": job_id})
+    response = _jobs_table().get_item(Key={"jobId": job_id}, ConsistentRead=True)
     return response.get("Item")
+
+
+def get_uploaded_zip_metadata(key):
+    try:
+        return _s3().head_object(Bucket=os.environ["PHOTOS_BUCKET"], Key=key)
+    except ClientError as error:
+        if error.response["Error"]["Code"] in ("403", "404", "AccessDenied", "NoSuchKey", "NotFound"):
+            return None
+        raise
 
 
 def query_latest_job(event_id, user_id):

@@ -7,6 +7,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 import boto3
 from moto import mock_aws
+import pytest
 
 from routeHandler import lambda_handler
 
@@ -176,6 +177,34 @@ def test_job_status_reflects_row_written_by_db_api():
         "succeededCount": 0,
         "failedCount": 0,
     }
+
+
+@mock_aws
+def test_status_is_created_after_s3_upload_before_initialize_job():
+    dynamodb = boto3.resource("dynamodb", region_name="ap-south-1")
+    _create_jobs_table(dynamodb)
+    s3 = boto3.client("s3", region_name="ap-south-1")
+    s3.create_bucket(Bucket=os.environ["PHOTOS_BUCKET"], CreateBucketConfiguration={"LocationConstraint": "ap-south-1"})
+    job_id = "550e8400-e29b-41d4-a716-446655440000"
+    s3.put_object(
+        Bucket=os.environ["PHOTOS_BUCKET"],
+        Key=f"uploads/event/evt_1/user/user_1/job/{job_id}/original.zip",
+        Body=b"zip bytes",
+    )
+
+    response = lambda_handler(
+        _api_event("GET", f"/events/evt_1/jobs/{job_id}/status", claims={"sub": "user_1"}),
+        _FakeLambdaContext(),
+    )
+
+    assert response["statusCode"] == 200
+    assert json.loads(response["body"])["status"] == "CREATED"
+
+    with pytest.raises(ValueError, match="Unknown jobId"):
+        lambda_handler(
+            _api_event("GET", f"/events/evt_1/jobs/{job_id}/status", claims={"sub": "user_2"}),
+            _FakeLambdaContext(),
+        )
 
 
 @mock_aws
