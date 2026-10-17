@@ -4,7 +4,7 @@
   "StartAt": "InitializeJob",
   "States": {
     "InitializeJob": {
-      "Comment": "First db_api touch point: creates the Jobs row. jobId/eventID/uploaderID are parsed from the upload key (uploads/event/{eventID}/user/{userId}/job/{jobId}/original.zip, T-09) since no Jobs row exists yet to read them from. No Jobs row exists yet if this fails, so its own Catch skips UpdateStatusFailed and goes straight to IngestionFailed.",
+      "Comment": "Claims the job ID for this execution without replacing an existing row. The IDs come from the upload key. A duplicate object-created event is stopped by CheckJobClaim; a retry in this same execution retains its claim. If the claim fails, the Catch goes straight to IngestionFailed.",
       "Type": "Task",
       "Resource": "arn:aws:states:::lambda:invoke",
       "Arguments": {
@@ -14,10 +14,11 @@
           "jobId": "{% $split($states.input.key, '/')[6] %}",
           "eventID": "{% $split($states.input.key, '/')[2] %}",
           "uploaderID": "{% $split($states.input.key, '/')[4] %}",
-          "startedAt": "{% $states.context.Execution.StartTime %}"
+          "startedAt": "{% $states.context.Execution.StartTime %}",
+          "executionId": "{% $states.context.Execution.Id %}"
         }
       },
-      "Output": "{% $merge([$states.input, {'jobId': $split($states.input.key, '/')[6], 'eventID': $split($states.input.key, '/')[2], 'uploaderID': $split($states.input.key, '/')[4]}]) %}",
+      "Output": "{% $merge([$states.input, {'jobId': $split($states.input.key, '/')[6], 'eventID': $split($states.input.key, '/')[2], 'uploaderID': $split($states.input.key, '/')[4], 'claimed': $states.result.Payload.claimed}]) %}",
       "Retry": [
         {
           "ErrorEquals": ["States.ALL"],
@@ -32,7 +33,23 @@
           "Next": "IngestionFailed"
         }
       ],
-      "Next": "UpdateStatusExtracting"
+      "Next": "CheckJobClaim"
+    },
+
+    "CheckJobClaim": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Condition": "{% $states.input.claimed = true %}",
+          "Next": "UpdateStatusExtracting"
+        }
+      ],
+      "Default": "DuplicateUploadIgnored"
+    },
+
+    "DuplicateUploadIgnored": {
+      "Type": "Succeed",
+      "Comment": "A different execution already claimed this job ID; do not reset its status or reprocess its ZIP."
     },
 
     "UpdateStatusExtracting": {

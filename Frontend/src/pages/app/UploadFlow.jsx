@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { getUploadUrl, getJobStatus } from '../../lib/uploadApi'
 import { planUploadBatches, zipFilesInWorker } from '../../lib/uploadBatches'
+import { pollUploadJobs } from '../../lib/uploadJobStatus'
 
 const MAX_PHOTOS = 500
 
@@ -37,23 +38,34 @@ function UploadFlow() {
   const [pct, setPct] = useState(0)
   const [pickedLabel, setPickedLabel] = useState(null)
   const [jobIds, setJobIds] = useState([])
+  const [uploadSession, setUploadSession] = useState(0)
+  const [batchTotal, setBatchTotal] = useState(0)
+  const [uploadedBatches, setUploadedBatches] = useState(0)
+  const [currentBatchPct, setCurrentBatchPct] = useState(null)
   const [activityLabel, setActivityLabel] = useState('')
   const [errorDetail, setErrorDetail] = useState('')
   const [retryPending, setRetryPending] = useState(false)
   const resumeRef = useRef(null)
+  const knownJobsRef = useRef({})
 
+  const statusQueryKey = ['events', eventId, 'upload-session', uploadSession, 'status']
   const jobQuery = useQuery({
-    queryKey: ['events', eventId, 'jobs', jobIds, 'status'],
-    queryFn: () => Promise.all(jobIds.map((id) => getJobStatus(eventId, id))),
-    enabled: phase === 'processing' && jobIds.length > 0,
+    queryKey: statusQueryKey,
+    queryFn: async () => {
+      const result = await pollUploadJobs(jobIds, (id) => getJobStatus(eventId, id), knownJobsRef.current)
+      knownJobsRef.current = result.jobsById
+      return result
+    },
+    enabled: phase !== 'idle' && jobIds.length > 0,
     refetchInterval: (query) => {
-      const jobs = query.state.data
-      if (jobs?.length === jobIds.length && jobs.every((job) => FINISHED_STATES.includes(job.status))) return false
-      return fibonacciPollDelay(Math.max(query.state.dataUpdateCount, query.state.fetchFailureCount))
+      const jobs = query.state.data?.jobsById ?? {}
+      if (jobIds.every((id) => FINISHED_STATES.includes(jobs[id]?.status))) return false
+      return fibonacciPollDelay(query.state.dataUpdateCount)
     },
   })
 
-  const jobs = jobQuery.data ?? []
+  const jobs = jobIds.map((id) => jobQuery.data?.jobsById[id]).filter(Boolean)
+  const unreachableCount = jobQuery.data?.unreachableCount ?? 0
   const finishedJobs = jobs.filter((job) => FINISHED_STATES.includes(job.status))
   const allFinished = finishedJobs.length === jobIds.length && jobIds.length > 0
   const runningJobs = jobs.filter((job) => !FINISHED_STATES.includes(job.status))
@@ -61,19 +73,22 @@ function UploadFlow() {
     ? jobs.every((job) => job.status === 'FAILED') ? 'FAILED' : 'SUCCESS'
     : runningJobs[0]?.status ?? 'CREATED'
 
-  // Only a genuine terminal FAILED status ends the job. A transient fetch error
-  // (502, brief network blip) must NOT flip this to 'error' - the backend job is
-  // still running regardless of whether polling can currently reach it, and killing
-  // 'processing' here would disable the query (enabled: phase === 'processing') and
-  // stop polling for good, even though the job goes on to succeed on its own.
-  // Matching already finished server-side by the time a job reports SUCCESS — the
-  // gallery just needs its cached photo lists invalidated so "Photos of me" reflects
-  // the new matches instead of the pre-upload snapshot it had cached.
   useEffect(() => {
-    if (phase === 'processing' && allFinished) {
+    if (jobIds.length > 0) {
+      queryClient.invalidateQueries({ queryKey: ['events', eventId, 'upload-session', uploadSession, 'status'] })
+    }
+  // A new uploaded batch has its own job ID; check it without discarding known results.
+  }, [jobIds.length, uploadSession, eventId, queryClient])
+
+  // A failed status request for one batch must not hide the other batch results.
+  // Keep polling that batch while retaining successful responses and terminal jobs.
+  // Matching is complete when a batch reports SUCCESS. Refresh gallery caches
+  // as each batch finishes, even if later batches are still uploading.
+  useEffect(() => {
+    if (finishedJobs.length > 0) {
       queryClient.invalidateQueries({ queryKey: ['events', eventId, 'photos'] })
     }
-  }, [phase, allFinished, queryClient, eventId])
+  }, [finishedJobs.length, queryClient, eventId])
 
   const busy = phase === 'preparing' || phase === 'uploading' || phase === 'processing'
 
@@ -82,6 +97,11 @@ function UploadFlow() {
     setPct(0)
     setPickedLabel(null)
     setJobIds([])
+    setUploadSession((session) => session + 1)
+    setBatchTotal(0)
+    setUploadedBatches(0)
+    setCurrentBatchPct(null)
+    knownJobsRef.current = {}
     setActivityLabel('')
     setErrorDetail('')
     setRetryPending(false)
@@ -141,18 +161,24 @@ function UploadFlow() {
 
   const uploadBatches = async (batches, startAt = 0, completedIds = []) => {
     const ids = [...completedIds]
+    setBatchTotal(batches.length)
+    setUploadedBatches(ids.length)
     for (let index = startAt; index < batches.length; index++) {
       try {
         setPhase('preparing')
         setActivityLabel(`Packing batch ${index + 1} of ${batches.length}`)
+        setCurrentBatchPct(0)
         const blob = await zipFilesInWorker(batches[index], (percent) => {
-          setPct(Math.round(((index + percent / 200) / batches.length) * 100))
+          setCurrentBatchPct(percent)
         })
         setActivityLabel(`Uploading batch ${index + 1} of ${batches.length}`)
+        setCurrentBatchPct(0)
         const id = await uploadOne(blob, (fraction) => {
-          setPct(Math.round(((index + 0.5 + fraction / 2) / batches.length) * 100))
+          setCurrentBatchPct(Math.round(fraction * 100))
         })
         ids.push(id)
+        setUploadedBatches(ids.length)
+        setCurrentBatchPct(null)
         setJobIds([...ids])
         resumeRef.current = { batches, nextIndex: index + 1, ids }
       } catch (error) {
@@ -167,7 +193,7 @@ function UploadFlow() {
       }
     }
     resumeRef.current = null
-    setPct(100)
+    setCurrentBatchPct(null)
     setRetryPending(false)
     setPhase('processing')
   }
@@ -196,6 +222,9 @@ function UploadFlow() {
     }
 
     if (files.length === 1 && /\.zip$/i.test(files[0].name)) {
+      knownJobsRef.current = {}
+      setUploadSession((session) => session + 1)
+      setBatchTotal(0)
       setPickedLabel('1 zip archive selected')
       await uploadZip(files[0])
       return
@@ -207,6 +236,10 @@ function UploadFlow() {
     }
 
     setPickedLabel(`${files.length} photo${files.length === 1 ? '' : 's'} selected`)
+    knownJobsRef.current = {}
+    setUploadSession((session) => session + 1)
+    setJobIds([])
+    setUploadedBatches(0)
     setPhase('preparing')
     setPct(0)
     setErrorDetail('')
@@ -244,9 +277,10 @@ function UploadFlow() {
           ? 'Pick photos or a ZIP archive to add to this event.'
           : 'Keep this page open while your photos are prepared and uploaded. Processing continues after the upload finishes.'
 
-  const statusLabel = phase === 'preparing' ? activityLabel : phase === 'uploading' ? 'Uploading ZIP' : 'Processing photos'
+  const statusLabel = phase === 'preparing' ? 'Uploading batches' : phase === 'uploading' ? 'Uploading ZIP' : 'Processing photos'
   const processingPct = jobIds.length ? (finishedJobs.length / jobIds.length) * 100 : 0
-  const barPct = phase === 'processing' ? processingPct : pct
+  const batchUploadPct = batchTotal ? (uploadedBatches / batchTotal) * 100 : 0
+  const barPct = phase === 'processing' ? processingPct : batchTotal ? batchUploadPct : pct
   const succeededCount = finishedJobs.reduce((total, job) => total + (job.succeededCount ?? 0), 0)
   const failedCount = finishedJobs.reduce((total, job) => total + (job.failedCount ?? 0), 0)
   const failedJobs = finishedJobs.filter((job) => job.status === 'FAILED').length
@@ -293,7 +327,9 @@ function UploadFlow() {
                   <div className="font-mono text-[15px] font-semibold tabular-nums text-[#FF9578]">
                     {phase === 'processing'
                       ? `${finishedJobs.length} / ${jobIds.length} ${jobIds.length === 1 ? 'job' : 'batches'}`
-                      : `${Math.min(100, barPct)}%`}
+                      : batchTotal
+                        ? `${uploadedBatches} / ${batchTotal} uploaded`
+                        : `${Math.min(100, barPct)}%`}
                   </div>
                 </div>
                 <div className="h-[7px] overflow-hidden rounded-full bg-white/[0.09]">
@@ -304,18 +340,34 @@ function UploadFlow() {
                 </div>
                 {phase === 'processing' && !done && (
                   <div className="mt-3 text-pretty text-[13.5px] leading-[1.6] text-white/70">
-                    {jobQuery.isError
-                      ? 'Checking for an update. Processing continues while we reconnect.'
-                      : `${runningJobs.length} processing${activeStages.length ? ` · ${activeStages.join(', ')}` : ''}`}
+                    {runningJobs.length > 0 && `${runningJobs.length} processing${activeStages.length ? ` · ${activeStages.join(', ')}` : ''}`}
+                    {unreachableCount > 0 && `${runningJobs.length > 0 ? ' · ' : ''}Waiting for status from ${unreachableCount} ${unreachableCount === 1 ? 'batch' : 'batches'}`}
+                    {jobs.length === 0 && unreachableCount === 0 && 'Checking batch status'}
                     {succeededCount + failedCount > 0 && ` · ${succeededCount} added, ${failedCount} failed so far`}
                   </div>
                 )}
                 <div className="mt-2 text-pretty text-[13.5px] leading-[1.6] text-white/42">
                   {phase === 'processing'
                     ? `The bar counts finished ${jobIds.length === 1 ? 'jobs' : 'batches'}, not individual photos. You can leave this page while processing continues.`
-                    : 'Keep this page open until every batch has uploaded.'}
+                    : batchTotal
+                      ? `${activityLabel}${currentBatchPct === null ? '' : ` · ${currentBatchPct}% of this batch`}. Keep this page open until every batch has uploaded.`
+                      : 'Keep this page open until the ZIP has uploaded.'}
                 </div>
               </>
+            )}
+          </div>
+        )}
+
+        {batchTotal > 0 && phase !== 'idle' && phase !== 'processing' && jobIds.length > 0 && (
+          <div className="mt-3 rounded-[18px] border border-white/[0.08] bg-white/[0.05] p-5">
+            <div className="text-[15px] font-semibold">Processing uploaded batches</div>
+            <div className="mt-2 text-[13.5px] text-white/70">
+              {finishedJobs.length} of {jobIds.length} uploaded batches finished processing
+              {activeStages.length > 0 && ` · ${activeStages.join(', ')}`}
+              {succeededCount + failedCount > 0 && ` · ${succeededCount} photos added, ${failedCount} failed`}
+            </div>
+            {unreachableCount > 0 && (
+              <div className="mt-2 text-[13px] text-white/45">Waiting to check {unreachableCount} {unreachableCount === 1 ? 'batch' : 'batches'} again.</div>
             )}
           </div>
         )}

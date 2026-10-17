@@ -40,18 +40,21 @@ def handle_action(action, payload):
 
 
 def _create(payload):
+    # The previous workflow does not pass executionId. Accept it while db_api
+    # deploys ahead of the updated state machine.
     item = {
         "jobId": payload["jobId"],
         "eventID": payload["eventID"],
         "uploaderID": payload["uploaderID"],
         "status": "CREATED",
         "startedAt": payload["startedAt"],
+        "executionId": payload.get("executionId") or f"legacy:{payload['jobId']}",
         "eventUploaderKey": f"{payload['eventID']}#{payload['uploaderID']}",
         "succeededCount": 0,
         "failedCount": 0,
     }
-    create_job(item)
-    return {"jobId": item["jobId"]}
+    claimed = create_job(item)
+    return {"jobId": item["jobId"], "claimed": claimed}
 
 
 def _update_status(action, payload):

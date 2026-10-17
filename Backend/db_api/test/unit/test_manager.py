@@ -8,7 +8,7 @@ import Manager.manager as manager
 
 def test_create_builds_item_with_derived_eventUploaderKey_and_zeroed_counts(monkeypatch):
     created = {}
-    monkeypatch.setattr(manager, "create_job", lambda item: created.update(item))
+    monkeypatch.setattr(manager, "create_job", lambda item: created.update(item) or True)
 
     result = manager.handle_action(
         "create",
@@ -17,16 +17,18 @@ def test_create_builds_item_with_derived_eventUploaderKey_and_zeroed_counts(monk
             "eventID": "evt_1",
             "uploaderID": "user_1",
             "startedAt": "2026-08-15T10:00:00Z",
+            "executionId": "execution-1",
         },
     )
 
-    assert result == {"jobId": "job_1"}
+    assert result == {"jobId": "job_1", "claimed": True}
     assert created == {
         "jobId": "job_1",
         "eventID": "evt_1",
         "uploaderID": "user_1",
         "status": "CREATED",
         "startedAt": "2026-08-15T10:00:00Z",
+        "executionId": "execution-1",
         "eventUploaderKey": "evt_1#user_1",
         "succeededCount": 0,
         "failedCount": 0,

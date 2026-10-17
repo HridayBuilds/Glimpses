@@ -1,7 +1,7 @@
 data "aws_iam_policy_document" "jobs_access" {
   statement {
     effect    = "Allow"
-    actions   = ["dynamodb:PutItem", "dynamodb:UpdateItem"]
+    actions   = ["dynamodb:PutItem", "dynamodb:GetItem", "dynamodb:UpdateItem"]
     resources = [var.jobs_table_arn]
   }
 }

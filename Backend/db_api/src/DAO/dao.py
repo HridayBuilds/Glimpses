@@ -8,8 +8,16 @@ def _table():
     return boto3.resource("dynamodb").Table(os.environ["JOBS_TABLE_NAME"])
 
 
-def create_job(item: dict) -> None:
-    _table().put_item(Item=item)
+def create_job(item: dict) -> bool:
+    table = _table()
+    try:
+        table.put_item(Item=item, ConditionExpression="attribute_not_exists(jobId)")
+        return True
+    except ClientError as error:
+        if error.response["Error"]["Code"] != "ConditionalCheckFailedException":
+            raise
+    existing = table.get_item(Key={"jobId": item["jobId"]}, ConsistentRead=True).get("Item")
+    return existing is not None and existing.get("executionId") == item["executionId"]
 
 
 def create_drive_job(item: dict) -> None:

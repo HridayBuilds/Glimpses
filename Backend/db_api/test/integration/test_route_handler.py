@@ -38,14 +38,16 @@ def test_create_then_mark_success_round_trip():
             "eventID": "evt_1",
             "uploaderID": "user_1",
             "startedAt": "2026-08-15T10:00:00Z",
+            "executionId": "execution-1",
         },
         _FakeLambdaContext(),
     )
-    assert create_result == {"jobId": "job_1"}
+    assert create_result == {"jobId": "job_1", "claimed": True}
 
     item = table.get_item(Key={"jobId": "job_1"})["Item"]
     assert item["status"] == "CREATED"
     assert item["eventUploaderKey"] == "evt_1#user_1"
+    assert item["executionId"] == "execution-1"
     assert item["succeededCount"] == 0
     assert item["failedCount"] == 0
 
@@ -65,6 +67,42 @@ def test_create_then_mark_success_round_trip():
     assert item["succeededCount"] == 594
     assert item["failedCount"] == 6
     assert item["eventUploaderKey"] == "evt_1#user_1"
+
+
+@mock_aws
+def test_duplicate_object_event_does_not_reset_or_reprocess_job():
+    dynamodb = boto3.resource("dynamodb", region_name="ap-south-1")
+    _create_jobs_table(dynamodb)
+    table = dynamodb.Table("glimpses-jobs-test")
+    context = _FakeLambdaContext()
+    payload = {
+        "action": "create", "jobId": "job_1", "eventID": "evt_1", "uploaderID": "user_1",
+        "startedAt": "2026-08-15T10:00:00Z", "executionId": "execution-1",
+    }
+
+    assert lambda_handler(payload, context)["claimed"] is True
+    lambda_handler({"action": "mark_success", "jobId": "job_1", "succeededCount": 4}, context)
+
+    # Retrying InitializeJob in the same execution must remain safe, while a
+    # second execution for the same S3 object must stop before photo processing.
+    assert lambda_handler(payload, context)["claimed"] is True
+    assert lambda_handler({**payload, "executionId": "execution-2"}, context)["claimed"] is False
+    item = table.get_item(Key={"jobId": "job_1"})["Item"]
+    assert item["status"] == "SUCCESS"
+    assert item["succeededCount"] == 4
+    assert item["executionId"] == "execution-1"
+
+
+@mock_aws
+def test_old_state_machine_payload_remains_accepted_during_deployment():
+    dynamodb = boto3.resource("dynamodb", region_name="ap-south-1")
+    _create_jobs_table(dynamodb)
+    payload = {
+        "action": "create", "jobId": "job_legacy", "eventID": "evt_1",
+        "uploaderID": "user_1", "startedAt": "2026-08-15T10:00:00Z",
+    }
+    result = lambda_handler(payload, _FakeLambdaContext())
+    assert result == {"jobId": "job_legacy", "claimed": True}
 
 
 @mock_aws
